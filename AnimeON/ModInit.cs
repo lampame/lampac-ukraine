@@ -1,6 +1,15 @@
+﻿using Newtonsoft.Json;
+using Shared;
+using Shared.Engine;
+using Newtonsoft.Json.Linq;
 ﻿using Shared;
 using Shared.Models.Online.Settings;
 using Shared.Models.Module;
+
+using Newtonsoft.Json;
+using Shared;
+using Shared.Engine;
+using Newtonsoft.Json.Linq;
 
 namespace AnimeON
 {
@@ -25,6 +34,7 @@ namespace AnimeON
                     list = new string[] { "socks5://ip:port" }
                 }
             };
+            AnimeON = ModuleInvoke.Conf("AnimeON", AnimeON).ToObject<OnlinesSettings>();
 
             // Виводити "уточнити пошук"
             AppInit.conf.online.with_search.Add("animeon");
