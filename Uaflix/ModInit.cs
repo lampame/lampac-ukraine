@@ -1,4 +1,7 @@
-﻿using Shared;
+﻿using Newtonsoft.Json;
+using Shared;
+using Shared.Engine;
+using Newtonsoft.Json.Linq;
 using Shared.Models.Online.Settings;
 using Shared.Models.Module;
 
@@ -13,11 +16,9 @@ namespace Uaflix
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            // streamproxy: false - замовчуванням вимкнено, але модуль сумісний з streamproxy=true
-            // Клоакінг посилань для серіалів дозволяє працювати незалежно від налаштування streamproxy
-            UaFlix = new OnlinesSettings("Uaflix", "https://uafix.net", streamproxy: false, useproxy: false)
+            UaFlix = new OnlinesSettings("Uaflix", "https://uaflix.net", streamproxy: false, useproxy: false)
             {
-                displayname = "🇺🇦 UaFlix",
+                displayname = "UaFlix",
                 displayindex = 0,
                 proxy = new Shared.Models.Base.ProxySettings()
                 {
@@ -27,6 +28,7 @@ namespace Uaflix
                     list = new string[] { "socks5://IP:PORT" }
                 }
             };
+            UaFlix = ModuleInvoke.Conf("Uaflix", UaFlix).ToObject<OnlinesSettings>();
 
             // Виводити "уточнити пошук"
             AppInit.conf.online.with_search.Add("uaflix");
