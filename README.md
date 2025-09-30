@@ -48,3 +48,24 @@ Create or update the module/repository.yaml file
 branch - optional, default main
 
 modules - optional, if not specified, all modules from the repository will be installed
+
+## Init support
+
+```json
+"Uaflix": {
+    "enable": true,
+    "domain": "https://uaflix.net",
+    "displayname": "Uaflix",
+    "streamproxy": false,
+    "useproxy": false,
+    "proxy": {
+      "useAuth": true,
+      "username": "FooBAR",
+      "password": "Strong_password",
+      "list": [
+        "socks5://adress:port"
+      ]
+    },
+    "displayindex": 1
+  }
+```
