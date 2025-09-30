@@ -28,3 +28,23 @@
      ```bash
      -v /path/to/your/cloned/repo/Uaflix:/home/module/Uaflix
      ```
+
+## Auto installation
+
+If Lampac version 148.1 and newer
+
+Create or update the module/repository.yaml file
+
+```YAML
+- repository: https://github.com/lampame/lampac-ukraine
+  branch: main
+  modules:
+    - AnimeON
+    - CikavaIdeya
+    - Uaflix
+    - Unimay
+```
+
+branch - optional, default main
+
+modules - optional, if not specified, all modules from the repository will be installed
