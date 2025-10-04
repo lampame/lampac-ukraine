@@ -8,8 +8,8 @@
 - [ ] KinoVezha
 - [ ] KlonTV
 - [x] UAFlix
-- [ ] UATuTFun
-- [X] Unimay
+- [x] UATuTFun
+- [x] Unimay
 
 
 ## Installation
@@ -38,9 +38,10 @@ Create or update the module/repository.yaml file
   modules:
     - AnimeON
     - Anihub
+    - Unimay
     - CikavaIdeya
     - Uaflix
-    - Unimay
+    - UaTUT
 ```
 
 branch - optional, default main
