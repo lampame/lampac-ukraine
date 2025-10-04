@@ -1,8 +1,7 @@
 # Ukraine online source for Lampac
 
 - [x] AnimeON
-- [ ] AnimeUA
-- [ ] Anitubeinua
+- [x] AniHUB
 - [ ] BambooUA
 - [x] CikavaIdeya
 - [ ] KinoTron
@@ -10,8 +9,6 @@
 - [ ] KlonTV
 - [x] UAFlix
 - [ ] UATuTFun
-- [ ] UFDub
-- [ ] Uakino
 - [X] Unimay
 
 
@@ -40,6 +37,7 @@ Create or update the module/repository.yaml file
   branch: main
   modules:
     - AnimeON
+    - Anihub
     - CikavaIdeya
     - Uaflix
     - Unimay
