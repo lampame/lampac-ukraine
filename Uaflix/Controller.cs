@@ -123,9 +123,8 @@ namespace Uaflix.Controllers
                     return OnError("uaflix", proxyManager);
                 }
                 
-                // Для серіалів завжди вибираємо перший результат автоматично
-                // Для фільмів показуємо вибір тільки якщо більше одного результату
-                if (serial == 0 && searchResults.Count > 1)
+                // Для фільмів і серіалів показуємо вибір тільки якщо більше одного результату
+                if (searchResults.Count > 1)
                 {
                     var similar_tpl = new SimilarTpl(searchResults.Count);
                     foreach (var res in searchResults)
@@ -133,7 +132,7 @@ namespace Uaflix.Controllers
                         string link = $"{host}/uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(res.Url)}";
                         similar_tpl.Append(res.Title, res.Year.ToString(), string.Empty, link, res.PosterUrl);
                     }
-                    OnLog($"=== RETURN: similar movies ({searchResults.Count}) ===");
+                    OnLog($"=== RETURN: similar items ({searchResults.Count}) ===");
                     return rjson ? Content(similar_tpl.ToJson(), "application/json; charset=utf-8") : Content(similar_tpl.ToHtml(), "text/html; charset=utf-8");
                 }
 
