@@ -10,7 +10,7 @@ namespace Uaflix.Models
         public int episode { get; set; }
         
         // Нові поля для підтримки змішаних плеєрів
-        public string playerType { get; set; } // "ashdi-serial", "zetvideo-serial", "zetvideo-vod"
+        public string playerType { get; set; } // "ashdi-serial", "zetvideo-serial", "zetvideo-vod", "ashdi-vod"
         public string iframeUrl { get; set; }  // URL iframe для цього епізоду
     }
 }

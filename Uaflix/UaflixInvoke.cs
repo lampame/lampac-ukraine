@@ -45,6 +45,8 @@ namespace Uaflix
             // Перевіряємо на підтримувані типи плеєрів
             if (iframeUrl.Contains("ashdi.vip/serial/"))
                 return "ashdi-serial";
+            else if (iframeUrl.Contains("ashdi.vip/vod/"))
+                return "ashdi-vod";
             else if (iframeUrl.Contains("zetvideo.net/serial/"))
                 return "zetvideo-serial";
             else if (iframeUrl.Contains("zetvideo.net/vod/"))
@@ -200,6 +202,46 @@ namespace Uaflix
             catch (Exception ex)
             {
                 _onLog($"ParseSingleEpisodePlayer error: {ex.Message}");
+                return (null, null);
+            }
+        }
+        
+        /// <summary>
+        /// Парсинг одного епізоду з ashdi-vod (новий метод для обробки окремих епізодів з ashdi.vip/vod/)
+        /// </summary>
+        private async Task<(string file, string voiceName)> ParseAshdiVodEpisode(string iframeUrl)
+        {
+            var headers = new List<HeadersModel>()
+            {
+                new HeadersModel("User-Agent", "Mozilla/5.0"),
+                new HeadersModel("Referer", "https://uafix.net/")
+            };
+            
+            try
+            {
+                string html = await Http.Get(iframeUrl, headers: headers, proxy: _proxyManager.Get());
+                
+                // Шукаємо Playerjs конфігурацію з file параметром
+                var match = Regex.Match(html, @"file:\s*'?([^'""\s,}]+\.m3u8)'?");
+                if (!match.Success)
+                {
+                    // Якщо не знайдено, шукаємо в іншому форматі
+                    match = Regex.Match(html, @"file['""]?\s*:\s*['""]([^'""}]+\.m3u8)['""]");
+                }
+                
+                if (!match.Success)
+                    return (null, null);
+                
+                string fileUrl = match.Groups[1].Value;
+                
+                // Визначити озвучку з URL
+                string voiceName = ExtractVoiceFromUrl(fileUrl);
+                
+                return (fileUrl, voiceName);
+            }
+            catch (Exception ex)
+            {
+                _onLog($"ParseAshdiVodEpisode error: {ex.Message}");
                 return (null, null);
             }
         }
@@ -363,9 +405,8 @@ namespace Uaflix
                     {
                         _onLog($"AggregateSerialStructure: Processing zetvideo-vod for season {season} with {seasonGroup.Value.Count} episodes");
                         
-                        // Для zetvideo-vod достатньо визначити тип плеєра, озвучки будуть визначатися через call
-                        // Створюємо умовну озвучку для цього сезону
-                        string displayName = "[Uaflix] Uaflix";
+                        // Для zetvideo-vod створюємо озвучку з реальними епізодами
+                        string displayName = "Uaflix #2";
                         
                         if (!structure.Voices.ContainsKey(displayName))
                         {
@@ -378,10 +419,61 @@ namespace Uaflix
                             };
                         }
                         
-                        // Створюємо пустий список епізодів для цього сезону - вони будуть заповнені через call
-                        structure.Voices[displayName].Seasons[season] = new List<EpisodeInfo>();
+                        // Створюємо епізоди для цього сезону з посиланнями на сторінки епізодів
+                        var episodes = new List<EpisodeInfo>();
+                        foreach (var episodeInfo in seasonGroup.Value)
+                        {
+                            episodes.Add(new EpisodeInfo
+                            {
+                                Number = episodeInfo.episode,
+                                Title = episodeInfo.title,
+                                File = episodeInfo.url, // URL сторінки епізоду для використання в call
+                                Id = episodeInfo.url,
+                                Poster = null,
+                                Subtitle = null
+                            });
+                        }
                         
-                        _onLog($"AggregateSerialStructure: Created placeholder voice for season {season} in zetvideo-vod");
+                        structure.Voices[displayName].Seasons[season] = episodes;
+                        
+                        _onLog($"AggregateSerialStructure: Created voice with {episodes.Count} episodes for season {season} in zetvideo-vod");
+                    }
+                    else if (playerType == "ashdi-vod")
+                    {
+                        _onLog($"AggregateSerialStructure: Processing ashdi-vod for season {season} with {seasonGroup.Value.Count} episodes");
+                        
+                        // Для ashdi-vod створюємо озвучку з реальними епізодами
+                        string displayName = "Uaflix #3";
+                        
+                        if (!structure.Voices.ContainsKey(displayName))
+                        {
+                            structure.Voices[displayName] = new VoiceInfo
+                            {
+                                Name = "Uaflix",
+                                PlayerType = "ashdi-vod",
+                                DisplayName = displayName,
+                                Seasons = new Dictionary<int, List<EpisodeInfo>>()
+                            };
+                        }
+                        
+                        // Створюємо епізоди для цього сезону з посиланнями на сторінки епізодів
+                        var episodes = new List<EpisodeInfo>();
+                        foreach (var episodeInfo in seasonGroup.Value)
+                        {
+                            episodes.Add(new EpisodeInfo
+                            {
+                                Number = episodeInfo.episode,
+                                Title = episodeInfo.title,
+                                File = episodeInfo.url, // URL сторінки епізоду для використання в call
+                                Id = episodeInfo.url,
+                                Poster = null,
+                                Subtitle = null
+                            });
+                        }
+                        
+                        structure.Voices[displayName].Seasons[season] = episodes;
+                        
+                        _onLog($"AggregateSerialStructure: Created voice with {episodes.Count} episodes for season {season} in ashdi-vod");
                     }
                 }
                 
@@ -748,12 +840,26 @@ namespace Uaflix
                         result.streams = await ParseAllZetvideoSources(iframeUrl);
                     else if (iframeUrl.Contains("ashdi.vip"))
                     {
-                        result.streams = await ParseAllAshdiSources(iframeUrl);
-                        var idMatch = Regex.Match(iframeUrl, @"_(\d+)|vod/(\d+)");
-                        if (idMatch.Success)
+                        // Перевіряємо, чи це ashdi-vod (окремий епізод) або ashdi-serial (багатосерійний плеєр)
+                        if (iframeUrl.Contains("/vod/"))
                         {
-                            string ashdiId = idMatch.Groups[1].Success ? idMatch.Groups[1].Value : idMatch.Groups[2].Value;
-                            result.subtitles = await GetAshdiSubtitles(ashdiId);
+                            // Це окремий епізод на ashdi.vip/vod/, обробляємо як ashdi-vod
+                            var (file, voiceName) = await ParseAshdiVodEpisode(iframeUrl);
+                            if (!string.IsNullOrEmpty(file))
+                            {
+                                result.streams.Add((file, "1080p"));
+                            }
+                        }
+                        else
+                        {
+                            // Це багатосерійний плеєр, обробляємо як і раніше
+                            result.streams = await ParseAllAshdiSources(iframeUrl);
+                            var idMatch = Regex.Match(iframeUrl, @"_(\d+)|vod/(\d+)");
+                            if (idMatch.Success)
+                            {
+                                string ashdiId = idMatch.Groups[1].Success ? idMatch.Groups[1].Value : idMatch.Groups[2].Value;
+                                result.subtitles = await GetAshdiSubtitles(ashdiId);
+                            }
                         }
                     }
                 }

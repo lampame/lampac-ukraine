@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace Uaflix.Models
 {
     /// <summary>
-    /// Агрегована структура серіалу з озвучками з усіх джерел (ashdi, zetvideo-serial, zetvideo-vod)
+    /// Агрегована структура серіалу з озвучками з усіх джерел (ashdi, zetvideo-serial, zetvideo-vod, ashdi-vod)
     /// </summary>
     public class SerialAggregatedStructure
     {

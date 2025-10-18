@@ -79,7 +79,10 @@ namespace Uaflix.Controllers
 
             if (play)
             {
-                var playResult = await invoke.ParseEpisode(t);
+                // Визначаємо URL для парсингу - або з параметра t, або з episode_url
+                string urlToParse = !string.IsNullOrEmpty(t) ? t : Request.Query["episode_url"];
+                
+                var playResult = await invoke.ParseEpisode(urlToParse);
                 if (playResult.streams != null && playResult.streams.Count > 0)
                 {
                     OnLog("=== RETURN: play redirect ===");
@@ -87,6 +90,24 @@ namespace Uaflix.Controllers
                 }
                 
                 OnLog("=== RETURN: play no streams ===");
+                return Content("Uaflix", "text/html; charset=utf-8");
+            }
+            
+            // Якщо є episode_url але немає play=true, це виклик для отримання інформації про стрім (для method: 'call')
+            string episodeUrl = Request.Query["episode_url"];
+            if (!string.IsNullOrEmpty(episodeUrl))
+            {
+                var playResult = await invoke.ParseEpisode(episodeUrl);
+                if (playResult.streams != null && playResult.streams.Count > 0)
+                {
+                    // Повертаємо JSON з інформацією про стрім для методу 'play'
+                    string streamUrl = HostStreamProxy(init, accsArgs(playResult.streams.First().link));
+                    string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? original_title}\"}}";
+                    OnLog($"=== RETURN: call method JSON for episode_url ===");
+                    return Content(jsonResult, "application/json; charset=utf-8");
+                }
+                
+                OnLog("=== RETURN: call method no streams ===");
                 return Content("Uaflix", "text/html; charset=utf-8");
             }
 
@@ -251,23 +272,19 @@ namespace Uaflix.Controllers
                         // Для ashdi/zetvideo-serial повертаємо готове посилання з play
                         var voice = structure.Voices[t];
                         
-                        if (voice.PlayerType == "zetvideo-vod")
+                        if (voice.PlayerType == "zetvideo-vod" || voice.PlayerType == "ashdi-vod")
                         {
-                            // Знайти URL епізоду зі структури AllEpisodes
-                            var episodeInfo = structure.AllEpisodes
-                                .FirstOrDefault(e => e.season == s && e.episode == ep.Number);
-                            
-                            if (episodeInfo != null)
-                            {
-                                string callUrl = $"{host}/uaflix?t={HttpUtility.UrlEncode(episodeInfo.url)}&play=true";
-                                episode_tpl.Append(
-                                    name: ep.Title,
-                                    title: title,
-                                    s: s.ToString(),
-                                    e: ep.Number.ToString(),
-                                    link: accsArgs(callUrl)
-                                );
-                            }
+                            // Для zetvideo-vod та ashdi-vod використовуємо URL епізоду для виклику
+                            // Потрібно передати URL епізоду в інший параметр, щоб не плутати з play=true
+                            string callUrl = $"{host}/uaflix?episode_url={HttpUtility.UrlEncode(ep.File)}&imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&s={s}&e={ep.Number}";
+                            episode_tpl.Append(
+                                name: ep.Title,
+                                title: title,
+                                s: s.ToString(),
+                                e: ep.Number.ToString(),
+                                link: accsArgs(callUrl),
+                                method: "call"
+                            );
                         }
                         else
                         {

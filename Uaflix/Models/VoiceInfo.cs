@@ -13,7 +13,7 @@ namespace Uaflix.Models
         public string Name { get; set; }
         
         /// <summary>
-        /// Тип плеєра: "ashdi-serial", "zetvideo-serial", "zetvideo-vod"
+        /// Тип плеєра: "ashdi-serial", "zetvideo-serial", "zetvideo-vod", "ashdi-vod"
         /// </summary>
         public string PlayerType { get; set; }
         
