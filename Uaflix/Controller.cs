@@ -202,7 +202,7 @@ namespace Uaflix.Controllers
                     foreach (var season in seasonsWithValidEpisodes)
                     {
                         string link = $"{host}/uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={season}&href={HttpUtility.UrlEncode(filmUrl)}";
-                        season_tpl.Append($"Сезон {season}", link, season.ToString());
+                        season_tpl.Append($"{season}", link, season.ToString());
                         OnLog($"Added season {season} to template");
                     }
 

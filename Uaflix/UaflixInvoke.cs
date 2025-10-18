@@ -109,17 +109,33 @@ namespace Uaflix
                 
                 string playerPrefix = playerType == "ashdi-serial" ? "Ashdi" : "Zetvideo";
                 
+                // Для формування унікальних назв озвучок
+                var voiceCounts = new Dictionary<string, int>();
+                
                 foreach (var voiceObj in voicesArray)
                 {
                     string voiceName = voiceObj["title"]?.ToString().Trim();
                     if (string.IsNullOrEmpty(voiceName))
                         continue;
                     
+                    // Перевіряємо, чи вже існує така назва озвучки
+                    if (voiceCounts.ContainsKey(voiceName))
+                    {
+                        voiceCounts[voiceName]++;
+                        // Якщо є дублікат, додаємо номер
+                        voiceName = $"{voiceName} {voiceCounts[voiceName]}";
+                    }
+                    else
+                    {
+                        // Ініціалізуємо лічильник для нової озвучки
+                        voiceCounts[voiceObj["title"]?.ToString().Trim()] = 1;
+                    }
+                    
                     var voiceInfo = new VoiceInfo
                     {
-                        Name = voiceName,
+                        Name = voiceObj["title"]?.ToString().Trim(), // Зберігаємо оригінальну назву для внутрішнього використання
                         PlayerType = playerType,
-                        DisplayName = $"[{playerPrefix}] {voiceName}",
+                        DisplayName = voiceName, // Відображаємо унікальну назву
                         Seasons = new Dictionary<int, List<EpisodeInfo>>()
                     };
                     
