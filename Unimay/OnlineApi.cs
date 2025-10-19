@@ -10,7 +10,17 @@ namespace Unimay
             var online = new List<(string name, string url, string plugin, int index)>();
 
             var init = ModInit.Unimay;
-            if (init.enable && !init.rip)
+
+            // Визначення isAnime згідно стандарту Lampac (Deepwiki):
+            // isanime = true якщо original_language == "ja" або "zh"
+            bool hasLang = !string.IsNullOrEmpty(original_language);
+            bool isanime = hasLang && (original_language == "ja" || original_language == "zh");
+
+            // Unimay — аніме-провайдер. Додаємо якщо:
+            // - загальний пошук (serial == -1), або
+            // - контент є аніме (isanime), або
+            // - мова невідома (немає original_language)
+            if (init.enable && !init.rip && (serial == -1 || isanime || !hasLang))
             {
                 string url = init.overridehost;
                 if (string.IsNullOrEmpty(url))
