@@ -29,10 +29,12 @@ namespace Uaflix
                     username = "a",
                     password = "a",
                     list = new string[] { "socks5://IP:PORT" }
-                }
+                },
+                // Note: OnlinesSettings не має властивості additional, використовуємо інший підхід
             };
+            
             UaFlix = ModuleInvoke.Conf("Uaflix", UaFlix).ToObject<OnlinesSettings>();
-
+            
             // Виводити "уточнити пошук"
             AppInit.conf.online.with_search.Add("uaflix");
         }
