@@ -148,5 +148,73 @@ namespace AnimeON
 
             return TimeSpan.FromMinutes(ctime);
         }
+        public async Task<AnimeON.Models.AnimeONAggregatedStructure> AggregateSerialStructure(int animeId, int season)
+        {
+            string memKey = $"AnimeON:aggregated:{animeId}:{season}";
+            if (_hybridCache.TryGetValue(memKey, out AnimeON.Models.AnimeONAggregatedStructure cached))
+                return cached;
+
+            try
+            {
+                var structure = new AnimeON.Models.AnimeONAggregatedStructure
+                {
+                    AnimeId = animeId,
+                    Season = season,
+                    Voices = new Dictionary<string, AnimeON.Models.AnimeONVoiceInfo>()
+                };
+
+                var fundubs = await GetFundubs(animeId);
+                if (fundubs == null || fundubs.Count == 0)
+                    return null;
+
+                foreach (var fundub in fundubs)
+                {
+                    if (fundub?.Fundub == null || fundub.Player == null)
+                        continue;
+
+                    foreach (var player in fundub.Player)
+                    {
+                        string display = $"[{player.Name}] {fundub.Fundub.Name}";
+
+                        var episodesData = await GetEpisodes(animeId, player.Id, fundub.Fundub.Id);
+                        if (episodesData?.Episodes == null || episodesData.Episodes.Count == 0)
+                            continue;
+
+                        var voiceInfo = new AnimeON.Models.AnimeONVoiceInfo
+                        {
+                            Name = fundub.Fundub.Name,
+                            PlayerType = player.Name?.ToLower(),
+                            DisplayName = display,
+                            PlayerId = player.Id,
+                            FundubId = fundub.Fundub.Id,
+                            Episodes = episodesData.Episodes
+                                .OrderBy(ep => ep.EpisodeNum)
+                                .Select(ep => new AnimeON.Models.AnimeONEpisodeInfo
+                                {
+                                    Number = ep.EpisodeNum,
+                                    Title = ep.Name,
+                                    Hls = ep.Hls,
+                                    VideoUrl = ep.VideoUrl,
+                                    EpisodeId = ep.Id
+                                })
+                                .ToList()
+                        };
+
+                        structure.Voices[display] = voiceInfo;
+                    }
+                }
+
+                if (!structure.Voices.Any())
+                    return null;
+
+                _hybridCache.Set(memKey, structure, cacheTime(20, init: _init));
+                return structure;
+            }
+            catch (Exception ex)
+            {
+                _onLog?.Invoke($"AnimeON AggregateSerialStructure error: {ex.Message}");
+                return null;
+            }
+        }
     }
 }

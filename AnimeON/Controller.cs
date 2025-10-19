@@ -34,114 +34,148 @@ namespace AnimeON.Controllers
                 return Forbid();
 
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
+            OnLog($"AnimeON Index: title={title}, original_title={original_title}, serial={serial}, s={s}, t={t}, year={year}, imdb_id={imdb_id}, kp={kinopoisk_id}");
 
             var seasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year);
+            OnLog($"AnimeON: search results = {seasons?.Count ?? 0}");
             if (seasons == null || seasons.Count == 0)
-                return Content("AnimeON", "text/html; charset=utf-8");
+                return OnError("animeon", proxyManager);
 
-            var allOptions = new List<(SearchModel season, FundubModel fundub, Player player)>();
-            foreach (var season in seasons)
-            {
-                var fundubs = await invoke.GetFundubs(season.Id);
-                if (fundubs != null)
-                {
-                    foreach (var fundub in fundubs)
-                    {
-                        foreach (var player in fundub.Player)
-                        {
-                            allOptions.Add((season, fundub, player));
-                        }
-                    }
-                }
-            }
+            // [Refactoring] Використовується агрегована структура (AggregateSerialStructure) — попередній збір allOptions не потрібний
 
-            if (allOptions.Count == 0)
-                return Content("AnimeON", "text/html; charset=utf-8");
+            // [Refactoring] Перевірка allOptions видалена — використовується перевірка структури озвучок нижче
 
             if (serial == 1)
             {
-                if (s == -1) // Выбор сезона/озвучки
+                if (s == -1) // Крок 1: Вибір аніме (як сезони)
                 {
-                    var season_tpl = new SeasonTpl(allOptions.Count);
-                    for (int i = 0; i < allOptions.Count; i++)
+                    var season_tpl = new SeasonTpl(seasons.Count);
+                    for (int i = 0; i < seasons.Count; i++)
                     {
-                        var item = allOptions[i];
-                        string translationName = $"[{item.player.Name}|S{item.season.Season}] {item.fundub.Fundub.Name}";
+                        var anime = seasons[i];
+                        string seasonName = anime.Season.ToString();
                         string link = $"{host}/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={i}";
-                        season_tpl.Append(translationName, link, $"{i}");
+                        season_tpl.Append(seasonName, link, anime.Season.ToString());
                     }
+                    OnLog($"AnimeON: return seasons count={seasons.Count}");
                     return rjson ? Content(season_tpl.ToJson(), "application/json; charset=utf-8") : Content(season_tpl.ToHtml(), "text/html; charset=utf-8");
                 }
-                else // Вывод эпизодов
+                else // Крок 2/3: Вибір озвучки та епізодів
                 {
-                    if (s >= allOptions.Count)
-                        return Content("AnimeON", "text/html; charset=utf-8");
+                    if (s >= seasons.Count)
+                        return OnError("animeon", proxyManager);
 
-                    var selected = allOptions[s];
-                    var episodesData = await invoke.GetEpisodes(selected.season.Id, selected.player.Id, selected.fundub.Fundub.Id);
-                    if (episodesData == null || episodesData.Episodes == null)
-                        return Content("AnimeON", "text/html; charset=utf-8");
+                    var selectedAnime = seasons[s];
+                    var structure = await invoke.AggregateSerialStructure(selectedAnime.Id, selectedAnime.Season);
+                    if (structure == null || !structure.Voices.Any())
+                        return OnError("animeon", proxyManager);
 
-                    var movie_tpl = new MovieTpl(title, original_title, episodesData.Episodes.Count);
-                    foreach (var ep in episodesData.Episodes.OrderBy(e => e.EpisodeNum))
+                    OnLog($"AnimeON: voices found = {structure.Voices.Count}");
+                    // Автовибір першої озвучки якщо t не задано
+                    if (string.IsNullOrEmpty(t))
+                        t = structure.Voices.Keys.First();
+
+                    // Формуємо список озвучок
+                    var voice_tpl = new VoiceTpl();
+                    foreach (var voice in structure.Voices)
                     {
-                        var streamquality = new StreamQualityTpl();
+                        string voiceLink = $"{host}/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&t={HttpUtility.UrlEncode(voice.Key)}";
+                        bool isActive = voice.Key == t;
+                        voice_tpl.Append(voice.Key, isActive, voiceLink);
+                    }
+
+                    // Перевірка вибраної озвучки
+                    if (!structure.Voices.ContainsKey(t))
+                        return OnError("animeon", proxyManager);
+
+                    var episode_tpl = new EpisodeTpl();
+                    var selectedVoiceInfo = structure.Voices[t];
+
+                    // Формуємо епізоди для вибраної озвучки
+                    foreach (var ep in selectedVoiceInfo.Episodes.OrderBy(e => e.Number))
+                    {
+                        string episodeName = !string.IsNullOrEmpty(ep.Title) ? ep.Title : $"Епізод {ep.Number}";
+                        string seasonStr = selectedAnime.Season.ToString();
+                        string episodeStr = ep.Number.ToString();
+
                         string streamLink = !string.IsNullOrEmpty(ep.Hls) ? ep.Hls : ep.VideoUrl;
+                        if (string.IsNullOrEmpty(streamLink))
+                            continue;
 
-                        if (selected.player.Name.ToLower() == "moon" && !string.IsNullOrEmpty(streamLink) && streamLink.Contains("moonanime.art/iframe/"))
+                        if (selectedVoiceInfo.PlayerType == "moon")
                         {
-                            streamLink = $"{host}/animeon/play?url={HttpUtility.UrlEncode(streamLink)}";
-                            streamquality.Append(streamLink, "hls");
-                            movie_tpl.Append(string.IsNullOrEmpty(ep.Name) ? $"Серія {ep.EpisodeNum}" : ep.Name, accsArgs(streamLink), streamquality: streamquality);
+                            // method=call з accsArgs(callUrl)
+                            string callUrl = $"{host}/animeon/play?url={HttpUtility.UrlEncode(streamLink)}";
+                            episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, accsArgs(callUrl), "call");
                         }
-                        else if (!string.IsNullOrEmpty(streamLink))
+                        else
                         {
-                            streamquality.Append(HostStreamProxy(init, accsArgs(streamLink)), "hls");
-                            movie_tpl.Append(string.IsNullOrEmpty(ep.Name) ? $"Серія {ep.EpisodeNum}" : ep.Name, accsArgs(streamquality.Firts().link), streamquality: streamquality);
-                        }
-                    }
-
-                    if (!string.IsNullOrEmpty(episodesData.AnotherPlayer) && episodesData.AnotherPlayer.Contains("ashdi.vip"))
-                    {
-                        var match = Regex.Match(episodesData.AnotherPlayer, "/serial/([0-9]+)");
-                        if (match.Success)
-                        {
-                            string ashdi_kp = match.Groups[1].Value;
-                            string ashdi_link = $"/ashdi?kinopoisk_id={ashdi_kp}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}";
-                            movie_tpl.Append("Плеєр Ashdi", ashdi_link);
+                            // Пряме відтворення через HostStreamProxy(init, accsArgs(streamLink))
+                            string playUrl = HostStreamProxy(init, accsArgs(streamLink));
+                            episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, playUrl);
                         }
                     }
 
-                    return rjson ? Content(movie_tpl.ToJson(), "application/json; charset=utf-8") : Content(movie_tpl.ToHtml(), "text/html; charset=utf-8");
+                    // Повертаємо озвучки + епізоди разом
+                    OnLog($"AnimeON: return episodes count={selectedVoiceInfo.Episodes.Count} for voice='{t}' season={selectedAnime.Season}");
+                    if (rjson)
+                        return Content(episode_tpl.ToJson(voice_tpl), "application/json; charset=utf-8");
+
+                    return Content(voice_tpl.ToHtml() + episode_tpl.ToHtml(), "text/html; charset=utf-8");
                 }
             }
-            else // Фильм
+            else // Фільм
             {
-                 var tpl = new MovieTpl(title, original_title, allOptions.Count);
-                 foreach (var item in allOptions)
-                 {
-                     var episodesData = await invoke.GetEpisodes(item.season.Id, item.player.Id, item.fundub.Fundub.Id);
-                     if (episodesData == null || episodesData.Episodes == null || episodesData.Episodes.Count == 0)
-                         continue;
-                     
-                     string translationName = $"[{item.player.Name}] {item.fundub.Fundub.Name}";
-                     var streamquality = new StreamQualityTpl();
-                     var firstEp = episodesData.Episodes.FirstOrDefault();
-                     string streamLink = !string.IsNullOrEmpty(firstEp.Hls) ? firstEp.Hls : firstEp.VideoUrl;
+                var firstAnime = seasons.FirstOrDefault();
+                if (firstAnime == null)
+                    return OnError("animeon", proxyManager);
 
-                     if (item.player.Name.ToLower() == "moon" && !string.IsNullOrEmpty(streamLink) && streamLink.Contains("moonanime.art/iframe/"))
-                     {
-                         streamLink = $"{host}/animeon/play?url={HttpUtility.UrlEncode(streamLink)}";
-                         streamquality.Append(streamLink, "hls");
-                         tpl.Append(translationName, accsArgs(streamLink), streamquality: streamquality);
-                     }
-                     else if (!string.IsNullOrEmpty(streamLink))
-                     {
-                         streamquality.Append(HostStreamProxy(init, accsArgs(streamLink)), "hls");
-                         tpl.Append(translationName, accsArgs(streamquality.Firts().link), streamquality: streamquality);
-                     }
-                 }
-                 return rjson ? Content(tpl.ToJson(), "application/json; charset=utf-8") : Content(tpl.ToHtml(), "text/html; charset=utf-8");
+                var fundubs = await invoke.GetFundubs(firstAnime.Id);
+                OnLog($"AnimeON: movie fundubs count = {fundubs?.Count ?? 0}");
+                if (fundubs == null || fundubs.Count == 0)
+                    return OnError("animeon", proxyManager);
+
+                var tpl = new MovieTpl(title, original_title);
+
+                foreach (var fundub in fundubs)
+                {
+                    if (fundub?.Fundub == null || fundub.Player == null || fundub.Player.Count == 0)
+                        continue;
+
+                    foreach (var player in fundub.Player)
+                    {
+                        var episodesData = await invoke.GetEpisodes(firstAnime.Id, player.Id, fundub.Fundub.Id);
+                        if (episodesData == null || episodesData.Episodes == null || episodesData.Episodes.Count == 0)
+                            continue;
+
+                        var firstEp = episodesData.Episodes.FirstOrDefault();
+                        if (firstEp == null)
+                            continue;
+
+                        string streamLink = !string.IsNullOrEmpty(firstEp.Hls) ? firstEp.Hls : firstEp.VideoUrl;
+                        if (string.IsNullOrEmpty(streamLink))
+                            continue;
+
+                        string translationName = $"[{player.Name}] {fundub.Fundub.Name}";
+
+                        if (player.Name?.ToLower() == "moon" && streamLink.Contains("moonanime.art/iframe/"))
+                        {
+                            string callUrl = $"{host}/animeon/play?url={HttpUtility.UrlEncode(streamLink)}";
+                            tpl.Append(translationName, accsArgs(callUrl), "call");
+                        }
+                        else
+                        {
+                            tpl.Append(translationName, HostStreamProxy(init, accsArgs(streamLink)));
+                        }
+                    }
+                }
+
+                // Якщо не зібрали жодної опції — повертаємо помилку
+                if (tpl.IsEmpty())
+                    return OnError("animeon", proxyManager);
+
+                OnLog("AnimeON: return movie options");
+                return rjson ? Content(tpl.ToJson(), "application/json; charset=utf-8") : Content(tpl.ToHtml(), "text/html; charset=utf-8");
             }
         }
 
@@ -227,18 +261,26 @@ namespace AnimeON.Controllers
         public async Task<ActionResult> Play(string url)
         {
             if (string.IsNullOrEmpty(url))
-                return OnError("url is empty");
+            {
+                OnLog("AnimeON Play: empty url");
+                return OnError("animeon", proxyManager);
+            }
 
             var init = await loadKit(ModInit.AnimeON);
             if (!init.enable)
                 return Forbid();
 
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
+            OnLog($"AnimeON Play: url={url}");
             string streamLink = await invoke.ParseMoonAnimePage(url);
 
             if (string.IsNullOrEmpty(streamLink))
-                return Content("Не вдалося отримати посилання на відео", "text/html; charset=utf-8");
+            {
+                OnLog("AnimeON Play: cannot extract stream from iframe");
+                return OnError("animeon", proxyManager);
+            }
 
+            OnLog("AnimeON Play: redirect to proxied stream");
             return Redirect(HostStreamProxy(init, accsArgs(streamLink)));
         }
     }

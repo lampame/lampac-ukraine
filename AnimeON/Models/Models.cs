@@ -72,7 +72,7 @@ namespace AnimeON.Models
         public List<Episode> Episodes { get; set; }
 
         [JsonPropertyName("anotherPlayer")]
-        public string AnotherPlayer { get; set; }
+        public System.Text.Json.JsonElement AnotherPlayer { get; set; }
     }
 
     public class Episode
