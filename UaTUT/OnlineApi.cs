@@ -10,6 +10,7 @@ namespace UaTUT
             var online = new List<(string name, string url, string plugin, int index)>();
 
             var init = ModInit.UaTUT;
+            // UaTUT: змішаний контент (аніме + не-аніме) — завжди включати при enable && !rip
             if (init.enable && !init.rip)
             {
                 string url = init.overridehost;

@@ -10,7 +10,17 @@ namespace AnimeON
             var online = new List<(string name, string url, string plugin, int index)>();
 
             var init = ModInit.AnimeON;
-            if (init.enable && !init.rip)
+
+            // Визначаємо isAnime згідно стандарту Lampac (Deepwiki):
+            // isanime = true якщо original_language == "ja" або "zh"
+            bool hasLang = !string.IsNullOrEmpty(original_language);
+            bool isanime = hasLang && (original_language == "ja" || original_language == "zh");
+
+            // AnimeON — аніме-провайдер. Додаємо його:
+            // - при загальному пошуку (serial == -1), або
+            // - якщо контент визначений як аніме (isanime), або
+            // - якщо мова невідома (відсутній original_language)
+            if (init.enable && !init.rip && (serial == -1 || isanime || !hasLang))
             {
                 string url = init.overridehost;
                 if (string.IsNullOrEmpty(url))
