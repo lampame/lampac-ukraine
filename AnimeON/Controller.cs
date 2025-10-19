@@ -53,9 +53,9 @@ namespace AnimeON.Controllers
                     for (int i = 0; i < seasons.Count; i++)
                     {
                         var anime = seasons[i];
-                        string seasonName = $"{(anime.TitleUa ?? anime.TitleEn ?? original_title)} (S{anime.Season})";
+                        string seasonName = anime.Season.ToString();
                         string link = $"{host}/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={i}";
-                        season_tpl.Append(seasonName, link, i.ToString());
+                        season_tpl.Append(seasonName, link, anime.Season.ToString());
                     }
                     OnLog($"AnimeON: return seasons count={seasons.Count}");
                     return rjson ? Content(season_tpl.ToJson(), "application/json; charset=utf-8") : Content(season_tpl.ToHtml(), "text/html; charset=utf-8");
