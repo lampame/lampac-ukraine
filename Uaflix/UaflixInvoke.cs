@@ -551,7 +551,7 @@ namespace Uaflix
 
             try
             {
-                string filmTitle = !string.IsNullOrEmpty(search_query) ? search_query : (!string.IsNullOrEmpty(title) ? title : original_title);
+                string filmTitle = !string.IsNullOrEmpty(search_query) ? search_query : (!string.IsNullOrEmpty(title) ? original_title : title);
                 string searchUrl = $"{_init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(filmTitle)}";
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
 
