@@ -98,7 +98,7 @@ namespace AnimeON
 
         public async Task<EpisodeModel> GetEpisodes(int animeId, int playerId, int fundubId)
         {
-            string episodesUrl = $"{_init.host}/api/player/episodes/{animeId}?take=100&skip=-1&playerId={playerId}&fundubId={fundubId}";
+            string episodesUrl = $"{_init.host}/api/player/{animeId}/episodes?take=100&skip=-1&playerId={playerId}&fundubId={fundubId}";
             _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {episodesUrl}");
             string episodesJson = await Http.Get(episodesUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
             if (string.IsNullOrEmpty(episodesJson))
