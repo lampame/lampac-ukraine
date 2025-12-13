@@ -78,7 +78,7 @@ namespace AnimeON.Models
         public string Description { get; set; }
 
         [JsonPropertyName("team")]
-        public string Team { get; set; }
+        public object Team { get; set; }
 
         [JsonPropertyName("telegram")]
         public string Telegram { get; set; }
