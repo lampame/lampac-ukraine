@@ -86,7 +86,7 @@ namespace AnimeON
 
         public async Task<List<FundubModel>> GetFundubs(int animeId)
         {
-            string fundubsUrl = $"{_init.host}/api/player/translations/{animeId}";
+            string fundubsUrl = $"{_init.host}/api/player/{animeId}/translations";
             _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {fundubsUrl}");
             string fundubsJson = await Http.Get(fundubsUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
             if (string.IsNullOrEmpty(fundubsJson))

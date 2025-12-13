@@ -181,7 +181,7 @@ namespace AnimeON.Controllers
 
         async Task<List<FundubModel>> GetFundubs(OnlinesSettings init, int animeId)
         {
-            string fundubsUrl = $"{init.host}/api/player/translations/{animeId}";
+            string fundubsUrl = $"{init.host}/api/player/{animeId}/translations";
             string fundubsJson = await Http.Get(fundubsUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
             if (string.IsNullOrEmpty(fundubsJson))
                 return null;
