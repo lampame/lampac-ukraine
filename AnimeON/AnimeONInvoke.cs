@@ -93,7 +93,20 @@ namespace AnimeON
                 return null;
 
             var fundubsResponse = JsonSerializer.Deserialize<FundubsResponseModel>(fundubsJson);
-            return fundubsResponse?.FunDubs;
+            if (fundubsResponse?.Translations == null || fundubsResponse.Translations.Count == 0)
+                return null;
+
+            var fundubs = new List<FundubModel>();
+            foreach (var translation in fundubsResponse.Translations)
+            {
+                var fundubModel = new FundubModel
+                {
+                    Fundub = translation.Translation,
+                    Player = translation.Player
+                };
+                fundubs.Add(fundubModel);
+            }
+            return fundubs;
         }
 
         public async Task<EpisodeModel> GetEpisodes(int animeId, int playerId, int fundubId)

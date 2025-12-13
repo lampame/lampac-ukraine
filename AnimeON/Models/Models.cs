@@ -35,14 +35,14 @@ namespace AnimeON.Models
 
     public class FundubsResponseModel
     {
-        [JsonPropertyName("funDubs")]
-        public List<FundubModel> FunDubs { get; set; }
+        [JsonPropertyName("translations")]
+        public List<TranslationModel> Translations { get; set; }
     }
 
-    public class FundubModel
+    public class TranslationModel
     {
-        [JsonPropertyName("fundub")]
-        public Fundub Fundub { get; set; }
+        [JsonPropertyName("translation")]
+        public Fundub Translation { get; set; }
 
         [JsonPropertyName("player")]
         public List<Player> Player { get; set; }
@@ -55,6 +55,57 @@ namespace AnimeON.Models
 
         [JsonPropertyName("name")]
         public string Name { get; set; }
+
+        [JsonPropertyName("isSub")]
+        public bool IsSub { get; set; }
+
+        [JsonPropertyName("synonyms")]
+        public List<string> Synonyms { get; set; }
+
+        [JsonPropertyName("studios")]
+        public List<Studio> Studios { get; set; }
+    }
+
+    public class Studio
+    {
+        [JsonPropertyName("slug")]
+        public string Slug { get; set; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+
+        [JsonPropertyName("description")]
+        public string Description { get; set; }
+
+        [JsonPropertyName("team")]
+        public string Team { get; set; }
+
+        [JsonPropertyName("telegram")]
+        public string Telegram { get; set; }
+
+        [JsonPropertyName("youtube")]
+        public string Youtube { get; set; }
+
+        [JsonPropertyName("patreon")]
+        public string Patreon { get; set; }
+
+        [JsonPropertyName("buymeacoffee")]
+        public string BuyMeACoffee { get; set; }
+
+        [JsonPropertyName("avatar")]
+        public Avatar Avatar { get; set; }
+    }
+
+    public class Avatar
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("original")]
+        public string Original { get; set; }
+
+        [JsonPropertyName("preview")]
+        public string Preview { get; set; }
     }
 
     public class Player
@@ -64,6 +115,15 @@ namespace AnimeON.Models
 
         [JsonPropertyName("id")]
         public int Id { get; set; }
+
+        [JsonPropertyName("episodesCount")]
+        public int EpisodesCount { get; set; }
+    }
+
+    public class FundubModel
+    {
+        public Fundub Fundub { get; set; }
+        public List<Player> Player { get; set; }
     }
 
     public class EpisodeModel
