@@ -16,7 +16,7 @@ namespace Uaflix
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            UaFlix = new OnlinesSettings("Uaflix", "https://uaflix.net", streamproxy: false, useproxy: false)
+            UaFlix = new OnlinesSettings("Uaflix", "https://uafix.net", streamproxy: false, useproxy: false)
             {
                 displayname = "UaFlix",
                 group = 0,
