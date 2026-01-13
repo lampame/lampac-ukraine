@@ -1,5 +1,12 @@
 # Ukraine online source for Lampac
 
+## Table of contents
+
+- [Installation](#installation)
+- [Auto installation](#auto-installation)
+- [Init support](#init-support)
+- [Donate](#donate)
+
 - [x] AnimeON
 - [x] [RIP] AniHUB
 - [x] BambooUA
