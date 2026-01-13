@@ -54,26 +54,7 @@ namespace CikavaIdeya.Controllers
                 if (playResult.streams != null && playResult.streams.Count > 0)
                 {
                     string streamLink = playResult.streams.First().link;
-                    List<HeadersModel> streamHeaders = null;
-                    bool forceProxy = false;
-
-                    if (streamLink.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase) && init.streamproxy)
-                    {
-                        streamHeaders = new List<HeadersModel>()
-                        {
-                            new HeadersModel("User-Agent", "Mozilla/5.0"),
-                            new HeadersModel("Referer", "https://ashdi.vip/")
-                        };
-                        forceProxy = true;
-                    }
-
-                    string streamUrl = HostStreamProxy(init, streamLink, headers: streamHeaders, force_streamproxy: forceProxy);
-                    if (!string.IsNullOrEmpty(streamUrl) &&
-                        streamUrl.StartsWith($"{host}/proxy/", StringComparison.OrdinalIgnoreCase))
-                    {
-                        streamUrl = accsArgs(streamUrl);
-                    }
-
+                    string streamUrl = HostStreamProxy(init, accsArgs(streamLink));
                     OnLog($"Controller: redirecting to stream URL: {streamUrl}");
                     return Redirect(streamUrl);
                 }

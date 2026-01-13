@@ -324,7 +324,7 @@ namespace CikavaIdeya
                     string playerJson = match.Groups[1].Value;
                     _onLog($"GetStreamUrlFromAshdi: playerJson={playerJson}");
                     // Знаходимо поле file
-                    var fileMatch = Regex.Match(playerJson, @"file\s*:\s*[""]?([^\s,""}]+)[""]?", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                    var fileMatch = Regex.Match(playerJson, @"file\s*:\s*['""]([^'""]+)['""]", RegexOptions.Multiline | RegexOptions.IgnoreCase);
                     if (fileMatch.Success)
                     {
                         _onLog($"GetStreamUrlFromAshdi: found file URL: {fileMatch.Groups[1].Value}");
