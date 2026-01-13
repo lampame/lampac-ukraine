@@ -150,6 +150,82 @@ namespace AnimeON
             return null;
         }
 
+        public async Task<string> ParseAshdiPage(string url)
+        {
+            try
+            {
+                var headers = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", "Mozilla/5.0"),
+                    new HeadersModel("Referer", _init.host)
+                };
+
+                _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {url}");
+                string html = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+                if (string.IsNullOrEmpty(html))
+                    return null;
+
+                var match = System.Text.RegularExpressions.Regex.Match(html, @"file:\s*""([^""]+)""");
+                if (match.Success)
+                {
+                    return match.Groups[1].Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                _onLog($"AnimeON ParseAshdiPage error: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        public async Task<string> ResolveEpisodeStream(int episodeId)
+        {
+            try
+            {
+                string url = $"{_init.host}/api/player/{episodeId}/episode";
+                _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {url}");
+                string json = await Http.Get(url, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
+                if (string.IsNullOrEmpty(json))
+                    return null;
+
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("fileUrl", out var fileProp))
+                {
+                    string fileUrl = fileProp.GetString();
+                    if (!string.IsNullOrEmpty(fileUrl))
+                        return fileUrl;
+                }
+
+                if (root.TryGetProperty("videoUrl", out var videoProp))
+                {
+                    string videoUrl = videoProp.GetString();
+                    return await ResolveVideoUrl(videoUrl);
+                }
+            }
+            catch (Exception ex)
+            {
+                _onLog($"AnimeON ResolveEpisodeStream error: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        public async Task<string> ResolveVideoUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return null;
+
+            if (url.Contains("moonanime.art"))
+                return await ParseMoonAnimePage(url);
+
+            if (url.Contains("ashdi.vip/vod"))
+                return await ParseAshdiPage(url);
+
+            return url;
+        }
+
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
         {
             if (init != null && init.rhub && rhub != -1)
