@@ -279,7 +279,7 @@ namespace AnimeON.Controllers
         }
 
         [HttpGet("animeon/play")]
-        public async Task<ActionResult> Play(string url, int episode_id = 0)
+        public async Task<ActionResult> Play(string url, int episode_id = 0, string title = null)
         {
             var init = await loadKit(ModInit.AnimeON);
             if (!init.enable)
@@ -309,8 +309,10 @@ namespace AnimeON.Controllers
                 return OnError("animeon", proxyManager);
             }
 
-            OnLog("AnimeON Play: redirect to proxied stream");
-            return Redirect(HostStreamProxy(init, accsArgs(streamLink)));
+            string streamUrl = HostStreamProxy(init, accsArgs(streamLink));
+            string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? string.Empty}\"}}";
+            OnLog("AnimeON Play: return call JSON");
+            return Content(jsonResult, "application/json; charset=utf-8");
         }
     }
 }
