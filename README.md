@@ -1,12 +1,11 @@
 # Ukraine online source for Lampac
 
 - [x] AnimeON
-- [x] AniHUB
-- [ ] BambooUA
+- [x] [RIP] AniHUB
+- [x] BambooUA
 - [x] CikavaIdeya
-- [ ] KinoTron
-- [ ] KinoVezha
-- [ ] KlonTV
+- [x] StarLight
+- [x] UAKino
 - [x] UAFlix
 - [x] UATuTFun
 - [x] Unimay
@@ -42,6 +41,9 @@ Create or update the module/repository.yaml file
     - CikavaIdeya
     - Uaflix
     - UaTUT
+    - Bamboo
+    - UAKino
+    - StarLight
 ```
 
 branch - optional, default main
@@ -68,3 +70,7 @@ modules - optional, if not specified, all modules from the repository will be in
     "displayindex": 1
   }
 ```
+
+## Donate
+
+Support the author: https://lampame.donatik.me
