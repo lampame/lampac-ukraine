@@ -63,8 +63,8 @@ namespace StarLight.Controllers
                     var season_tpl = new SeasonTpl(project.Seasons.Count);
                     for (int i = 0; i < project.Seasons.Count; i++)
                     {
-                        var season = project.Seasons[i];
-                        string seasonName = string.IsNullOrEmpty(season.Title) ? $"Сезон {i + 1}" : season.Title;
+                        var seasonInfo = project.Seasons[i];
+                        string seasonName = string.IsNullOrEmpty(seasonInfo.Title) ? $"Сезон {i + 1}" : seasonInfo.Title;
                         string link = $"{host}/starlight?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={i}&href={HttpUtility.UrlEncode(itemUrl)}";
                         season_tpl.Append(seasonName, link, i.ToString());
                     }
