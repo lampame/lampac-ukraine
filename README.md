@@ -2,20 +2,12 @@
 
 ## Table of contents
 
-- [Installation](#installation)
-- [Auto installation](#auto-installation)
-- [Init support](#init-support)
-- [Donate](#donate)
-
-- [x] AnimeON
-- [x] [RIP] AniHUB
-- [x] BambooUA
-- [x] CikavaIdeya
-- [x] StarLight
-- [x] UAKino
-- [x] UAFlix
-- [x] UATuTFun
-- [x] Unimay
+- [Ukraine online source for Lampac](#ukraine-online-source-for-lampac)
+  - [Table of contents](#table-of-contents)
+  - [Installation](#installation)
+  - [Auto installation](#auto-installation)
+  - [Init support](#init-support)
+  - [Donate](#donate)
 
 
 ## Installation
