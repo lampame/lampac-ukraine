@@ -99,18 +99,25 @@ namespace AnimeON.Controllers
                         string episodeStr = ep.Number.ToString();
 
                         string streamLink = !string.IsNullOrEmpty(ep.Hls) ? ep.Hls : ep.VideoUrl;
+                        bool needsResolve = selectedVoiceInfo.PlayerType == "moon" || selectedVoiceInfo.PlayerType == "ashdi";
+
+                        if (string.IsNullOrEmpty(streamLink) && ep.EpisodeId > 0)
+                        {
+                            string callUrl = $"{host}/animeon/play?episode_id={ep.EpisodeId}";
+                            episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, accsArgs(callUrl), "call");
+                            continue;
+                        }
+
                         if (string.IsNullOrEmpty(streamLink))
                             continue;
 
-                        if (selectedVoiceInfo.PlayerType == "moon")
+                        if (needsResolve || streamLink.Contains("moonanime.art") || streamLink.Contains("ashdi.vip/vod"))
                         {
-                            // method=call з accsArgs(callUrl)
                             string callUrl = $"{host}/animeon/play?url={HttpUtility.UrlEncode(streamLink)}";
                             episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, accsArgs(callUrl), "call");
                         }
                         else
                         {
-                            // Пряме відтворення через HostStreamProxy(init, accsArgs(streamLink))
                             string playUrl = HostStreamProxy(init, accsArgs(streamLink));
                             episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, playUrl);
                         }
@@ -158,7 +165,8 @@ namespace AnimeON.Controllers
 
                         string translationName = $"[{player.Name}] {fundub.Fundub.Name}";
 
-                        if (player.Name?.ToLower() == "moon" && streamLink.Contains("moonanime.art/iframe/"))
+                        bool needsResolve = player.Name?.ToLower() == "moon" || player.Name?.ToLower() == "ashdi";
+                        if (needsResolve || streamLink.Contains("moonanime.art/iframe/") || streamLink.Contains("ashdi.vip/vod"))
                         {
                             string callUrl = $"{host}/animeon/play?url={HttpUtility.UrlEncode(streamLink)}";
                             tpl.Append(translationName, accsArgs(callUrl), "call");
@@ -271,30 +279,40 @@ namespace AnimeON.Controllers
         }
 
         [HttpGet("animeon/play")]
-        public async Task<ActionResult> Play(string url)
+        public async Task<ActionResult> Play(string url, int episode_id = 0, string title = null)
         {
-            if (string.IsNullOrEmpty(url))
-            {
-                OnLog("AnimeON Play: empty url");
-                return OnError("animeon", proxyManager);
-            }
-
             var init = await loadKit(ModInit.AnimeON);
             if (!init.enable)
                 return Forbid();
 
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
-            OnLog($"AnimeON Play: url={url}");
-            string streamLink = await invoke.ParseMoonAnimePage(url);
+            OnLog($"AnimeON Play: url={url}, episode_id={episode_id}");
 
-            if (string.IsNullOrEmpty(streamLink))
+            string streamLink = null;
+            if (episode_id > 0)
             {
-                OnLog("AnimeON Play: cannot extract stream from iframe");
+                streamLink = await invoke.ResolveEpisodeStream(episode_id);
+            }
+            else if (!string.IsNullOrEmpty(url))
+            {
+                streamLink = await invoke.ResolveVideoUrl(url);
+            }
+            else
+            {
+                OnLog("AnimeON Play: empty url");
                 return OnError("animeon", proxyManager);
             }
 
-            OnLog("AnimeON Play: redirect to proxied stream");
-            return Redirect(HostStreamProxy(init, accsArgs(streamLink)));
+            if (string.IsNullOrEmpty(streamLink))
+            {
+                OnLog("AnimeON Play: cannot extract stream");
+                return OnError("animeon", proxyManager);
+            }
+
+            string streamUrl = HostStreamProxy(init, accsArgs(streamLink));
+            string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? string.Empty}\"}}";
+            OnLog("AnimeON Play: return call JSON");
+            return Content(jsonResult, "application/json; charset=utf-8");
         }
     }
 }
