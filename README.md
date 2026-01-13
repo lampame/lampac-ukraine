@@ -2,8 +2,6 @@
 
 ## Table of contents
 
-- [Ukraine online source for Lampac](#ukraine-online-source-for-lampac)
-  - [Table of contents](#table-of-contents)
   - [Installation](#installation)
   - [Auto installation](#auto-installation)
   - [Init support](#init-support)
