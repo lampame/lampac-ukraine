@@ -67,7 +67,13 @@ namespace CikavaIdeya.Controllers
                         forceProxy = true;
                     }
 
-                    string streamUrl = HostStreamProxy(init, accsArgs(streamLink), headers: streamHeaders, force_streamproxy: forceProxy);
+                    string streamUrl = HostStreamProxy(init, streamLink, headers: streamHeaders, force_streamproxy: forceProxy);
+                    if (!string.IsNullOrEmpty(streamUrl) &&
+                        streamUrl.StartsWith($"{host}/proxy/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        streamUrl = accsArgs(streamUrl);
+                    }
+
                     OnLog($"Controller: redirecting to stream URL: {streamUrl}");
                     return Redirect(streamUrl);
                 }
