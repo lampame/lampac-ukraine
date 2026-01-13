@@ -57,7 +57,7 @@ namespace CikavaIdeya.Controllers
                     List<HeadersModel> streamHeaders = null;
                     bool forceProxy = false;
 
-                    if (streamLink.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase))
+                    if (streamLink.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase) && init.streamproxy)
                     {
                         streamHeaders = new List<HeadersModel>()
                         {
