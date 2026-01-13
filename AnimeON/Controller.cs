@@ -309,7 +309,19 @@ namespace AnimeON.Controllers
                 return OnError("animeon", proxyManager);
             }
 
-            string streamUrl = HostStreamProxy(init, accsArgs(streamLink));
+            List<HeadersModel> streamHeaders = null;
+            bool forceProxy = false;
+            if (streamLink.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase))
+            {
+                streamHeaders = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", "Mozilla/5.0"),
+                    new HeadersModel("Referer", "https://ashdi.vip/")
+                };
+                forceProxy = true;
+            }
+
+            string streamUrl = HostStreamProxy(init, accsArgs(streamLink), headers: streamHeaders, force_streamproxy: forceProxy);
             string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? string.Empty}\"}}";
             OnLog("AnimeON Play: return call JSON");
             return Content(jsonResult, "application/json; charset=utf-8");

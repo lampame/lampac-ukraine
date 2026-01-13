@@ -157,7 +157,7 @@ namespace AnimeON
                 var headers = new List<HeadersModel>()
                 {
                     new HeadersModel("User-Agent", "Mozilla/5.0"),
-                    new HeadersModel("Referer", _init.host)
+                    new HeadersModel("Referer", "https://ashdi.vip/")
                 };
 
                 _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {url}");
@@ -165,7 +165,7 @@ namespace AnimeON
                 if (string.IsNullOrEmpty(html))
                     return null;
 
-                var match = System.Text.RegularExpressions.Regex.Match(html, @"file:\s*""([^""]+)""");
+                var match = System.Text.RegularExpressions.Regex.Match(html, @"file\s*:\s*['""]([^'""]+)['""]");
                 if (match.Success)
                 {
                     return match.Groups[1].Value;
