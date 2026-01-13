@@ -125,13 +125,23 @@ namespace StarLight
                     Channel = root.TryGetProperty("channelTitle", out var channelProp) ? channelProp.GetString() : null
                 };
 
+                if (root.TryGetProperty("seasons", out var seasonsListProp) && seasonsListProp.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var season in seasonsListProp.EnumerateArray())
+                    {
+                        string seasonTitle = season.TryGetProperty("title", out var sTitle) ? sTitle.GetString() : null;
+                        string seasonSlug = season.TryGetProperty("seasonSlug", out var sSlug) ? sSlug.GetString() : null;
+                        AddSeason(project, seasonTitle, seasonSlug);
+                    }
+                }
+
                 if (root.TryGetProperty("seasonsGallery", out var seasonsProp) && seasonsProp.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var season in seasonsProp.EnumerateArray())
                     {
                         string seasonTitle = season.TryGetProperty("title", out var sTitle) ? sTitle.GetString() : null;
                         string seasonSlug = season.TryGetProperty("seasonSlug", out var sSlug) ? sSlug.GetString() : null;
-                        project.Seasons.Add(new SeasonInfo { Title = seasonTitle, Slug = seasonSlug });
+                        AddSeason(project, seasonTitle, seasonSlug);
 
                         if (season.TryGetProperty("items", out var itemsProp) && itemsProp.ValueKind == JsonValueKind.Array)
                         {
@@ -150,6 +160,8 @@ namespace StarLight
                     }
                 }
 
+                await LoadMissingSeasonEpisodes(project, href, headers);
+
                 _hybridCache.Set(memKey, project, cacheTime(10, init: _init));
                 return project;
             }
@@ -158,6 +170,69 @@ namespace StarLight
                 _onLog?.Invoke($"StarLight project error: {ex.Message}");
                 return null;
             }
+        }
+
+        private async Task LoadMissingSeasonEpisodes(ProjectInfo project, string href, List<HeadersModel> headers)
+        {
+            if (project == null || string.IsNullOrEmpty(href))
+                return;
+
+            var missing = project.Seasons
+                .Where(s => !string.IsNullOrEmpty(s.Slug))
+                .Where(s => !project.Episodes.Any(e => e.SeasonSlug == s.Slug))
+                .ToList();
+
+            foreach (var season in missing)
+            {
+                string seasonUrl = $"{href}/{season.Slug}";
+                try
+                {
+                    _onLog?.Invoke($"StarLight season: {seasonUrl}");
+                    string payload = await Http.Get(seasonUrl, headers: headers, proxy: _proxyManager.Get());
+                    if (string.IsNullOrEmpty(payload))
+                        continue;
+
+                    using var document = JsonDocument.Parse(payload);
+                    var root = document.RootElement;
+
+                    if (root.TryGetProperty("items", out var itemsProp) && itemsProp.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in itemsProp.EnumerateArray())
+                        {
+                            string hash = item.TryGetProperty("hash", out var eHash) ? eHash.GetString() : null;
+                            if (string.IsNullOrEmpty(hash))
+                                continue;
+
+                            if (project.Episodes.Any(e => e.SeasonSlug == season.Slug && e.Hash == hash))
+                                continue;
+
+                            project.Episodes.Add(new EpisodeInfo
+                            {
+                                Title = item.TryGetProperty("title", out var eTitle) ? eTitle.GetString() : null,
+                                Hash = hash,
+                                VideoSlug = item.TryGetProperty("videoSlug", out var eSlug) ? eSlug.GetString() : null,
+                                Date = item.TryGetProperty("dateOfBroadcast", out var eDate) ? eDate.GetString() : (item.TryGetProperty("timeUploadVideo", out var eDate2) ? eDate2.GetString() : null),
+                                SeasonSlug = season.Slug
+                            });
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _onLog?.Invoke($"StarLight season error: {ex.Message}");
+                }
+            }
+        }
+
+        private static void AddSeason(ProjectInfo project, string title, string slug)
+        {
+            if (project == null || string.IsNullOrEmpty(slug))
+                return;
+
+            if (project.Seasons.Any(s => s.Slug == slug))
+                return;
+
+            project.Seasons.Add(new SeasonInfo { Title = title, Slug = slug });
         }
 
         public List<EpisodeInfo> GetEpisodes(ProjectInfo project, string seasonSlug)

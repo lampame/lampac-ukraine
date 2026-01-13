@@ -75,13 +75,15 @@ namespace StarLight.Controllers
                 if (s < 0 || s >= project.Seasons.Count)
                     return OnError("starlight", proxyManager);
 
-                string seasonSlug = project.Seasons[s].Slug;
+                var season = project.Seasons[s];
+                string seasonSlug = season.Slug;
                 var episodes = invoke.GetEpisodes(project, seasonSlug);
                 if (episodes == null || episodes.Count == 0)
                     return OnError("starlight", proxyManager);
 
                 var episode_tpl = new EpisodeTpl();
                 int index = 1;
+                string seasonNumber = GetSeasonNumber(season, s);
                 foreach (var ep in episodes)
                 {
                     if (string.IsNullOrEmpty(ep.Hash))
@@ -89,7 +91,7 @@ namespace StarLight.Controllers
 
                     string episodeName = string.IsNullOrEmpty(ep.Title) ? $"Епізод {index}" : ep.Title;
                     string callUrl = $"{host}/starlight/play?hash={HttpUtility.UrlEncode(ep.Hash)}&title={HttpUtility.UrlEncode(title ?? original_title)}";
-                    episode_tpl.Append(episodeName, title ?? original_title, (s + 1).ToString(), index.ToString("D2"), accsArgs(callUrl), "call");
+                    episode_tpl.Append(episodeName, title ?? original_title, seasonNumber, index.ToString("D2"), accsArgs(callUrl), "call");
                     index++;
                 }
 
@@ -131,6 +133,15 @@ namespace StarLight.Controllers
             string streamUrl = HostStreamProxy(init, accsArgs(result.Stream), proxy: proxyManager.Get());
             string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? result.Name ?? ""}\"}}";
             return Content(jsonResult, "application/json; charset=utf-8");
+        }
+
+        private static string GetSeasonNumber(SeasonInfo season, int fallbackIndex)
+        {
+            if (season?.Title == null)
+                return (fallbackIndex + 1).ToString();
+
+            var digits = new string(season.Title.Where(char.IsDigit).ToArray());
+            return string.IsNullOrEmpty(digits) ? (fallbackIndex + 1).ToString() : digits;
         }
     }
 }
