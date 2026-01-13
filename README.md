@@ -70,3 +70,7 @@ modules - optional, if not specified, all modules from the repository will be in
     "displayindex": 1
   }
 ```
+
+## Donate
+
+Support the author: https://lampame.donatik.me
