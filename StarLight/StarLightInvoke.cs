@@ -127,23 +127,23 @@ namespace StarLight
 
                 if (root.TryGetProperty("seasons", out var seasonsListProp) && seasonsListProp.ValueKind == JsonValueKind.Array)
                 {
-                    foreach (var season in seasonsListProp.EnumerateArray())
+                    foreach (var seasonItem in seasonsListProp.EnumerateArray())
                     {
-                        string seasonTitle = season.TryGetProperty("title", out var sTitle) ? sTitle.GetString() : null;
-                        string seasonSlug = season.TryGetProperty("seasonSlug", out var sSlug) ? sSlug.GetString() : null;
+                        string seasonTitle = seasonItem.TryGetProperty("title", out var sTitle) ? sTitle.GetString() : null;
+                        string seasonSlug = seasonItem.TryGetProperty("seasonSlug", out var sSlug) ? sSlug.GetString() : null;
                         AddSeason(project, seasonTitle, seasonSlug);
                     }
                 }
 
                 if (root.TryGetProperty("seasonsGallery", out var seasonsProp) && seasonsProp.ValueKind == JsonValueKind.Array)
                 {
-                    foreach (var season in seasonsProp.EnumerateArray())
+                    foreach (var seasonItem in seasonsProp.EnumerateArray())
                     {
-                        string seasonTitle = season.TryGetProperty("title", out var sTitle) ? sTitle.GetString() : null;
-                        string seasonSlug = season.TryGetProperty("seasonSlug", out var sSlug) ? sSlug.GetString() : null;
+                        string seasonTitle = seasonItem.TryGetProperty("title", out var sTitle) ? sTitle.GetString() : null;
+                        string seasonSlug = seasonItem.TryGetProperty("seasonSlug", out var sSlug) ? sSlug.GetString() : null;
                         AddSeason(project, seasonTitle, seasonSlug);
 
-                        if (season.TryGetProperty("items", out var itemsProp) && itemsProp.ValueKind == JsonValueKind.Array)
+                        if (seasonItem.TryGetProperty("items", out var itemsProp) && itemsProp.ValueKind == JsonValueKind.Array)
                         {
                             foreach (var item in itemsProp.EnumerateArray())
                             {
@@ -182,9 +182,9 @@ namespace StarLight
                 .Where(s => !project.Episodes.Any(e => e.SeasonSlug == s.Slug))
                 .ToList();
 
-            foreach (var season in missing)
+            foreach (var seasonInfo in missing)
             {
-                string seasonUrl = $"{href}/{season.Slug}";
+                string seasonUrl = $"{href}/{seasonInfo.Slug}";
                 try
                 {
                     _onLog?.Invoke($"StarLight season: {seasonUrl}");
@@ -203,7 +203,7 @@ namespace StarLight
                             if (string.IsNullOrEmpty(hash))
                                 continue;
 
-                            if (project.Episodes.Any(e => e.SeasonSlug == season.Slug && e.Hash == hash))
+                            if (project.Episodes.Any(e => e.SeasonSlug == seasonInfo.Slug && e.Hash == hash))
                                 continue;
 
                             project.Episodes.Add(new EpisodeInfo
@@ -212,7 +212,7 @@ namespace StarLight
                                 Hash = hash,
                                 VideoSlug = item.TryGetProperty("videoSlug", out var eSlug) ? eSlug.GetString() : null,
                                 Date = item.TryGetProperty("dateOfBroadcast", out var eDate) ? eDate.GetString() : (item.TryGetProperty("timeUploadVideo", out var eDate2) ? eDate2.GetString() : null),
-                                SeasonSlug = season.Slug
+                                SeasonSlug = seasonInfo.Slug
                             });
                         }
                     }
