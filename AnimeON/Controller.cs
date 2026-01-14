@@ -25,7 +25,6 @@ namespace AnimeON.Controllers
                     {
                         "c3ZpdGFubW92aWU=",
                         "cG9ydGFsLXR2",
-                        "bGFtcGE=",
                     }
                     .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
                 StringComparer.OrdinalIgnoreCase
