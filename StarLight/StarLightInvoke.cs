@@ -119,7 +119,7 @@ namespace StarLight
                 {
                     Title = root.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : null,
                     Description = root.TryGetProperty("description", out var descProp) ? descProp.GetString() : null,
-                    Poster = NormalizeImage(root.TryGetProperty("image", out var imageProp) ? imageProp.GetString() : null),
+                    Poster = NormalizeImage(SelectImage(root, "imageMob", "imageTab", "image", "logoImage")),
                     Hash = root.TryGetProperty("hash", out var hashProp) ? hashProp.GetString() : null,
                     Type = root.TryGetProperty("typeSlug", out var typeProp) ? typeProp.GetString() : null,
                     Channel = root.TryGetProperty("channelTitle", out var channelProp) ? channelProp.GetString() : null
@@ -143,7 +143,8 @@ namespace StarLight
                                     Hash = item.TryGetProperty("hash", out var eHash) ? eHash.GetString() : null,
                                     VideoSlug = item.TryGetProperty("videoSlug", out var eSlug) ? eSlug.GetString() : null,
                                     Date = item.TryGetProperty("dateOfBroadcast", out var eDate) ? eDate.GetString() : (item.TryGetProperty("timeUploadVideo", out var eDate2) ? eDate2.GetString() : null),
-                                    SeasonSlug = seasonSlug
+                                    SeasonSlug = seasonSlug,
+                                    Image = NormalizeImage(SelectImage(item, "imageMob", "image"))
                                 });
                             }
                         }
@@ -238,6 +239,21 @@ namespace StarLight
                 return path;
 
             return $"{_init.host}{path}";
+        }
+
+        private static string SelectImage(JsonElement element, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (element.TryGetProperty(key, out var prop))
+                {
+                    var value = prop.GetString();
+                    if (!string.IsNullOrEmpty(value))
+                        return value;
+                }
+            }
+
+            return null;
         }
 
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)

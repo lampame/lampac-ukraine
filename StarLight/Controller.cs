@@ -89,7 +89,7 @@ namespace StarLight.Controllers
 
                     string episodeName = string.IsNullOrEmpty(ep.Title) ? $"Епізод {index}" : ep.Title;
                     string callUrl = $"{host}/starlight/play?hash={HttpUtility.UrlEncode(ep.Hash)}&title={HttpUtility.UrlEncode(title ?? original_title)}";
-                    episode_tpl.Append(episodeName, title ?? original_title, (s + 1).ToString(), index.ToString("D2"), accsArgs(callUrl), "call");
+                    episode_tpl.Append(episodeName, title ?? original_title, (s + 1).ToString(), index.ToString("D2"), accsArgs(callUrl), "call", img: ep.Image);
                     index++;
                 }
 
