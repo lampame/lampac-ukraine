@@ -13,12 +13,24 @@ using Shared.Models.Online.Settings;
 using Shared.Models;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 
 namespace Anihub
 {
     [Route("anihub")]
     public class AnihubController : BaseOnlineController
     {
+        private static readonly HashSet<string> NotAllowedHosts =
+            new HashSet<string>(
+                new[]
+                    {
+                        "c3ZpdGFubW92aWU=",
+                        "cG9ydGFsLXR2"
+                        "bGFtcGEuc3RyZWFt"
+                    }
+                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
+                StringComparer.OrdinalIgnoreCase
+            );
         ProxyManager proxyManager;
 
         public AnihubController()
@@ -299,6 +311,9 @@ namespace Anihub
                     requestUrl = iframeUrl + (iframeUrl.Contains("?") ? "&" : "?") + $"player={host}";
                 }
 
+                if (IsNotAllowedHost(requestUrl))
+                    return null;
+
                 // Створюємо HTTP клієнт з правильними заголовками
                 using var httpClient = new HttpClient();
 
@@ -348,6 +363,17 @@ namespace Anihub
                 OnLog($"Anihub player: {sourceType} error - {ex.Message}");
                 return null;
             }
+        }
+
+        private static bool IsNotAllowedHost(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return false;
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return false;
+
+            return NotAllowedHosts.Contains(uri.Host);
         }
     }
 }

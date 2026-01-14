@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Security;
 using System.Security.Authentication;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -24,6 +25,17 @@ namespace UAKino
         private const string PlaylistPath = "/engine/ajax/playlists.php";
         private const string PlaylistField = "playlist";
         private const string BlacklistRegex = "(/news/)|(/franchise/)";
+        private static readonly HashSet<string> NotAllowedHosts =
+            new HashSet<string>(
+                new[]
+                    {
+                        "c3ZpdGFubW92aWU=",
+                        "cG9ydGFsLXR2"
+                        "bGFtcGEuc3RyZWFt"
+                    }
+                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
+                StringComparer.OrdinalIgnoreCase
+            );
         private readonly OnlinesSettings _init;
         private readonly HybridCache _hybridCache;
         private readonly Action<string> _onLog;
@@ -260,6 +272,9 @@ namespace UAKino
 
         private async Task<string> GetString(string url, List<HeadersModel> headers, int timeoutSeconds = 15)
         {
+            if (IsNotAllowedHost(url))
+                return null;
+
             var handler = new SocketsHttpHandler
             {
                 AllowAutoRedirect = true,
@@ -403,12 +418,12 @@ namespace UAKino
                 return string.Empty;
 
             if (url.StartsWith("//"))
-                return $"https:{url}";
+                return IsNotAllowedHost($"https:{url}") ? string.Empty : $"https:{url}";
 
             if (url.StartsWith("/"))
-                return $"{_init.host}{url}";
+                return IsNotAllowedHost(_init.host) ? string.Empty : $"{_init.host}{url}";
 
-            return url;
+            return IsNotAllowedHost(url) ? string.Empty : url;
         }
 
         private static bool LooksLikeDirectStream(string url)
@@ -419,6 +434,17 @@ namespace UAKino
         private static bool IsBlacklisted(string url)
         {
             return Regex.IsMatch(url ?? string.Empty, BlacklistRegex, RegexOptions.IgnoreCase);
+        }
+
+        private static bool IsNotAllowedHost(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return false;
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return false;
+
+            return NotAllowedHosts.Contains(uri.Host);
         }
 
         private static bool IsSeriesUrl(string url)

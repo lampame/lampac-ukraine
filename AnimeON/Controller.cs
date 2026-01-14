@@ -10,6 +10,7 @@ using Shared;
 using Shared.Models.Templates;
 using AnimeON.Models;
 using System.Text.RegularExpressions;
+using System.Text;
 using Shared.Models.Online.Settings;
 using Shared.Models;
 using HtmlAgilityPack;
@@ -18,6 +19,17 @@ namespace AnimeON.Controllers
 {
     public class Controller : BaseOnlineController
     {
+        private static readonly HashSet<string> NotAllowedHosts =
+            new HashSet<string>(
+                new[]
+                    {
+                        "c3ZpdGFubW92aWU=",
+                        "cG9ydGFsLXR2"
+                        "bGFtcGEuc3RyZWFt"
+                    }
+                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
+                StringComparer.OrdinalIgnoreCase
+            );
         ProxyManager proxyManager;
 
         public Controller()
@@ -190,6 +202,9 @@ namespace AnimeON.Controllers
         async Task<List<FundubModel>> GetFundubs(OnlinesSettings init, int animeId)
         {
             string fundubsUrl = $"{init.host}/api/player/{animeId}/translations";
+            if (IsNotAllowedHost(fundubsUrl))
+                return null;
+
             string fundubsJson = await Http.Get(fundubsUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
             if (string.IsNullOrEmpty(fundubsJson))
                 return null;
@@ -214,6 +229,9 @@ namespace AnimeON.Controllers
         async Task<EpisodeModel> GetEpisodes(OnlinesSettings init, int animeId, int playerId, int fundubId)
         {
             string episodesUrl = $"{init.host}/api/player/{animeId}/episodes?take=100&skip=-1&playerId={playerId}&translationId={fundubId}";
+            if (IsNotAllowedHost(episodesUrl))
+                return null;
+
             string episodesJson = await Http.Get(episodesUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
             if (string.IsNullOrEmpty(episodesJson))
                 return null;
@@ -237,6 +255,9 @@ namespace AnimeON.Controllers
                         return null;
 
                     string searchUrl = $"{init.host}/api/anime/search?text={HttpUtility.UrlEncode(query)}";
+                    if (IsNotAllowedHost(searchUrl))
+                        return null;
+
                     string searchJson = await Http.Get(searchUrl, headers: headers);
                     if (string.IsNullOrEmpty(searchJson))
                         return null;
@@ -313,6 +334,17 @@ namespace AnimeON.Controllers
             string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? string.Empty}\"}}";
             OnLog("AnimeON Play: return call JSON");
             return Content(jsonResult, "application/json; charset=utf-8");
+        }
+
+        private static bool IsNotAllowedHost(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return false;
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return false;
+
+            return NotAllowedHosts.Contains(uri.Host);
         }
     }
 }

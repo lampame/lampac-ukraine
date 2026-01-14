@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Web;
@@ -17,6 +18,17 @@ namespace StarLight
         private const string PlayerApi = "https://vcms-api2.starlight.digital/player-api";
         private const string PlayerReferer = "https://teleportal.ua/";
         private const string Language = "ua";
+        private static readonly HashSet<string> NotAllowedHosts =
+            new HashSet<string>(
+                new[]
+                    {
+                        "c3ZpdGFubW92aWU=",
+                        "cG9ydGFsLXR2"
+                        "bGFtcGEuc3RyZWFt"
+                    }
+                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
+                StringComparer.OrdinalIgnoreCase
+            );
         private readonly OnlinesSettings _init;
         private readonly HybridCache _hybridCache;
         private readonly Action<string> _onLog;
@@ -41,6 +53,9 @@ namespace StarLight
                 return cached;
 
             string url = $"{_init.host}/{Language}/live-search?q={HttpUtility.UrlEncode(query)}";
+            if (IsNotAllowedHost(url))
+                return null;
+
             var headers = new List<HeadersModel>()
             {
                 new HeadersModel("User-Agent", "Mozilla/5.0"),
@@ -107,6 +122,9 @@ namespace StarLight
 
             try
             {
+                if (IsNotAllowedHost(href))
+                    return null;
+
                 _onLog?.Invoke($"StarLight project: {href}");
                 string payload = await Http.Get(href, headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(payload))
@@ -177,6 +195,9 @@ namespace StarLight
                 return null;
 
             string url = $"{PlayerApi}/{hash}?referer={HttpUtility.UrlEncode(PlayerReferer)}&lang={Language}";
+            if (IsNotAllowedHost(url))
+                return null;
+
             var headers = new List<HeadersModel>()
             {
                 new HeadersModel("User-Agent", "Mozilla/5.0"),
@@ -235,11 +256,21 @@ namespace StarLight
                 return string.Empty;
 
             if (path.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                return path;
+                return IsNotAllowedHost(path) ? string.Empty : path;
 
-            return $"{_init.host}{path}";
+            return IsNotAllowedHost(_init.host) ? string.Empty : $"{_init.host}{path}";
         }
 
+        private static bool IsNotAllowedHost(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return false;
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return false;
+
+            return NotAllowedHosts.Contains(uri.Host);
+        }
 
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
         {
