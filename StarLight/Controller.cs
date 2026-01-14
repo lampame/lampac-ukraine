@@ -193,7 +193,7 @@ namespace StarLight.Controllers
                 html.Append("'>");
 
                 html.Append("<div class=\"videos__item-imgbox videos__movie-imgbox\"></div><div class=\"videos__item-title\">");
-                Shared.Models.Templates.UtilsTpl.HtmlEncode(item.name, html);
+                HtmlEncode(item.name, html);
                 html.Append("</div></div>");
 
                 firstjson = false;
@@ -202,6 +202,25 @@ namespace StarLight.Controllers
             html.Append("</div>");
 
             return html.ToString();
+        }
+
+        private static void HtmlEncode(string value, StringBuilder sb)
+        {
+            if (string.IsNullOrEmpty(value))
+                return;
+
+            foreach (var c in value)
+            {
+                switch (c)
+                {
+                    case '<': sb.Append("&lt;"); break;
+                    case '>': sb.Append("&gt;"); break;
+                    case '&': sb.Append("&amp;"); break;
+                    case '"': sb.Append("&quot;"); break;
+                    case '\'': sb.Append("&#39;"); break;
+                    default: sb.Append(c); break;
+                }
+            }
         }
     }
 }
