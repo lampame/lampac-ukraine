@@ -193,7 +193,7 @@ namespace StarLight.Controllers
                 html.Append("'>");
 
                 html.Append("<div class=\"videos__item-imgbox videos__movie-imgbox\"></div><div class=\"videos__item-title\">");
-                UtilsTpl.HtmlEncode(item.name, html);
+                Shared.Models.Templates.UtilsTpl.HtmlEncode(item.name, html);
                 html.Append("</div></div>");
 
                 firstjson = false;
