@@ -282,7 +282,8 @@ namespace Uaflix.Controllers
                                 s: s.ToString(),
                                 e: ep.Number.ToString(),
                                 link: accsArgs(callUrl),
-                                method: "call"
+                                method: "call",
+                                streamlink: accsArgs($"{callUrl}&play=true")
                             );
                         }
                         else
@@ -331,4 +332,3 @@ namespace Uaflix.Controllers
         
     }
 }
-
