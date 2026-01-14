@@ -84,7 +84,7 @@ namespace StarLight.Controllers
                 if (episodes == null || episodes.Count == 0)
                     return OnError("starlight", proxyManager);
 
-                var episodeItems = new List<(string name, object json)>();
+                var episodeItems = new List<(string name, object json, string image)>();
                 int index = 1;
                 foreach (var ep in episodes)
                 {
@@ -107,7 +107,7 @@ namespace StarLight.Controllers
                         img = image
                     };
 
-                    episodeItems.Add((episodeName, jsonItem));
+                    episodeItems.Add((episodeName, jsonItem, image));
                     index++;
                 }
 
@@ -172,7 +172,7 @@ namespace StarLight.Controllers
             return JsonSerializer.Serialize(payload, EpisodeJsonOptions);
         }
 
-        private static string BuildEpisodeHtml(List<(string name, object json)> items)
+        private static string BuildEpisodeHtml(List<(string name, object json, string image)> items)
         {
             var html = new StringBuilder();
             bool firstjson = true;
@@ -192,7 +192,18 @@ namespace StarLight.Controllers
                 html.Append(JsonSerializer.Serialize(item.json, EpisodeJsonOptions));
                 html.Append("'>");
 
-                html.Append("<div class=\"videos__item-imgbox videos__movie-imgbox\"></div><div class=\"videos__item-title\">");
+                if (!string.IsNullOrEmpty(item.image))
+                {
+                    html.Append("<div class=\"videos__item-imgbox videos__movie-imgbox\" style=\"background-image:url('");
+                    HtmlEncode(item.image, html);
+                    html.Append("')\"></div>");
+                }
+                else
+                {
+                    html.Append("<div class=\"videos__item-imgbox videos__movie-imgbox\"></div>");
+                }
+
+                html.Append("<div class=\"videos__item-title\">");
                 HtmlEncode(item.name, html);
                 html.Append("</div></div>");
 
