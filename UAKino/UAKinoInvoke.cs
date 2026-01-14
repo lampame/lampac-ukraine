@@ -447,7 +447,7 @@ namespace UAKino
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            return NotAllowedHosts.Contains(uri.Host);
+            return NotAllowedHosts.Any(x => x.Contains(uri.Host));
         }
 
         private static bool IsSeriesUrl(string url)

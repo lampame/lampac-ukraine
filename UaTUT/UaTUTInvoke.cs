@@ -177,7 +177,7 @@ namespace UaTUT
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            return NotAllowedHosts.Contains(uri.Host);
+            return NotAllowedHosts.Any(x => x.Contains(uri.Host));
         }
 
         private PlayerData ParsePlayerData(string playerHtml)

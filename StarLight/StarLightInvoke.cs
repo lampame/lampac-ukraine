@@ -343,7 +343,7 @@ namespace StarLight
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            return NotAllowedHosts.Contains(uri.Host);
+            return NotAllowedHosts.Any(x => x.Contains(uri.Host));
         }
 
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)

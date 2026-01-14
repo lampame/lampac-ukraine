@@ -317,7 +317,7 @@ namespace Bamboo
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            return NotAllowedHosts.Contains(uri.Host);
+            return NotAllowedHosts.Any(x => x.Contains(uri.Host));
         }
 
         private static int? ExtractEpisodeNumber(string title)
