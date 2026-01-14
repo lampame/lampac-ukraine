@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Security;
 using System.Security.Authentication;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -259,14 +260,16 @@ namespace UAKino
 
         private async Task<string> GetString(string url, List<HeadersModel> headers, int timeoutSeconds = 15)
         {
-            var handler = new HttpClientHandler
+            var handler = new SocketsHttpHandler
             {
                 AllowAutoRedirect = true,
                 AutomaticDecompression = DecompressionMethods.Brotli | DecompressionMethods.GZip | DecompressionMethods.Deflate,
-                SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+                SslOptions = new SslClientAuthenticationOptions
+                {
+                    RemoteCertificateValidationCallback = (_, _, _, _) => true,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+                }
             };
-
-            handler.ServerCertificateCustomValidationCallback += (sender, cert, chain, sslPolicyErrors) => true;
 
             var proxy = _proxyManager.Get();
             if (proxy != null)
