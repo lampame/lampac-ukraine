@@ -347,7 +347,7 @@ namespace AnimeON.Controllers
             return Content(jsonResult, "application/json; charset=utf-8");
         }
 
-        private static bool IsNotAllowedHost(string url)
+        private bool IsNotAllowedHost(string url)
         {
             if (string.IsNullOrEmpty(url))
                 return false;
@@ -355,7 +355,11 @@ namespace AnimeON.Controllers
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            return NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            bool marker = NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            if (marker)
+                OnLog($"Error: {Guid.NewGuid()}");
+
+            return marker;
         }
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink, List<HeadersModel> headers, bool forceProxy)

@@ -309,7 +309,7 @@ namespace Bamboo
             return IsNotAllowedHost(url) ? string.Empty : url;
         }
 
-        private static bool IsNotAllowedHost(string url)
+        private bool IsNotAllowedHost(string url)
         {
             if (string.IsNullOrEmpty(url))
                 return false;
@@ -317,7 +317,11 @@ namespace Bamboo
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            return NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            bool marker = NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            if (marker)
+                _onLog?.Invoke($"Error: {Guid.NewGuid()}");
+
+            return marker;
         }
 
         private static int? ExtractEpisodeNumber(string title)

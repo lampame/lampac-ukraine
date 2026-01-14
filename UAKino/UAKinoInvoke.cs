@@ -212,13 +212,22 @@ namespace UAKino
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
 
-                var iframe = doc.DocumentNode.SelectSingleNode("//iframe[@id='pre']");
+                var playlistNode = doc.DocumentNode.SelectSingleNode($"//div[contains(@class,'playlists-ajax') and @data-xfname='{PlaylistField}']");
+                if (playlistNode != null)
+                    return null;
+
+                var iframe = doc.DocumentNode.SelectSingleNode("//iframe[@id='pre' and not(ancestor::*[@id='overroll'])]") ??
+                             doc.DocumentNode.SelectSingleNode("//iframe[@id='pre']");
                 if (iframe == null)
                     return null;
 
                 string src = iframe.GetAttributeValue("src", "");
                 if (string.IsNullOrEmpty(src))
                     src = iframe.GetAttributeValue("data-src", "");
+
+                if (src.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
+                    src.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+                    return null;
 
                 return NormalizeUrl(src);
             }
@@ -439,7 +448,7 @@ namespace UAKino
             return Regex.IsMatch(url ?? string.Empty, BlacklistRegex, RegexOptions.IgnoreCase);
         }
 
-        private static bool IsNotAllowedHost(string url)
+        private bool IsNotAllowedHost(string url)
         {
             if (string.IsNullOrEmpty(url))
                 return false;
@@ -447,7 +456,11 @@ namespace UAKino
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            return NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            bool marker = NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            if (marker)
+                _onLog?.Invoke($"Error: {Guid.NewGuid()}");
+
+            return marker;
         }
 
         private static bool IsSeriesUrl(string url)

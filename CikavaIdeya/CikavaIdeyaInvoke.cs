@@ -378,7 +378,7 @@ namespace CikavaIdeya
             return null;
         }
 
-        private static bool IsNotAllowedHost(string url)
+        private bool IsNotAllowedHost(string url)
         {
             if (string.IsNullOrEmpty(url))
                 return false;
@@ -386,7 +386,11 @@ namespace CikavaIdeya
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            return NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            bool marker = NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            if (marker)
+                _onLog?.Invoke($"Error: {Guid.NewGuid()}");
+
+            return marker;
         }
 
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)

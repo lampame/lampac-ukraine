@@ -169,7 +169,7 @@ namespace UaTUT
             }
         }
 
-        private static bool IsNotAllowedHost(string url)
+        private bool IsNotAllowedHost(string url)
         {
             if (string.IsNullOrEmpty(url))
                 return false;
@@ -177,7 +177,11 @@ namespace UaTUT
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            return NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            bool marker = NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            if (marker)
+                _onLog?.Invoke($"Error: {Guid.NewGuid()}");
+
+            return marker;
         }
 
         private PlayerData ParsePlayerData(string playerHtml)
