@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Security.Authentication;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using HtmlAgilityPack;
@@ -62,7 +66,7 @@ namespace UAKino
                     };
 
                     _onLog?.Invoke($"UAKino search: {searchUrl}");
-                    string html = await Http.Get(searchUrl, headers: headers, proxy: _proxyManager.Get());
+                    string html = await GetString(searchUrl, headers);
                     if (string.IsNullOrEmpty(html))
                         continue;
 
@@ -147,7 +151,7 @@ namespace UAKino
             try
             {
                 _onLog?.Invoke($"UAKino playlist: {url}");
-                string payload = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+                string payload = await GetString(url, headers);
                 if (string.IsNullOrEmpty(payload))
                     return null;
 
@@ -189,7 +193,7 @@ namespace UAKino
             try
             {
                 _onLog?.Invoke($"UAKino movie page: {href}");
-                string html = await Http.Get(href, headers: headers, proxy: _proxyManager.Get());
+                string html = await GetString(href, headers);
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -232,7 +236,7 @@ namespace UAKino
             try
             {
                 _onLog?.Invoke($"UAKino parse player: {url}");
-                string html = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+                string html = await GetString(url, headers);
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -251,6 +255,45 @@ namespace UAKino
                 _onLog?.Invoke($"UAKino parse player error: {ex.Message}");
                 return null;
             }
+        }
+
+        private async Task<string> GetString(string url, List<HeadersModel> headers, int timeoutSeconds = 15)
+        {
+            var handler = new HttpClientHandler
+            {
+                AllowAutoRedirect = true,
+                AutomaticDecompression = DecompressionMethods.Brotli | DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+            };
+
+            handler.ServerCertificateCustomValidationCallback += (sender, cert, chain, sslPolicyErrors) => true;
+
+            var proxy = _proxyManager.Get();
+            if (proxy != null)
+            {
+                handler.UseProxy = true;
+                handler.Proxy = proxy;
+            }
+            else
+            {
+                handler.UseProxy = false;
+            }
+
+            using var client = new HttpClient(handler);
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+
+            if (headers != null)
+            {
+                foreach (var h in headers)
+                    req.Headers.TryAddWithoutValidation(h.name, h.val);
+            }
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(5, timeoutSeconds)));
+            using var response = await client.SendAsync(req, cts.Token).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            return await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
         }
 
         private List<PlaylistItem> ParsePlaylistHtml(string html)
