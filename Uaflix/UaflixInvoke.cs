@@ -500,6 +500,8 @@ namespace Uaflix
                     return null;
                 }
 
+                NormalizeUaflixVoiceNames(structure);
+
                 // Edge Case 9: Перевірка наявності епізодів у озвучках
                 bool hasEpisodes = structure.Voices.Values.Any(v => v.Seasons.Values.Any(s => s.Any()));
                 if (!hasEpisodes)
@@ -886,6 +888,38 @@ namespace Uaflix
             }
             _onLog($"ParseEpisode result: streams.count={result.streams.Count}, ashdi_url={result.ashdi_url}");
             return result;
+        }
+
+        private void NormalizeUaflixVoiceNames(SerialAggregatedStructure structure)
+        {
+            const string baseName = "Uaflix";
+            const string zetName = "Uaflix #2";
+            const string ashdiName = "Uaflix #3";
+
+            if (structure == null || structure.Voices == null || structure.Voices.Count == 0)
+                return;
+
+            bool hasBase = structure.Voices.ContainsKey(baseName);
+            bool hasZet = structure.Voices.ContainsKey(zetName);
+            bool hasAshdi = structure.Voices.ContainsKey(ashdiName);
+
+            if (hasBase)
+                return;
+
+            if (hasZet && !hasAshdi)
+            {
+                var voice = structure.Voices[zetName];
+                voice.DisplayName = baseName;
+                structure.Voices.Remove(zetName);
+                structure.Voices[baseName] = voice;
+            }
+            else if (hasAshdi && !hasZet)
+            {
+                var voice = structure.Voices[ashdiName];
+                voice.DisplayName = baseName;
+                structure.Voices.Remove(ashdiName);
+                structure.Voices[baseName] = voice;
+            }
         }
 
         async Task<List<(string link, string quality)>> ParseAllZetvideoSources(string iframeUrl)
