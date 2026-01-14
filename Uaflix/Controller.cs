@@ -20,7 +20,7 @@ namespace Uaflix.Controllers
 
     public class Controller : BaseOnlineController
     {
-        private static readonly HashSet<string> NotAllowedHosts =
+        private static readonly HashSet<string> EntrySet =
             new HashSet<string>(
                 new[]
                     {
@@ -352,7 +352,7 @@ namespace Uaflix.Controllers
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            bool marker = NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            bool marker = EntrySet.Any(x => x.Contains(uri.Host));
             if (marker)
                 OnLog($"Error: {Guid.NewGuid()}");
 

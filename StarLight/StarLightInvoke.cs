@@ -18,7 +18,7 @@ namespace StarLight
         private const string PlayerApi = "https://vcms-api2.starlight.digital/player-api";
         private const string PlayerReferer = "https://teleportal.ua/";
         private const string Language = "ua";
-        private static readonly HashSet<string> NotAllowedHosts =
+        private static readonly HashSet<string> EntrySet =
             new HashSet<string>(
                 new[]
                     {
@@ -343,7 +343,7 @@ namespace StarLight
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            bool marker = NotAllowedHosts.Any(x => x.Contains(uri.Host));
+            bool marker = EntrySet.Any(x => x.Contains(uri.Host));
             if (marker)
                 _onLog?.Invoke($"Error: {Guid.NewGuid()}");
 

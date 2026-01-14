@@ -73,6 +73,14 @@ namespace UaTUT
                     if (string.IsNullOrEmpty(host))
                         return;
 
+                    if (Uri.TryCreate(host, UriKind.Absolute, out var uri))
+                        host = uri.Host;
+                    else if (Uri.TryCreate("http://" + host, UriKind.Absolute, out uri))
+                        host = uri.Host;
+
+                    if (string.IsNullOrEmpty(host))
+                        return;
+
                     using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
                     string payload = "{\"Host\":\"" + host.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"}";
                     using var request = new HttpRequestMessage(
