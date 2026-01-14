@@ -65,7 +65,9 @@ modules - optional, if not specified, all modules from the repository will be in
         "socks5://adress:port"
       ]
     },
-    "displayindex": 1
+    "displayindex": 1,
+    "apn": true,
+    "apn_host": "domaine.com/{encodeurl}"
   }
 ```
 
