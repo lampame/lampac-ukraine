@@ -1,9 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Web;
 using Microsoft.AspNetCore.Mvc;
@@ -84,7 +81,7 @@ namespace StarLight.Controllers
                 if (episodes == null || episodes.Count == 0)
                     return OnError("starlight", proxyManager);
 
-                var episodeItems = new List<(string name, object json, string image)>();
+                var episode_tpl = new EpisodeTpl();
                 int index = 1;
                 foreach (var ep in episodes)
                 {
@@ -93,30 +90,11 @@ namespace StarLight.Controllers
 
                     string episodeName = string.IsNullOrEmpty(ep.Title) ? $"Епізод {index}" : ep.Title;
                     string callUrl = $"{host}/starlight/play?hash={HttpUtility.UrlEncode(ep.Hash)}&title={HttpUtility.UrlEncode(title ?? original_title)}";
-                    string image = string.IsNullOrEmpty(ep.Image) ? null : ep.Image;
-                    string displayTitle = $"{title ?? original_title} ({index} серия)";
-
-                    var jsonItem = new
-                    {
-                        method = "call",
-                        url = accsArgs(callUrl),
-                        s = (short)(s + 1),
-                        e = (short)index,
-                        name = episodeName,
-                        title = displayTitle,
-                        img = image
-                    };
-
-                    episodeItems.Add((episodeName, jsonItem, image));
+                    episode_tpl.Append(episodeName, title ?? original_title, (s + 1).ToString(), index.ToString("D2"), accsArgs(callUrl), "call");
                     index++;
                 }
 
-                if (episodeItems.Count == 0)
-                    return OnError("starlight", proxyManager);
-
-                return rjson
-                    ? Content(BuildEpisodeJson(episodeItems.Select(i => i.json)), "application/json; charset=utf-8")
-                    : Content(BuildEpisodeHtml(episodeItems), "text/html; charset=utf-8");
+                return rjson ? Content(episode_tpl.ToJson(), "application/json; charset=utf-8") : Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
             }
             else
             {
@@ -156,82 +134,5 @@ namespace StarLight.Controllers
             return Content(jsonResult, "application/json; charset=utf-8");
         }
 
-        private static readonly JsonSerializerOptions EpisodeJsonOptions = new JsonSerializerOptions
-        {
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-        };
-
-        private static string BuildEpisodeJson(IEnumerable<object> items)
-        {
-            var payload = new
-            {
-                type = "episode",
-                data = items
-            };
-
-            return JsonSerializer.Serialize(payload, EpisodeJsonOptions);
-        }
-
-        private static string BuildEpisodeHtml(List<(string name, object json, string image)> items)
-        {
-            var html = new StringBuilder();
-            bool firstjson = true;
-
-            html.Append("<div class=\"videos__line\">");
-
-            foreach (var item in items)
-            {
-                html.Append("<div class=\"videos__item videos__movie selector ");
-                if (firstjson)
-                    html.Append("focused");
-                html.Append("\" ");
-
-                html.Append("media=\"\" ");
-
-                html.Append("data-json='");
-                html.Append(JsonSerializer.Serialize(item.json, EpisodeJsonOptions));
-                html.Append("'>");
-
-                if (!string.IsNullOrEmpty(item.image))
-                {
-                    html.Append("<div class=\"videos__item-imgbox videos__movie-imgbox\" style=\"background-image:url('");
-                    HtmlEncode(item.image, html);
-                    html.Append("')\"></div>");
-                }
-                else
-                {
-                    html.Append("<div class=\"videos__item-imgbox videos__movie-imgbox\"></div>");
-                }
-
-                html.Append("<div class=\"videos__item-title\">");
-                HtmlEncode(item.name, html);
-                html.Append("</div></div>");
-
-                firstjson = false;
-            }
-
-            html.Append("</div>");
-
-            return html.ToString();
-        }
-
-        private static void HtmlEncode(string value, StringBuilder sb)
-        {
-            if (string.IsNullOrEmpty(value))
-                return;
-
-            foreach (var c in value)
-            {
-                switch (c)
-                {
-                    case '<': sb.Append("&lt;"); break;
-                    case '>': sb.Append("&gt;"); break;
-                    case '&': sb.Append("&amp;"); break;
-                    case '"': sb.Append("&quot;"); break;
-                    case '\'': sb.Append("&#39;"); break;
-                    default: sb.Append(c); break;
-                }
-            }
-        }
     }
 }

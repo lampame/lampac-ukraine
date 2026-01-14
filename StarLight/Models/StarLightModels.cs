@@ -24,7 +24,6 @@ namespace StarLight.Models
         public string VideoSlug { get; set; }
         public string Date { get; set; }
         public string SeasonSlug { get; set; }
-        public string Image { get; set; }
     }
 
     public class ProjectInfo
