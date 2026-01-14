@@ -341,7 +341,7 @@ namespace AnimeON.Controllers
                 forceProxy = true;
             }
 
-            string streamUrl = HostStreamProxy(init, accsArgs(streamLink), headers: streamHeaders, force_streamproxy: forceProxy);
+            string streamUrl = BuildStreamUrl(init, streamLink, streamHeaders, forceProxy);
             string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? string.Empty}\"}}";
             OnLog("AnimeON Play: return call JSON");
             return Content(jsonResult, "application/json; charset=utf-8");
@@ -356,6 +356,15 @@ namespace AnimeON.Controllers
                 return false;
 
             return NotAllowedHosts.Contains(uri.Host);
+        }
+
+        string BuildStreamUrl(OnlinesSettings init, string streamLink, List<HeadersModel> headers, bool forceProxy)
+        {
+            string link = accsArgs(streamLink);
+            if (ApnHelper.IsAshdiUrl(link) && ApnHelper.IsEnabled(init))
+                return ApnHelper.WrapUrl(init, link);
+
+            return HostStreamProxy(init, link, headers: headers, force_streamproxy: forceProxy);
         }
     }
 }

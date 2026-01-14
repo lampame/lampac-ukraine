@@ -69,6 +69,15 @@ modules - optional, if not specified, all modules from the repository will be in
   }
 ```
 
+## APN support
+
+Sources with APN support:
+- AnimeON
+- Uaflix
+- UaTUT
+- CikavaIdeya
+- UAKino
+
 ## Donate
 
 Support the author: https://lampame.donatik.me

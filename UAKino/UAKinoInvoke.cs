@@ -274,6 +274,10 @@ namespace UAKino
             if (IsNotAllowedHost(url))
                 return null;
 
+            string requestUrl = ApnHelper.IsAshdiUrl(url) && ApnHelper.IsEnabled(_init)
+                ? ApnHelper.WrapUrl(_init, url)
+                : url;
+
             var handler = new SocketsHttpHandler
             {
                 AllowAutoRedirect = true,
@@ -297,7 +301,7 @@ namespace UAKino
             }
 
             using var client = new HttpClient(handler);
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            using var req = new HttpRequestMessage(HttpMethod.Get, requestUrl);
 
             if (headers != null)
             {

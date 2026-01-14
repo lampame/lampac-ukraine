@@ -65,7 +65,7 @@ namespace CikavaIdeya.Controllers
                 if (playResult.streams != null && playResult.streams.Count > 0)
                 {
                     string streamLink = playResult.streams.First().link;
-                    string streamUrl = HostStreamProxy(init, accsArgs(streamLink));
+                    string streamUrl = BuildStreamUrl(init, streamLink);
                     OnLog($"Controller: redirecting to stream URL: {streamUrl}");
                     return Redirect(streamUrl);
                 }
@@ -78,7 +78,7 @@ namespace CikavaIdeya.Controllers
                 }
 
                 if (playResult.streams != null && playResult.streams.Count > 0)
-                    return Redirect(HostStreamProxy(init, accsArgs(playResult.streams.First().link)));
+                    return Redirect(BuildStreamUrl(init, playResult.streams.First().link));
                 
                 return Content("CikavaIdeya", "text/html; charset=utf-8");
             }
@@ -412,6 +412,15 @@ namespace CikavaIdeya.Controllers
                 return false;
 
             return NotAllowedHosts.Contains(uri.Host);
+        }
+
+        string BuildStreamUrl(OnlinesSettings init, string streamLink)
+        {
+            string link = accsArgs(streamLink);
+            if (ApnHelper.IsAshdiUrl(link) && ApnHelper.IsEnabled(init))
+                return ApnHelper.WrapUrl(init, link);
+
+            return HostStreamProxy(init, link);
         }
     }
 }

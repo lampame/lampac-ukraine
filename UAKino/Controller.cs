@@ -133,9 +133,18 @@ namespace UAKino.Controllers
             if (result == null || string.IsNullOrEmpty(result.File))
                 return OnError("uakino", proxyManager);
 
-            string streamUrl = HostStreamProxy(init, accsArgs(result.File), proxy: proxyManager.Get());
+            string streamUrl = BuildStreamUrl(init, result.File);
             string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? ""}\"}}";
             return Content(jsonResult, "application/json; charset=utf-8");
+        }
+
+        string BuildStreamUrl(OnlinesSettings init, string streamLink)
+        {
+            string link = accsArgs(streamLink);
+            if (ApnHelper.IsAshdiUrl(link) && ApnHelper.IsEnabled(init))
+                return ApnHelper.WrapUrl(init, link);
+
+            return HostStreamProxy(init, link, proxy: proxyManager.Get());
         }
     }
 }
