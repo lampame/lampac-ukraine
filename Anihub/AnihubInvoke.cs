@@ -19,6 +19,16 @@ namespace Anihub
 {
     public class AnihubInvoke
     {
+        private static readonly HashSet<string> NotAllowedHosts =
+            new HashSet<string>(
+                new[]
+                    {
+                        "c3ZpdGFubW92aWU=",
+                        "cG9ydGFsLXR2",
+                    }
+                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
+                StringComparer.OrdinalIgnoreCase
+            );
         private OnlinesSettings _init;
         private HybridCache _hybridCache;
         private Action<string> _onLog;
@@ -40,6 +50,9 @@ namespace Anihub
 
             string searchQuery = string.IsNullOrEmpty(title) ? original_title : title;
             string searchUrl = $"{_init.apihost}/anime/?search={HttpUtility.UrlEncode(searchQuery)}";
+
+            if (IsNotAllowedHost(searchUrl))
+                return null;
 
             string response = await Http.Get(searchUrl, headers: headers, proxy: _proxyManager.Get());
 
@@ -75,6 +88,9 @@ namespace Anihub
             );
 
             string sourcesUrl = $"{_init.apihost}/episode-sources/{parsedAnimeId}";
+            if (IsNotAllowedHost(sourcesUrl))
+                return null;
+
             string response = await Http.Get(sourcesUrl, headers: headers, proxy: _proxyManager.Get());
 
             if (string.IsNullOrEmpty(response))
@@ -154,6 +170,17 @@ namespace Anihub
             }
 
             return voices;
+        }
+
+        private static bool IsNotAllowedHost(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return false;
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return false;
+
+            return NotAllowedHosts.Contains(uri.Host);
         }
 
         public async Task<List<SeasonTpl>> GetSeasons(AnihubEpisodeSourcesResponse sources)

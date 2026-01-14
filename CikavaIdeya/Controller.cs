@@ -9,6 +9,7 @@ using HtmlAgilityPack;
 using Shared;
 using Shared.Models.Templates;
 using System.Text.RegularExpressions;
+using System.Text;
 using Shared.Models.Online.Settings;
 using Shared.Models;
 using CikavaIdeya.Models;
@@ -17,6 +18,16 @@ namespace CikavaIdeya.Controllers
 {
     public class Controller : BaseOnlineController
     {
+        private static readonly HashSet<string> NotAllowedHosts =
+            new HashSet<string>(
+                new[]
+                    {
+                        "c3ZpdGFubW92aWU=",
+                        "cG9ydGFsLXR2",
+                    }
+                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
+                StringComparer.OrdinalIgnoreCase
+            );
         ProxyManager proxyManager;
 
         public Controller()
@@ -157,6 +168,9 @@ namespace CikavaIdeya.Controllers
                 string searchUrl = $"{init.host}/index.php?do=search&subaction=search&story={HttpUtility.UrlEncode(searchTitle)}";
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) };
 
+                if (IsNotAllowedHost(searchUrl))
+                    return null;
+
                 var searchHtml = await Http.Get(searchUrl, headers: headers);
                 // Перевіряємо, чи є результати пошуку
                 if (searchHtml.Contains("На жаль, пошук на сайті не дав жодних результатів"))
@@ -210,6 +224,9 @@ namespace CikavaIdeya.Controllers
                     filmUrl = init.host + filmUrl;
 
                 // Отримуємо список епізодів (для фільмів - один епізод, для серіалів - всі епізоди)
+                if (IsNotAllowedHost(filmUrl))
+                    return null;
+
                 var filmHtml = await Http.Get(filmUrl, headers: headers);
                 // Перевіряємо, чи не видалено контент
                 if (filmHtml.Contains("Видалено на прохання правовласника"))
@@ -361,6 +378,9 @@ namespace CikavaIdeya.Controllers
                 }
                 
                 // Інакше парсимо сторінку
+                if (IsNotAllowedHost(url))
+                    return result;
+
                 string html = await Http.Get(url, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
@@ -381,6 +401,17 @@ namespace CikavaIdeya.Controllers
                 OnLog($"ParseEpisode error: {ex.Message}");
             }
             return result;
+        }
+
+        private static bool IsNotAllowedHost(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return false;
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return false;
+
+            return NotAllowedHosts.Contains(uri.Host);
         }
     }
 }

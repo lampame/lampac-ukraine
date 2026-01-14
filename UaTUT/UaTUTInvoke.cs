@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
@@ -15,6 +16,16 @@ namespace UaTUT
 {
     public class UaTUTInvoke
     {
+        private static readonly HashSet<string> NotAllowedHosts =
+            new HashSet<string>(
+                new[]
+                    {
+                        "c3ZpdGFubW92aWU=",
+                        "cG9ydGFsLXR2",
+                    }
+                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
+                StringComparer.OrdinalIgnoreCase
+            );
         private OnlinesSettings _init;
         private HybridCache _hybridCache;
         private Action<string> _onLog;
@@ -63,6 +74,9 @@ namespace UaTUT
             string url = $"{searchUrl}?q={HttpUtility.UrlEncode(query)}";
             _onLog($"UaTUT searching: {url}");
 
+            if (IsNotAllowedHost(url))
+                return null;
+
             var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") };
             var response = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
 
@@ -88,6 +102,9 @@ namespace UaTUT
             {
                 string url = $"{_init.apihost}/{movieId}";
                 _onLog($"UaTUT getting movie page: {url}");
+
+                if (IsNotAllowedHost(url))
+                    return null;
 
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") };
                 var response = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
@@ -130,6 +147,9 @@ namespace UaTUT
             {
                 _onLog($"UaTUT getting player data from: {playerUrl}");
 
+                if (IsNotAllowedHost(playerUrl))
+                    return null;
+
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") };
                 var response = await Http.Get(playerUrl, headers: headers, proxy: _proxyManager.Get());
 
@@ -143,6 +163,17 @@ namespace UaTUT
                 _onLog($"UaTUT GetPlayerData error: {ex.Message}");
                 return null;
             }
+        }
+
+        private static bool IsNotAllowedHost(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return false;
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return false;
+
+            return NotAllowedHosts.Contains(uri.Host);
         }
 
         private PlayerData ParsePlayerData(string playerHtml)

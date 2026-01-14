@@ -1,11 +1,14 @@
 # Ukraine online source for Lampac
 
-## Table of contents
-
-  - [Installation](#installation)
-  - [Auto installation](#auto-installation)
-  - [Init support](#init-support)
-  - [Donate](#donate)
+- [x] AnimeON
+- [x] [RIP] AniHUB
+- [x] BambooUA
+- [x] CikavaIdeya
+- [x] StarLight
+- [x] UAKino
+- [x] UAFlix
+- [x] UATuTFun
+- [x] Unimay
 
 
 ## Installation
@@ -67,6 +70,7 @@ modules - optional, if not specified, all modules from the repository will be in
     "displayindex": 1
   }
 ```
+
 ## Donate
 
 Support the author: https://lampame.donatik.me

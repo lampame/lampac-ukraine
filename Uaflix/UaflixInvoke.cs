@@ -14,11 +14,22 @@ using Shared.Models.Templates;
 using System.Net;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Text;
 
 namespace Uaflix
 {
     public class UaflixInvoke
     {
+        private static readonly HashSet<string> NotAllowedHosts =
+            new HashSet<string>(
+                new[]
+                    {
+                        "c3ZpdGFubW92aWU=",
+                        "cG9ydGFsLXR2",
+                    }
+                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
+                StringComparer.OrdinalIgnoreCase
+            );
         private OnlinesSettings _init;
         private HybridCache _hybridCache;
         private Action<string> _onLog;
@@ -89,6 +100,9 @@ namespace Uaflix
                         _onLog($"ParseMultiEpisodePlayer: Using base ashdi URL without parameters: {requestUrl}");
                     }
                 }
+
+                if (IsNotAllowedHost(requestUrl))
+                    return null;
 
                 string html = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
                 
@@ -201,6 +215,9 @@ namespace Uaflix
             
             try
             {
+                if (IsNotAllowedHost(iframeUrl))
+                    return (null, null);
+
                 string html = await Http.Get(iframeUrl, headers: headers, proxy: _proxyManager.Get());
                 
                 // Знайти file:"url"
@@ -235,6 +252,9 @@ namespace Uaflix
             
             try
             {
+                if (IsNotAllowedHost(iframeUrl))
+                    return (null, null);
+
                 string html = await Http.Get(iframeUrl, headers: headers, proxy: _proxyManager.Get());
                 
                 // Шукаємо Playerjs конфігурацію з file параметром
@@ -341,6 +361,9 @@ namespace Uaflix
                         new HeadersModel("Referer", _init.host) 
                     };
                     
+                    if (IsNotAllowedHost(firstEpisode.url))
+                        continue;
+
                     string html = await Http.Get(firstEpisode.url, headers: headers, proxy: _proxyManager.Get());
                     
                     var doc = new HtmlDocument();
@@ -500,6 +523,8 @@ namespace Uaflix
                     return null;
                 }
 
+                NormalizeUaflixVoiceNames(structure);
+
                 // Edge Case 9: Перевірка наявності епізодів у озвучках
                 bool hasEpisodes = structure.Voices.Values.Any(v => v.Seasons.Values.Any(s => s.Any()));
                 if (!hasEpisodes)
@@ -554,6 +579,9 @@ namespace Uaflix
                 string filmTitle = !string.IsNullOrEmpty(original_title) ? original_title : (!string.IsNullOrEmpty(title) ? title : search_query);
                 string searchUrl = $"{_init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(filmTitle)}";
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
+
+                if (IsNotAllowedHost(searchUrl))
+                    return null;
 
                 var searchHtml = await Http.Get(searchUrl, headers: headers, proxy: _proxyManager.Get());
                 var doc = new HtmlDocument();
@@ -647,6 +675,9 @@ namespace Uaflix
             try
             {
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
+                if (IsNotAllowedHost(filmUrl))
+                    return null;
+
                 var filmHtml = await Http.Get(filmUrl, headers: headers, proxy: _proxyManager.Get());
                 var doc = new HtmlDocument();
                 doc.LoadHtml(filmHtml);
@@ -722,6 +753,9 @@ namespace Uaflix
             try
             {
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
+                if (IsNotAllowedHost(filmUrl))
+                    return null;
+
                 var filmHtml = await Http.Get(filmUrl, headers: headers, proxy: _proxyManager.Get());
                 var filmDoc = new HtmlDocument();
                 filmDoc.LoadHtml(filmHtml);
@@ -756,7 +790,11 @@ namespace Uaflix
                     seasonUrls.Add(filmUrl);
                 }
 
-                var seasonTasks = seasonUrls.Select(url => Http.Get(url, headers: headers, proxy: _proxyManager.Get()).AsTask());
+                var safeSeasonUrls = seasonUrls.Where(url => !IsNotAllowedHost(url)).ToList();
+                if (safeSeasonUrls.Count == 0)
+                    return null;
+
+                var seasonTasks = safeSeasonUrls.Select(url => Http.Get(url, headers: headers, proxy: _proxyManager.Get()).AsTask());
                 var seasonPagesHtml = await Task.WhenAll(seasonTasks);
 
                 foreach (var html in seasonPagesHtml)
@@ -817,6 +855,9 @@ namespace Uaflix
             var result = new Uaflix.Models.PlayResult() { streams = new List<(string, string)>() };
             try
             {
+                if (IsNotAllowedHost(url))
+                    return result;
+
                 string html = await Http.Get(url, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
@@ -888,9 +929,44 @@ namespace Uaflix
             return result;
         }
 
+        private void NormalizeUaflixVoiceNames(SerialAggregatedStructure structure)
+        {
+            const string baseName = "Uaflix";
+            const string zetName = "Uaflix #2";
+            const string ashdiName = "Uaflix #3";
+
+            if (structure == null || structure.Voices == null || structure.Voices.Count == 0)
+                return;
+
+            bool hasBase = structure.Voices.ContainsKey(baseName);
+            bool hasZet = structure.Voices.ContainsKey(zetName);
+            bool hasAshdi = structure.Voices.ContainsKey(ashdiName);
+
+            if (hasBase)
+                return;
+
+            if (hasZet && !hasAshdi)
+            {
+                var voice = structure.Voices[zetName];
+                voice.DisplayName = baseName;
+                structure.Voices.Remove(zetName);
+                structure.Voices[baseName] = voice;
+            }
+            else if (hasAshdi && !hasZet)
+            {
+                var voice = structure.Voices[ashdiName];
+                voice.DisplayName = baseName;
+                structure.Voices.Remove(ashdiName);
+                structure.Voices[baseName] = voice;
+            }
+        }
+
         async Task<List<(string link, string quality)>> ParseAllZetvideoSources(string iframeUrl)
         {
             var result = new List<(string link, string quality)>();
+            if (IsNotAllowedHost(iframeUrl))
+                return result;
+
             var html = await Http.Get(iframeUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://zetvideo.net/") }, proxy: _proxyManager.Get());
             if (string.IsNullOrEmpty(html)) return result;
 
@@ -922,6 +998,9 @@ namespace Uaflix
         async Task<List<(string link, string quality)>> ParseAllAshdiSources(string iframeUrl)
         {
             var result = new List<(string link, string quality)>();
+            if (IsNotAllowedHost(iframeUrl))
+                return result;
+
             var html = await Http.Get(iframeUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") }, proxy: _proxyManager.Get());
              if (string.IsNullOrEmpty(html)) return result;
              
@@ -941,7 +1020,11 @@ namespace Uaflix
         
         async Task<SubtitleTpl?> GetAshdiSubtitles(string id)
         {
-            var html = await Http.Get($"https://ashdi.vip/vod/{id}", headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") }, proxy: _proxyManager.Get());
+            string url = $"https://ashdi.vip/vod/{id}";
+            if (IsNotAllowedHost(url))
+                return null;
+
+            var html = await Http.Get(url, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") }, proxy: _proxyManager.Get());
             string subtitle = new Regex("subtitle(\")?:\"([^\"]+)\"").Match(html).Groups[2].Value;
             if (!string.IsNullOrEmpty(subtitle))
             {
@@ -968,6 +1051,17 @@ namespace Uaflix
                 ctime = multiaccess;
             
             return TimeSpan.FromMinutes(ctime);
+        }
+
+        private static bool IsNotAllowedHost(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return false;
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return false;
+
+            return NotAllowedHosts.Contains(uri.Host);
         }
         
         /// <summary>

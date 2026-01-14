@@ -6,6 +6,7 @@ using Shared.Models.Online.Settings;
 using Shared.Models;
 using System.Text.Json;
 using System.Linq;
+using System.Text;
 using AnimeON.Models;
 using Shared.Engine;
 
@@ -13,6 +14,16 @@ namespace AnimeON
 {
     public class AnimeONInvoke
     {
+        private static readonly HashSet<string> NotAllowedHosts =
+            new HashSet<string>(
+                new[]
+                    {
+                        "c3ZpdGFubW92aWU=",
+                        "cG9ydGFsLXR2",
+                    }
+                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
+                StringComparer.OrdinalIgnoreCase
+            );
         private OnlinesSettings _init;
         private HybridCache _hybridCache;
         private Action<string> _onLog;
@@ -42,6 +53,9 @@ namespace AnimeON
                         return null;
 
                     string searchUrl = $"{_init.host}/api/anime/search?text={System.Web.HttpUtility.UrlEncode(query)}";
+                    if (IsNotAllowedHost(searchUrl))
+                        return null;
+
                     _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {searchUrl}");
                     string searchJson = await Http.Get(searchUrl, headers: headers, proxy: _proxyManager.Get());
                     if (string.IsNullOrEmpty(searchJson))
@@ -87,6 +101,9 @@ namespace AnimeON
         public async Task<List<FundubModel>> GetFundubs(int animeId)
         {
             string fundubsUrl = $"{_init.host}/api/player/{animeId}/translations";
+            if (IsNotAllowedHost(fundubsUrl))
+                return null;
+
             _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {fundubsUrl}");
             string fundubsJson = await Http.Get(fundubsUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
             if (string.IsNullOrEmpty(fundubsJson))
@@ -112,6 +129,9 @@ namespace AnimeON
         public async Task<EpisodeModel> GetEpisodes(int animeId, int playerId, int fundubId)
         {
             string episodesUrl = $"{_init.host}/api/player/{animeId}/episodes?take=100&skip=-1&playerId={playerId}&translationId={fundubId}";
+            if (IsNotAllowedHost(episodesUrl))
+                return null;
+
             _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {episodesUrl}");
             string episodesJson = await Http.Get(episodesUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
             if (string.IsNullOrEmpty(episodesJson))
@@ -130,6 +150,9 @@ namespace AnimeON
                     new HeadersModel("User-Agent", "Mozilla/5.0"),
                     new HeadersModel("Referer", "https://animeon.club/")
                 };
+
+                if (IsNotAllowedHost(requestUrl))
+                    return null;
 
                 _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
                 string html = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
@@ -160,6 +183,9 @@ namespace AnimeON
                     new HeadersModel("Referer", "https://ashdi.vip/")
                 };
 
+                if (IsNotAllowedHost(url))
+                    return null;
+
                 _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {url}");
                 string html = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
@@ -184,6 +210,9 @@ namespace AnimeON
             try
             {
                 string url = $"{_init.host}/api/player/{episodeId}/episode";
+                if (IsNotAllowedHost(url))
+                    return null;
+
                 _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {url}");
                 string json = await Http.Get(url, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(json))
@@ -217,6 +246,9 @@ namespace AnimeON
             if (string.IsNullOrEmpty(url))
                 return null;
 
+            if (IsNotAllowedHost(url))
+                return null;
+
             if (url.Contains("moonanime.art"))
                 return await ParseMoonAnimePage(url);
 
@@ -224,6 +256,17 @@ namespace AnimeON
                 return await ParseAshdiPage(url);
 
             return url;
+        }
+
+        private static bool IsNotAllowedHost(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return false;
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return false;
+
+            return NotAllowedHosts.Contains(uri.Host);
         }
 
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
