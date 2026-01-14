@@ -100,7 +100,7 @@ namespace Uaflix.Controllers
                 if (playResult.streams != null && playResult.streams.Count > 0)
                 {
                     OnLog("=== RETURN: play redirect ===");
-                    return Redirect(HostStreamProxy(init, accsArgs(playResult.streams.First().link)));
+                    return Redirect(BuildStreamUrl(init, playResult.streams.First().link));
                 }
                 
                 OnLog("=== RETURN: play no streams ===");
@@ -115,7 +115,7 @@ namespace Uaflix.Controllers
                 if (playResult.streams != null && playResult.streams.Count > 0)
                 {
                     // Повертаємо JSON з інформацією про стрім для методу 'play'
-                    string streamUrl = HostStreamProxy(init, accsArgs(playResult.streams.First().link));
+                    string streamUrl = BuildStreamUrl(init, playResult.streams.First().link);
                     string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? original_title}\"}}";
                     OnLog($"=== RETURN: call method JSON for episode_url ===");
                     return Content(jsonResult, "application/json; charset=utf-8");
@@ -303,7 +303,7 @@ namespace Uaflix.Controllers
                         else
                         {
                             // Для багатосерійних плеєрів (ashdi-serial, zetvideo-serial) - пряме відтворення
-                            string playUrl = HostStreamProxy(init, accsArgs(ep.File));
+                            string playUrl = BuildStreamUrl(init, ep.File);
                             episode_tpl.Append(
                                 name: ep.Title,
                                 title: title,
@@ -353,6 +353,15 @@ namespace Uaflix.Controllers
                 return false;
 
             return NotAllowedHosts.Contains(uri.Host);
+        }
+
+        string BuildStreamUrl(OnlinesSettings init, string streamLink)
+        {
+            string link = accsArgs(streamLink);
+            if (ApnHelper.IsAshdiUrl(link) && ApnHelper.IsEnabled(init))
+                return ApnHelper.WrapUrl(init, link);
+
+            return HostStreamProxy(init, link);
         }
     }
 }

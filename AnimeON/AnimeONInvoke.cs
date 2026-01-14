@@ -37,6 +37,14 @@ namespace AnimeON
             _proxyManager = proxyManager;
         }
 
+        string AshdiRequestUrl(string url)
+        {
+            if (!ApnHelper.IsAshdiUrl(url))
+                return url;
+
+            return ApnHelper.WrapUrl(_init, url);
+        }
+
         public async Task<List<SearchModel>> Search(string imdb_id, long kinopoisk_id, string title, string original_title, int year)
         {
             string memKey = $"AnimeON:search:{kinopoisk_id}:{imdb_id}";
@@ -186,8 +194,9 @@ namespace AnimeON
                 if (IsNotAllowedHost(url))
                     return null;
 
-                _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {url}");
-                string html = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+                string requestUrl = AshdiRequestUrl(url);
+                _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
+                string html = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
                     return null;
 

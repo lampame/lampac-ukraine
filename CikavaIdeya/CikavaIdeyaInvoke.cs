@@ -38,6 +38,14 @@ namespace CikavaIdeya
             _proxyManager = proxyManager;
         }
 
+        string AshdiRequestUrl(string url)
+        {
+            if (!ApnHelper.IsAshdiUrl(url))
+                return url;
+
+            return ApnHelper.WrapUrl(_init, url);
+        }
+
         public async Task<List<CikavaIdeya.Models.EpisodeLinkInfo>> Search(string imdb_id, long kinopoisk_id, string title, string original_title, int year, bool isfilm = false)
         {
             string filmTitle = !string.IsNullOrEmpty(title) ? title : original_title;
@@ -336,7 +344,7 @@ namespace CikavaIdeya
                 if (IsNotAllowedHost(url))
                     return null;
 
-                string html = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+                string html = await Http.Get(AshdiRequestUrl(url), headers: headers, proxy: _proxyManager.Get());
                 _onLog($"GetStreamUrlFromAshdi: received HTML, length={html.Length}");
                 
                 // Знаходимо JavaScript код з об'єктом player

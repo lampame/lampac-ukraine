@@ -145,13 +145,17 @@ namespace UaTUT
         {
             try
             {
-                _onLog($"UaTUT getting player data from: {playerUrl}");
+                string requestUrl = playerUrl;
+                if (ApnHelper.IsAshdiUrl(playerUrl) && ApnHelper.IsEnabled(_init))
+                    requestUrl = ApnHelper.WrapUrl(_init, playerUrl);
+
+                _onLog($"UaTUT getting player data from: {requestUrl}");
 
                 if (IsNotAllowedHost(playerUrl))
                     return null;
 
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") };
-                var response = await Http.Get(playerUrl, headers: headers, proxy: _proxyManager.Get());
+                var response = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
 
                 if (string.IsNullOrEmpty(response))
                     return null;

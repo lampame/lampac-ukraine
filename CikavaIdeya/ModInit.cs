@@ -34,7 +34,13 @@ namespace CikavaIdeya
                     list = new string[] { "socks5://IP:PORT" }
                 }
             };
-            CikavaIdeya = ModuleInvoke.Conf("CikavaIdeya", CikavaIdeya).ToObject<OnlinesSettings>();
+            var conf = ModuleInvoke.Conf("CikavaIdeya", CikavaIdeya);
+            bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
+            conf.Remove("apn");
+            conf.Remove("apn_host");
+            CikavaIdeya = conf.ToObject<OnlinesSettings>();
+            if (hasApn)
+                ApnHelper.ApplyInitConf(apnEnabled, apnHost, CikavaIdeya);
 
             // Виводити "уточнити пошук"
             AppInit.conf.online.with_search.Add("cikavaideya");

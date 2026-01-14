@@ -42,6 +42,14 @@ namespace Uaflix
             _onLog = onLog;
             _proxyManager = proxyManager;
         }
+
+        string AshdiRequestUrl(string url)
+        {
+            if (!ApnHelper.IsAshdiUrl(url))
+                return url;
+
+            return ApnHelper.WrapUrl(_init, url);
+        }
         
         #region Методи для визначення та парсингу різних типів плеєрів
         
@@ -104,7 +112,7 @@ namespace Uaflix
                 if (IsNotAllowedHost(requestUrl))
                     return null;
 
-                string html = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
+                string html = await Http.Get(AshdiRequestUrl(requestUrl), headers: headers, proxy: _proxyManager.Get());
                 
                 // Знайти JSON у new Playerjs({file:'...'})
                 var match = Regex.Match(html, @"file:'(\[.+?\])'", RegexOptions.Singleline);
@@ -1001,7 +1009,7 @@ namespace Uaflix
             if (IsNotAllowedHost(iframeUrl))
                 return result;
 
-            var html = await Http.Get(iframeUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") }, proxy: _proxyManager.Get());
+            var html = await Http.Get(AshdiRequestUrl(iframeUrl), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") }, proxy: _proxyManager.Get());
              if (string.IsNullOrEmpty(html)) return result;
              
             var doc = new HtmlDocument();
@@ -1024,7 +1032,7 @@ namespace Uaflix
             if (IsNotAllowedHost(url))
                 return null;
 
-            var html = await Http.Get(url, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") }, proxy: _proxyManager.Get());
+            var html = await Http.Get(AshdiRequestUrl(url), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") }, proxy: _proxyManager.Get());
             string subtitle = new Regex("subtitle(\")?:\"([^\"]+)\"").Match(html).Groups[2].Value;
             if (!string.IsNullOrEmpty(subtitle))
             {

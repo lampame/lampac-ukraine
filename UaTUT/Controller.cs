@@ -323,7 +323,7 @@ namespace UaTUT
 
             OnLog($"UaTUT PlayMovie: Found direct file: {playerData.File}");
 
-            string streamUrl = HostStreamProxy(init, playerData.File);
+            string streamUrl = BuildStreamUrl(init, playerData.File);
 
             // Якщо play=true, робимо Redirect, інакше повертаємо JSON
             if (play)
@@ -396,7 +396,7 @@ namespace UaTUT
                         {
                             OnLog($"UaTUT Play: Found episode {episode.Title}, stream: {episode.File}");
 
-                            string streamUrl = HostStreamProxy(init, episode.File);
+                            string streamUrl = BuildStreamUrl(init, episode.File);
                             string episodeTitle = $"{title ?? original_title} - {episode.Title}";
 
                             // Якщо play=true, робимо Redirect, інакше повертаємо JSON
@@ -419,6 +419,15 @@ namespace UaTUT
 
             OnLog("UaTUT Play: Episode not found");
             return OnError();
+        }
+
+        string BuildStreamUrl(OnlinesSettings init, string streamLink)
+        {
+            string link = accsArgs(streamLink);
+            if (ApnHelper.IsAshdiUrl(link) && ApnHelper.IsEnabled(init))
+                return ApnHelper.WrapUrl(init, link);
+
+            return HostStreamProxy(init, link);
         }
     }
 }

@@ -26,7 +26,13 @@ namespace UAKino
                     list = new string[] { "socks5://ip:port" }
                 }
             };
-            UAKino = ModuleInvoke.Conf("UAKino", UAKino).ToObject<OnlinesSettings>();
+            var conf = ModuleInvoke.Conf("UAKino", UAKino);
+            bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
+            conf.Remove("apn");
+            conf.Remove("apn_host");
+            UAKino = conf.ToObject<OnlinesSettings>();
+            if (hasApn)
+                ApnHelper.ApplyInitConf(apnEnabled, apnHost, UAKino);
 
             // Виводити "уточнити пошук"
             AppInit.conf.online.with_search.Add("uakino");

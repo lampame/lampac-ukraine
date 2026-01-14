@@ -33,7 +33,13 @@ namespace Uaflix
                 // Note: OnlinesSettings не має властивості additional, використовуємо інший підхід
             };
             
-            UaFlix = ModuleInvoke.Conf("Uaflix", UaFlix).ToObject<OnlinesSettings>();
+            var conf = ModuleInvoke.Conf("Uaflix", UaFlix);
+            bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
+            conf.Remove("apn");
+            conf.Remove("apn_host");
+            UaFlix = conf.ToObject<OnlinesSettings>();
+            if (hasApn)
+                ApnHelper.ApplyInitConf(apnEnabled, apnHost, UaFlix);
             
             // Виводити "уточнити пошук"
             AppInit.conf.online.with_search.Add("uaflix");

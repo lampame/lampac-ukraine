@@ -34,7 +34,13 @@ namespace AnimeON
                     list = new string[] { "socks5://ip:port" }
                 }
             };
-            AnimeON = ModuleInvoke.Conf("AnimeON", AnimeON).ToObject<OnlinesSettings>();
+            var conf = ModuleInvoke.Conf("AnimeON", AnimeON);
+            bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
+            conf.Remove("apn");
+            conf.Remove("apn_host");
+            AnimeON = conf.ToObject<OnlinesSettings>();
+            if (hasApn)
+                ApnHelper.ApplyInitConf(apnEnabled, apnHost, AnimeON);
 
             // Виводити "уточнити пошук"
             AppInit.conf.online.with_search.Add("animeon");
