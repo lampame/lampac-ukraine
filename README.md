@@ -1,7 +1,6 @@
 # Ukraine online source for Lampac
 
 - [x] AnimeON
-- [x] [RIP] AniHUB
 - [x] BambooUA
 - [x] CikavaIdeya
 - [x] StarLight
@@ -36,7 +35,6 @@ Create or update the module/repository.yaml file
   branch: main
   modules:
     - AnimeON
-    - Anihub
     - Unimay
     - CikavaIdeya
     - Uaflix
