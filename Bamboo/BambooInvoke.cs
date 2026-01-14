@@ -317,7 +317,7 @@ namespace Bamboo
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
 
-            bool marker = EntrySet.Any(x => x.Contains(uri.Host));
+            bool marker = EntrySet.Any(x => uri.Host.Contains(x));
             if (marker)
                 _onLog?.Invoke($"Error: {Guid.NewGuid()}");
 
