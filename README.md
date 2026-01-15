@@ -8,6 +8,7 @@
 - [x] UAFlix
 - [x] UATuTFun
 - [x] Unimay
+- [x] AshdiBase
 
 
 ## Installation
@@ -42,6 +43,7 @@ Create or update the module/repository.yaml file
     - Bamboo
     - UAKino
     - StarLight
+    - AshdiBase
 ```
 
 branch - optional, default main
@@ -79,6 +81,7 @@ Sources with APN support:
 - UaTUT
 - CikavaIdeya
 - UAKino
+- AshdiBase
 
 ## Donate
 
