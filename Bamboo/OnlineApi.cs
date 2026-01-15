@@ -21,12 +21,5 @@ namespace Bamboo
 
             return online;
         }
-                catch
-                {
-                    // ignore
-                }
-            });
-        }
-
     }
 }

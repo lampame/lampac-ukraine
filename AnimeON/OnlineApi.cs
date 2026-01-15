@@ -31,12 +31,5 @@ namespace AnimeON
 
             return online;
         }
-                catch
-                {
-                    // ignore
-                }
-            });
-        }
-
     }
 }

@@ -30,12 +30,5 @@ namespace CikavaIdeya
  
             return online;
         }
-                catch
-                {
-                    // ignore
-                }
-            });
-        }
-
     }
 }

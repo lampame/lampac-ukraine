@@ -22,12 +22,5 @@ namespace UaTUT
 
             return online;
         }
-                catch
-                {
-                    // ignore
-                }
-            });
-        }
-
     }
 }

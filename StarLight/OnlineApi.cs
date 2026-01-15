@@ -1,4 +1,5 @@
 using Shared.Models.Base;
+using System;
 using System.Collections.Generic;
 
 namespace StarLight
@@ -24,12 +25,5 @@ namespace StarLight
 
             return online;
         }
-                catch
-                {
-                    // ignore
-                }
-            });
-        }
-
     }
 }

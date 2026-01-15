@@ -31,12 +31,5 @@ namespace Unimay
 
             return online;
         }
-                catch
-                {
-                    // ignore
-                }
-            });
-        }
-
     }
 }

@@ -21,12 +21,5 @@ namespace Uaflix
 
             return online;
         }
-                catch
-                {
-                    // ignore
-                }
-            });
-        }
-
     }
 }

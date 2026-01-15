@@ -21,12 +21,5 @@ namespace UAKino
 
             return online;
         }
-                catch
-                {
-                    // ignore
-                }
-            });
-        }
-
     }
 }
