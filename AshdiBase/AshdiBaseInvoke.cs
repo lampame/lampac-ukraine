@@ -77,8 +77,12 @@ namespace AshdiBase
 
         async Task<string> RequestIframeUrl(string apiUrl)
         {
-            _onLog($"AshdiBase: requesting API {apiUrl}");
-            string response = await Http.Get(apiUrl, headers: new List<HeadersModel>()
+            string requestUrl = apiUrl;
+            if (ApnHelper.IsEnabled(_init))
+                requestUrl = ApnHelper.WrapUrl(_init, apiUrl);
+
+            _onLog($"AshdiBase: requesting API {requestUrl}");
+            string response = await Http.Get(requestUrl, headers: new List<HeadersModel>()
             {
                 new HeadersModel("User-Agent", "Mozilla/5.0"),
                 new HeadersModel("Referer", "https://base.ashdi.vip/")
