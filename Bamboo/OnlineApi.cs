@@ -13,7 +13,7 @@ namespace Bamboo
             if (init.enable && !init.rip)
             {
                 string url = init.overridehost;
-                if (string.IsNullOrEmpty(url))
+                if (string.IsNullOrEmpty(url) || TouchService.Touch(host))
                     url = $"{host}/bamboo";
 
                 online.Add((init.displayname, url, "bamboo", init.displayindex));

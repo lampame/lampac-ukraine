@@ -19,16 +19,6 @@ namespace AnimeON.Controllers
 {
     public class Controller : BaseOnlineController
     {
-        private static readonly HashSet<string> EntrySet =
-            new HashSet<string>(
-                new[]
-                    {
-                        "c3ZpdGFubW92aWU=",
-                        "cG9ydGFsLXR2",
-                    }
-                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
-                StringComparer.OrdinalIgnoreCase
-            );
         ProxyManager proxyManager;
 
         public Controller()
@@ -43,6 +33,12 @@ namespace AnimeON.Controllers
             var init = await loadKit(ModInit.AnimeON);
             if (!init.enable)
                 return Forbid();
+
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch, proxyManager);
+            }
 
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
             OnLog($"AnimeON Index: title={title}, original_title={original_title}, serial={serial}, s={s}, t={t}, year={year}, imdb_id={imdb_id}, kp={kinopoisk_id}");
@@ -201,8 +197,6 @@ namespace AnimeON.Controllers
         async Task<List<FundubModel>> GetFundubs(OnlinesSettings init, int animeId)
         {
             string fundubsUrl = $"{init.host}/api/player/{animeId}/translations";
-            if (IsNotAllowedHost(fundubsUrl))
-                return null;
 
             string fundubsJson = await Http.Get(fundubsUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
             if (string.IsNullOrEmpty(fundubsJson))
@@ -228,8 +222,6 @@ namespace AnimeON.Controllers
         async Task<EpisodeModel> GetEpisodes(OnlinesSettings init, int animeId, int playerId, int fundubId)
         {
             string episodesUrl = $"{init.host}/api/player/{animeId}/episodes?take=100&skip=-1&playerId={playerId}&translationId={fundubId}";
-            if (IsNotAllowedHost(episodesUrl))
-                return null;
 
             string episodesJson = await Http.Get(episodesUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
             if (string.IsNullOrEmpty(episodesJson))
@@ -254,8 +246,6 @@ namespace AnimeON.Controllers
                         return null;
 
                     string searchUrl = $"{init.host}/api/anime/search?text={HttpUtility.UrlEncode(query)}";
-                    if (IsNotAllowedHost(searchUrl))
-                        return null;
 
                     string searchJson = await Http.Get(searchUrl, headers: headers);
                     if (string.IsNullOrEmpty(searchJson))
@@ -305,6 +295,12 @@ namespace AnimeON.Controllers
             if (!init.enable)
                 return Forbid();
 
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch);
+            }
+
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
             OnLog($"AnimeON Play: url={url}, episode_id={episode_id}");
 
@@ -345,21 +341,6 @@ namespace AnimeON.Controllers
             string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? string.Empty}\"}}";
             OnLog("AnimeON Play: return call JSON");
             return Content(jsonResult, "application/json; charset=utf-8");
-        }
-
-        private bool IsNotAllowedHost(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return false;
-
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-                return false;
-
-            bool marker = EntrySet.Any(x => uri.Host.Contains(x));
-            if (marker)
-                OnLog($"Error: {Guid.NewGuid()}");
-
-            return marker;
         }
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink, List<HeadersModel> headers, bool forceProxy)

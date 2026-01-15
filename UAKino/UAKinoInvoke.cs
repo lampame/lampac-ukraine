@@ -25,16 +25,6 @@ namespace UAKino
         private const string PlaylistPath = "/engine/ajax/playlists.php";
         private const string PlaylistField = "playlist";
         private const string BlacklistRegex = "(/news/)|(/franchise/)";
-        private static readonly HashSet<string> EntrySet =
-            new HashSet<string>(
-                new[]
-                    {
-                        "c3ZpdGFubW92aWU=",
-                        "cG9ydGFsLXR2",
-                    }
-                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
-                StringComparer.OrdinalIgnoreCase
-            );
         private readonly OnlinesSettings _init;
         private readonly HybridCache _hybridCache;
         private readonly Action<string> _onLog;
@@ -280,9 +270,6 @@ namespace UAKino
 
         private async Task<string> GetString(string url, List<HeadersModel> headers, int timeoutSeconds = 15)
         {
-            if (IsNotAllowedHost(url))
-                return null;
-
             string requestUrl = ApnHelper.IsAshdiUrl(url) && ApnHelper.IsEnabled(_init)
                 ? ApnHelper.WrapUrl(_init, url)
                 : url;
@@ -430,12 +417,12 @@ namespace UAKino
                 return string.Empty;
 
             if (url.StartsWith("//"))
-                return IsNotAllowedHost($"https:{url}") ? string.Empty : $"https:{url}";
+                return $"https:{url}";
 
             if (url.StartsWith("/"))
-                return IsNotAllowedHost(_init.host) ? string.Empty : $"{_init.host}{url}";
+                return $"{_init.host}{url}";
 
-            return IsNotAllowedHost(url) ? string.Empty : url;
+            return url;
         }
 
         private static bool LooksLikeDirectStream(string url)
@@ -446,21 +433,6 @@ namespace UAKino
         private static bool IsBlacklisted(string url)
         {
             return Regex.IsMatch(url ?? string.Empty, BlacklistRegex, RegexOptions.IgnoreCase);
-        }
-
-        private bool IsNotAllowedHost(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return false;
-
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-                return false;
-
-            bool marker = EntrySet.Any(x => uri.Host.Contains(x));
-            if (marker)
-                _onLog?.Invoke($"Error: {Guid.NewGuid()}");
-
-            return marker;
         }
 
         private static bool IsSeriesUrl(string url)

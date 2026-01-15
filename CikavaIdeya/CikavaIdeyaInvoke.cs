@@ -15,16 +15,6 @@ namespace CikavaIdeya
 {
     public class CikavaIdeyaInvoke
     {
-        private static readonly HashSet<string> EntrySet =
-            new HashSet<string>(
-                new[]
-                    {
-                        "c3ZpdGFubW92aWU=",
-                        "cG9ydGFsLXR2",
-                    }
-                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
-                StringComparer.OrdinalIgnoreCase
-            );
         private OnlinesSettings _init;
         private HybridCache _hybridCache;
         private Action<string> _onLog;
@@ -90,9 +80,6 @@ namespace CikavaIdeya
                 string searchUrl = $"{_init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(searchTitle)}";
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
 
-                if (IsNotAllowedHost(searchUrl))
-                    return null;
-
                 var searchHtml = await Http.Get(searchUrl, headers: headers, proxy: _proxyManager.Get());
                 // Перевіряємо, чи є результати пошуку
                 if (searchHtml.Contains("На жаль, пошук на сайті не дав жодних результатів"))
@@ -146,9 +133,6 @@ namespace CikavaIdeya
                     filmUrl = _init.host + filmUrl;
 
                 // Отримуємо список епізодів (для фільмів - один епізод, для серіалів - всі епізоди)
-                if (IsNotAllowedHost(filmUrl))
-                    return null;
-
                 var filmHtml = await Http.Get(filmUrl, headers: headers, proxy: _proxyManager.Get());
                 // Перевіряємо, чи не видалено контент
                 if (filmHtml.Contains("Видалено на прохання правовласника"))
@@ -311,9 +295,6 @@ namespace CikavaIdeya
                 }
                 
                 // Інакше парсимо сторінку
-                if (IsNotAllowedHost(url))
-                    return result;
-
                 string html = await Http.Get(url, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
@@ -341,9 +322,6 @@ namespace CikavaIdeya
             {
                 _onLog($"GetStreamUrlFromAshdi: trying to get stream URL from {url}");
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") };
-                if (IsNotAllowedHost(url))
-                    return null;
-
                 string html = await Http.Get(AshdiRequestUrl(url), headers: headers, proxy: _proxyManager.Get());
                 _onLog($"GetStreamUrlFromAshdi: received HTML, length={html.Length}");
                 
@@ -376,21 +354,6 @@ namespace CikavaIdeya
                 _onLog($"GetStreamUrlFromAshdi error: {ex.Message}");
             }
             return null;
-        }
-
-        private bool IsNotAllowedHost(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return false;
-
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-                return false;
-
-            bool marker = EntrySet.Any(x => uri.Host.Contains(x));
-            if (marker)
-                _onLog?.Invoke($"Error: {Guid.NewGuid()}");
-
-            return marker;
         }
 
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)

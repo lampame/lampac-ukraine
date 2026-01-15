@@ -30,6 +30,12 @@ namespace Bamboo.Controllers
             if (!init.enable)
                 return Forbid();
 
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch, proxyManager);
+            }
+
             var invoke = new BambooInvoke(init, hybridCache, OnLog, proxyManager);
 
             string itemUrl = href;

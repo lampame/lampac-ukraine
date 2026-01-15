@@ -29,6 +29,12 @@ namespace StarLight.Controllers
             if (!init.enable)
                 return Forbid();
 
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch, proxyManager);
+            }
+
             var invoke = new StarLightInvoke(init, hybridCache, OnLog, proxyManager);
 
             string itemUrl = href;
@@ -125,6 +131,12 @@ namespace StarLight.Controllers
             var init = await loadKit(ModInit.StarLight);
             if (!init.enable)
                 return Forbid();
+
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch);
+            }
 
             var invoke = new StarLightInvoke(init, hybridCache, OnLog, proxyManager);
             var result = await invoke.ResolveStream(hash);

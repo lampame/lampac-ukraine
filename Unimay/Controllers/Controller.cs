@@ -29,6 +29,12 @@ namespace Unimay.Controllers
             if (await IsBadInitialization(init, rch: false))
                 return badInitMsg;
 
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch, proxyManager);
+            }
+
             var invoke = new UnimayInvoke(init, hybridCache, OnLog, proxyManager);
 
             if (!string.IsNullOrEmpty(code))

@@ -14,16 +14,6 @@ namespace Unimay
 {
     public class UnimayInvoke
     {
-        private static readonly HashSet<string> EntrySet =
-            new HashSet<string>(
-                new[]
-                    {
-                        "c3ZpdGFubW92aWU=",
-                        "cG9ydGFsLXR2",
-                    }
-                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
-                StringComparer.OrdinalIgnoreCase
-            );
         private OnlinesSettings _init;
         private ProxyManager _proxyManager;
         private HybridCache _hybridCache;
@@ -47,9 +37,6 @@ namespace Unimay
             {
                 string searchQuery = System.Web.HttpUtility.UrlEncode(title ?? original_title ?? "");
                 string searchUrl = $"{_init.host}/release/search?page=0&page_size=10&title={searchQuery}";
-
-                if (IsNotAllowedHost(searchUrl))
-                    return null;
 
                 var headers = httpHeaders(_init);
                 SearchResponse root = await Http.Get<SearchResponse>(searchUrl, timeoutSeconds: 8, proxy: _proxyManager.Get(), headers: headers);
@@ -80,9 +67,6 @@ namespace Unimay
             try
             {
                 string releaseUrl = $"{_init.host}/release?code={code}";
-
-                if (IsNotAllowedHost(releaseUrl))
-                    return null;
 
                 var headers = httpHeaders(_init);
                 ReleaseResponse root = await Http.Get<ReleaseResponse>(releaseUrl, timeoutSeconds: 8, proxy: _proxyManager.Get(), headers: headers);
@@ -174,21 +158,6 @@ namespace Unimay
                 new HeadersModel("Referer", init.host),
                 new HeadersModel("Accept", "application/json")
             };
-        }
-
-        private bool IsNotAllowedHost(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return false;
-
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-                return false;
-
-            bool marker = EntrySet.Any(x => uri.Host.Contains(x));
-            if (marker)
-                _onLog?.Invoke($"Error: {Guid.NewGuid()}");
-
-            return marker;
         }
 
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)

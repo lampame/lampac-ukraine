@@ -16,16 +16,6 @@ namespace Bamboo
 {
     public class BambooInvoke
     {
-        private static readonly HashSet<string> EntrySet =
-            new HashSet<string>(
-                new[]
-                    {
-                        "c3ZpdGFubW92aWU=",
-                        "cG9ydGFsLXR2",
-                    }
-                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
-                StringComparer.OrdinalIgnoreCase
-            );
         private readonly OnlinesSettings _init;
         private readonly HybridCache _hybridCache;
         private readonly Action<string> _onLog;
@@ -52,8 +42,6 @@ namespace Bamboo
             try
             {
                 string searchUrl = $"{_init.host}/index.php?do=search&subaction=search&story={HttpUtility.UrlEncode(query)}";
-                if (IsNotAllowedHost(searchUrl))
-                    return null;
 
                 var headers = new List<HeadersModel>()
                 {
@@ -119,9 +107,6 @@ namespace Bamboo
                     new HeadersModel("User-Agent", "Mozilla/5.0"),
                     new HeadersModel("Referer", _init.host)
                 };
-
-                if (IsNotAllowedHost(href))
-                    return null;
 
                 _onLog?.Invoke($"Bamboo series page: {href}");
                 string html = await Http.Get(href, headers: headers, proxy: _proxyManager.Get());
@@ -196,9 +181,6 @@ namespace Bamboo
                     new HeadersModel("User-Agent", "Mozilla/5.0"),
                     new HeadersModel("Referer", _init.host)
                 };
-
-                if (IsNotAllowedHost(href))
-                    return null;
 
                 _onLog?.Invoke($"Bamboo movie page: {href}");
                 string html = await Http.Get(href, headers: headers, proxy: _proxyManager.Get());
@@ -301,27 +283,12 @@ namespace Bamboo
                 return string.Empty;
 
             if (url.StartsWith("//"))
-                return IsNotAllowedHost($"https:{url}") ? string.Empty : $"https:{url}";
+                return $"https:{url}";
 
             if (url.StartsWith("/"))
-                return IsNotAllowedHost(_init.host) ? string.Empty : $"{_init.host}{url}";
+                return $"{_init.host}{url}";
 
-            return IsNotAllowedHost(url) ? string.Empty : url;
-        }
-
-        private bool IsNotAllowedHost(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return false;
-
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-                return false;
-
-            bool marker = EntrySet.Any(x => uri.Host.Contains(x));
-            if (marker)
-                _onLog?.Invoke($"Error: {Guid.NewGuid()}");
-
-            return marker;
+            return url;
         }
 
         private static int? ExtractEpisodeNumber(string title)

@@ -16,16 +16,6 @@ namespace UaTUT
 {
     public class UaTUTInvoke
     {
-        private static readonly HashSet<string> EntrySet =
-            new HashSet<string>(
-                new[]
-                    {
-                        "c3ZpdGFubW92aWU=",
-                        "cG9ydGFsLXR2",
-                    }
-                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
-                StringComparer.OrdinalIgnoreCase
-            );
         private OnlinesSettings _init;
         private HybridCache _hybridCache;
         private Action<string> _onLog;
@@ -74,9 +64,6 @@ namespace UaTUT
             string url = $"{searchUrl}?q={HttpUtility.UrlEncode(query)}";
             _onLog($"UaTUT searching: {url}");
 
-            if (IsNotAllowedHost(url))
-                return null;
-
             var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") };
             var response = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
 
@@ -102,9 +89,6 @@ namespace UaTUT
             {
                 string url = $"{_init.apihost}/{movieId}";
                 _onLog($"UaTUT getting movie page: {url}");
-
-                if (IsNotAllowedHost(url))
-                    return null;
 
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") };
                 var response = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
@@ -151,9 +135,6 @@ namespace UaTUT
 
                 _onLog($"UaTUT getting player data from: {requestUrl}");
 
-                if (IsNotAllowedHost(playerUrl))
-                    return null;
-
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") };
                 var response = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
 
@@ -167,21 +148,6 @@ namespace UaTUT
                 _onLog($"UaTUT GetPlayerData error: {ex.Message}");
                 return null;
             }
-        }
-
-        private bool IsNotAllowedHost(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return false;
-
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-                return false;
-
-            bool marker = EntrySet.Any(x => uri.Host.Contains(x));
-            if (marker)
-                _onLog?.Invoke($"Error: {Guid.NewGuid()}");
-
-            return marker;
         }
 
         private PlayerData ParsePlayerData(string playerHtml)

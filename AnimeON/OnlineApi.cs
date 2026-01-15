@@ -23,7 +23,7 @@ namespace AnimeON
             if (init.enable && !init.rip && (serial == -1 || isanime || !hasLang))
             {
                 string url = init.overridehost;
-                if (string.IsNullOrEmpty(url))
+                if (string.IsNullOrEmpty(url) || TouchService.Touch(host))
                     url = $"{host}/animeon";
 
                 online.Add((init.displayname, url, "animeon", init.displayindex));

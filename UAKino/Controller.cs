@@ -29,6 +29,12 @@ namespace UAKino.Controllers
             if (!init.enable)
                 return Forbid();
 
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch, proxyManager);
+            }
+
             var invoke = new UAKinoInvoke(init, hybridCache, OnLog, proxyManager);
 
             string itemUrl = href;
@@ -127,6 +133,12 @@ namespace UAKino.Controllers
             var init = await loadKit(ModInit.UAKino);
             if (!init.enable)
                 return Forbid();
+
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch);
+            }
 
             var invoke = new UAKinoInvoke(init, hybridCache, OnLog, proxyManager);
             var result = await invoke.ParsePlayer(url);

@@ -20,16 +20,6 @@ namespace Uaflix.Controllers
 
     public class Controller : BaseOnlineController
     {
-        private static readonly HashSet<string> EntrySet =
-            new HashSet<string>(
-                new[]
-                    {
-                        "c3ZpdGFubW92aWU=",
-                        "cG9ydGFsLXR2",
-                    }
-                    .Select(base64 => Encoding.UTF8.GetString(Convert.FromBase64String(base64))),
-                StringComparer.OrdinalIgnoreCase
-            );
         ProxyManager proxyManager;
 
         public Controller()
@@ -44,6 +34,12 @@ namespace Uaflix.Controllers
             var init = await loadKit(ModInit.UaFlix);
             if (await IsBadInitialization(init))
                 return Forbid();
+
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch, proxyManager);
+            }
 
             OnLog($"=== UAFLIX INDEX START ===");
             OnLog($"Uaflix Index: title={title}, serial={serial}, s={s}, play={play}, href={href}, checksearch={checksearch}");
@@ -60,9 +56,6 @@ namespace Uaflix.Controllers
                     string filmTitle = !string.IsNullOrEmpty(title) ? title : original_title;
                     string searchUrl = $"{init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(filmTitle)}";
                     var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) };
-
-                    if (IsNotAllowedHost(searchUrl))
-                        return OnError("uaflix", proxyManager);
 
                     var searchHtml = await Http.Get(searchUrl, headers: headers, proxy: proxyManager.Get(), timeoutSeconds: 10);
 
@@ -342,21 +335,6 @@ namespace Uaflix.Controllers
                 OnLog("=== RETURN: movie template ===");
                 return rjson ? Content(tpl.ToJson(), "application/json; charset=utf-8") : Content(tpl.ToHtml(), "text/html; charset=utf-8");
             }
-        }
-
-        private bool IsNotAllowedHost(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return false;
-
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-                return false;
-
-            bool marker = EntrySet.Any(x => uri.Host.Contains(x));
-            if (marker)
-                OnLog($"Error: {Guid.NewGuid()}");
-
-            return marker;
         }
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)

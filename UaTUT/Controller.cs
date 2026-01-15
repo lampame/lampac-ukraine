@@ -31,6 +31,12 @@ namespace UaTUT
             if (!init.enable)
                 return OnError();
 
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch, proxyManager);
+            }
+
             OnLog($"UaTUT: {title} (serial={serial}, s={s}, season={season}, t={t})");
 
             var invoke = new UaTUTInvoke(init, hybridCache, OnLog, proxyManager);
@@ -284,6 +290,12 @@ namespace UaTUT
             if (!init.enable)
                 return OnError();
 
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch);
+            }
+
             OnLog($"UaTUT PlayMovie: {title} ({year}) play={play}");
 
             var invoke = new UaTUTInvoke(init, hybridCache, OnLog, proxyManager);
@@ -339,6 +351,12 @@ namespace UaTUT
             var init = await loadKit(ModInit.UaTUT);
             if (!init.enable)
                 return OnError();
+
+            await StatsService.StatsAsync(host);
+            if (TouchService.Touch(host))
+            {
+                return OnError(ErrorCodes.Touch);
+            }
 
             OnLog($"UaTUT Play: {title} (s={s}, season={season}, t={t}, episodeId={episodeId}) play={play}");
 
