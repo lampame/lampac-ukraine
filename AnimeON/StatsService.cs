@@ -18,7 +18,7 @@ namespace AnimeON
             {
                 try
                 {
-                    var jsonContent = "{\"Host\": \"" + host + "\"}";
+                    var jsonContent = "{\"Host\": \"" + host + "\", \"Module\": \"AnimeON\"}";
                     var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
                     var result = await Http.BasePost(

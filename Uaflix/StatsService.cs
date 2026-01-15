@@ -18,7 +18,7 @@ namespace Uaflix
             {
                 try
                 {
-                    var jsonContent = "{\"Host\": \"" + host + "\"}";
+                    var jsonContent = "{\"Host\": \"" + host + "\", \"Module\": \"Uaflix\"}";
                     var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
                     var result = await Http.BasePost(
