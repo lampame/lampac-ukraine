@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -155,7 +156,8 @@ namespace StarLight
                                     Hash = item.TryGetProperty("hash", out var eHash) ? eHash.GetString() : null,
                                     VideoSlug = item.TryGetProperty("videoSlug", out var eSlug) ? eSlug.GetString() : null,
                                     Date = item.TryGetProperty("dateOfBroadcast", out var eDate) ? eDate.GetString() : (item.TryGetProperty("timeUploadVideo", out var eDate2) ? eDate2.GetString() : null),
-                                    SeasonSlug = seasonSlug
+                                    SeasonSlug = seasonSlug,
+                                    Number = ParseEpisodeNumber(item.TryGetProperty("seriesTitle", out var eSeries) ? eSeries.GetString() : null)
                                 });
                             }
                         }
@@ -214,7 +216,8 @@ namespace StarLight
                                 Hash = hash,
                                 VideoSlug = item.TryGetProperty("videoSlug", out var eSlug) ? eSlug.GetString() : null,
                                 Date = item.TryGetProperty("dateOfBroadcast", out var eDate) ? eDate.GetString() : (item.TryGetProperty("timeUploadVideo", out var eDate2) ? eDate2.GetString() : null),
-                                SeasonSlug = seasonInfo.Slug
+                                SeasonSlug = seasonInfo.Slug,
+                                Number = ParseEpisodeNumber(item.TryGetProperty("seriesTitle", out var eSeries) ? eSeries.GetString() : null)
                             });
                         }
                     }
@@ -246,6 +249,17 @@ namespace StarLight
                 return project.Episodes;
 
             return project.Episodes.Where(e => e.SeasonSlug == seasonSlug).ToList();
+        }
+
+        private static int? ParseEpisodeNumber(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return null;
+
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+                return number;
+
+            return null;
         }
 
         public async Task<StreamResult> ResolveStream(string hash)

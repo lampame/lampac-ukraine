@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 using Microsoft.AspNetCore.Mvc;
@@ -91,7 +93,14 @@ namespace StarLight.Controllers
                 var episode_tpl = new EpisodeTpl();
                 int index = 1;
                 string seasonNumber = GetSeasonNumber(season, s);
-                foreach (var ep in episodes)
+                var orderedEpisodes = episodes
+                    .Select(ep => new { Episode = ep, Number = GetEpisodeNumber(ep), Date = GetEpisodeDate(ep) })
+                    .OrderBy(ep => ep.Number ?? int.MaxValue)
+                    .ThenBy(ep => ep.Date ?? DateTime.MaxValue)
+                    .Select(ep => ep.Episode)
+                    .ToList();
+
+                foreach (var ep in orderedEpisodes)
                 {
                     if (string.IsNullOrEmpty(ep.Hash))
                         continue;
@@ -155,6 +164,49 @@ namespace StarLight.Controllers
 
             var digits = new string(season.Title.Where(char.IsDigit).ToArray());
             return string.IsNullOrEmpty(digits) ? (fallbackIndex + 1).ToString() : digits;
+        }
+
+        private static int? GetEpisodeNumber(EpisodeInfo episode)
+        {
+            if (episode == null)
+                return null;
+
+            if (episode.Number.HasValue)
+                return episode.Number.Value;
+
+            if (string.IsNullOrEmpty(episode.Title))
+                return null;
+
+            var title = episode.Title;
+            var markers = new[] { "випуск", "серия", "серія" };
+            foreach (var marker in markers)
+            {
+                var markerIndex = title.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (markerIndex <= 0)
+                    continue;
+
+                var prefix = title.Substring(0, markerIndex);
+                var matches = Regex.Matches(prefix, "\\d+");
+                if (matches.Count == 0)
+                    continue;
+
+                var last = matches[matches.Count - 1].Value;
+                if (int.TryParse(last, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+                    return number;
+            }
+
+            return null;
+        }
+
+        private static DateTime? GetEpisodeDate(EpisodeInfo episode)
+        {
+            if (episode == null || string.IsNullOrEmpty(episode.Date))
+                return null;
+
+            if (DateTime.TryParseExact(episode.Date, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+                return dt;
+
+            return DateTime.TryParse(episode.Date, CultureInfo.InvariantCulture, DateTimeStyles.None, out dt) ? dt : null;
         }
     }
 }
