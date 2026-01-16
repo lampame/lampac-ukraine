@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 using Shared;
@@ -307,11 +308,16 @@ namespace StarLight
                 if (string.IsNullOrEmpty(stream))
                     return null;
 
+                var multiStreams = ParseMultiHlsStreams(stream);
+                if (multiStreams != null && multiStreams.Count > 0)
+                    stream = multiStreams[0].link;
+
                 return new StreamResult
                 {
                     Stream = stream,
                     Poster = root.TryGetProperty("poster", out var posterProp) ? posterProp.GetString() : null,
-                    Name = root.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : null
+                    Name = root.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : null,
+                    Streams = multiStreams
                 };
             }
             catch (Exception ex)
@@ -342,6 +348,79 @@ namespace StarLight
                 ctime = multiaccess;
 
             return TimeSpan.FromMinutes(ctime);
+        }
+
+        private static List<(string link, string quality)> ParseMultiHlsStreams(string streamUrl)
+        {
+            if (string.IsNullOrEmpty(streamUrl))
+                return null;
+
+            if (!streamUrl.Contains("/hls/multi", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            if (!Uri.TryCreate(streamUrl, UriKind.Absolute, out var uri))
+                return null;
+
+            var query = HttpUtility.ParseQueryString(uri.Query);
+            var files = query.GetValues("file");
+            if (files == null || files.Length == 0)
+                return null;
+
+            var result = new List<(string link, string quality)>(files.Length);
+            var qualityCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var file in files)
+            {
+                if (string.IsNullOrEmpty(file))
+                    continue;
+
+                var decoded = HttpUtility.UrlDecode(file);
+                var quality = DetectQuality(decoded);
+                quality = EnsureUniqueQuality(quality, qualityCounts);
+                result.Add((decoded, quality));
+            }
+
+            return result.Count > 0 ? result : null;
+        }
+
+        private static string DetectQuality(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return "auto";
+
+            var lower = url.ToLowerInvariant();
+            if (lower.Contains("/lq."))
+                return "360";
+            if (lower.Contains("/mq."))
+                return "480";
+            if (lower.Contains("/hq."))
+                return "720";
+            if (lower.Contains("/sd."))
+                return "480";
+            if (lower.Contains("/hd."))
+                return "720";
+
+            var match = Regex.Match(lower, "(\\d{3,4})p");
+            if (match.Success)
+                return match.Groups[1].Value;
+
+            return "auto";
+        }
+
+        private static string EnsureUniqueQuality(string quality, Dictionary<string, int> counts)
+        {
+            if (string.IsNullOrEmpty(quality))
+                quality = "auto";
+
+            if (!counts.TryGetValue(quality, out var count))
+            {
+                counts[quality] = 1;
+                return quality;
+            }
+
+            count++;
+            counts[quality] = count;
+            return $"{quality}_{count}";
         }
     }
 }

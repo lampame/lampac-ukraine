@@ -152,9 +152,27 @@ namespace StarLight.Controllers
             if (result == null || string.IsNullOrEmpty(result.Stream))
                 return OnError("starlight", proxyManager);
 
-            string streamUrl = HostStreamProxy(init, accsArgs(result.Stream), proxy: proxyManager.Get());
-            string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? result.Name ?? ""}\"}}";
-            return Content(jsonResult, "application/json; charset=utf-8");
+            string videoTitle = title ?? result.Name ?? "";
+
+            if (result.Streams != null && result.Streams.Count > 0)
+            {
+                var streamQuality = new StreamQualityTpl();
+                foreach (var item in result.Streams)
+                {
+                    string streamLink = HostStreamProxy(init, accsArgs(item.link), proxy: proxyManager.Get());
+                    streamQuality.Append(streamLink, item.quality);
+                }
+
+                var first = streamQuality.Firts();
+                string streamUrl = string.IsNullOrEmpty(first.link)
+                    ? HostStreamProxy(init, accsArgs(result.Stream), proxy: proxyManager.Get())
+                    : first.link;
+
+                return Content(VideoTpl.ToJson("play", streamUrl, videoTitle, streamquality: streamQuality), "application/json; charset=utf-8");
+            }
+
+            string defaultUrl = HostStreamProxy(init, accsArgs(result.Stream), proxy: proxyManager.Get());
+            return Content(VideoTpl.ToJson("play", defaultUrl, videoTitle), "application/json; charset=utf-8");
         }
 
         private static string GetSeasonNumber(SeasonInfo season, int fallbackIndex)

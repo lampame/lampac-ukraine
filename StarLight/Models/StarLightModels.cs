@@ -44,5 +44,6 @@ namespace StarLight.Models
         public string Stream { get; set; }
         public string Poster { get; set; }
         public string Name { get; set; }
+        public List<(string link, string quality)> Streams { get; set; }
     }
 }
