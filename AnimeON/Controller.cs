@@ -186,7 +186,7 @@ namespace AnimeON.Controllers
                 }
 
                 // Якщо не зібрали жодної опції — повертаємо помилку
-                if (tpl.IsEmpty())
+                if (tpl.data == null || tpl.data.Count == 0)
                     return OnError("animeon", proxyManager);
 
                 OnLog("AnimeON: return movie options");

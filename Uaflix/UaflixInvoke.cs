@@ -771,7 +771,7 @@ namespace Uaflix
                 if (safeSeasonUrls.Count == 0)
                     return null;
 
-                var seasonTasks = safeSeasonUrls.Select(url => Http.Get(url, headers: headers, proxy: _proxyManager.Get()).AsTask());
+                var seasonTasks = safeSeasonUrls.Select(url => Http.Get(url, headers: headers, proxy: _proxyManager.Get()));
                 var seasonPagesHtml = await Task.WhenAll(seasonTasks);
 
                 foreach (var html in seasonPagesHtml)
@@ -1000,7 +1000,7 @@ namespace Uaflix
                     st.Append(match.Groups[1].Value, match.Groups[2].Value);
                     match = match.NextMatch();
                 }
-                if (!st.IsEmpty())
+                if (st.data != null && st.data.Count > 0)
                     return st;
             }
             return null;

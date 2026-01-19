@@ -1,0 +1,6 @@
+{
+  "enable": true,
+  "version": 2,
+  "initspace": "Mikai.ModInit",
+  "online": "Mikai.OnlineApi"
+}

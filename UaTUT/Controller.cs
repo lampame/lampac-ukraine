@@ -272,7 +272,7 @@ namespace UaTUT
                 movie_tpl.Append(movieName, movieLink, "call");
             }
 
-            if (movie_tpl.IsEmpty())
+            if (movie_tpl.data == null || movie_tpl.data.Count == 0)
             {
                 OnLog("UaTUT: No playable movies found");
                 return OnError();
