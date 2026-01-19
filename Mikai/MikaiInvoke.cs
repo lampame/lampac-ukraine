@@ -143,7 +143,7 @@ namespace Mikai
                 if (string.IsNullOrEmpty(html))
                     return null;
 
-                var match = System.Text.RegularExpressions.Regex.Match(html, @"file:\s*\"([^\"]+\.m3u8)\"");
+                var match = System.Text.RegularExpressions.Regex.Match(html, @"file:\s*""([^""]+\.m3u8)""");
                 if (match.Success)
                     return match.Groups[1].Value;
             }
@@ -179,7 +179,7 @@ namespace Mikai
                 if (string.IsNullOrEmpty(html))
                     return null;
 
-                var match = System.Text.RegularExpressions.Regex.Match(html, @"file\s*:\s*['\"]([^'\"]+)['\"]");
+                var match = System.Text.RegularExpressions.Regex.Match(html, @"file\s*:\s*['""]([^'""]+)['""]");
                 if (match.Success)
                     return match.Groups[1].Value;
             }
