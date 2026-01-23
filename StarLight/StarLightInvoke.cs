@@ -21,11 +21,11 @@ namespace StarLight
         private const string PlayerReferer = "https://teleportal.ua/";
         private const string Language = "ua";
         private readonly OnlinesSettings _init;
-        private readonly HybridCache _hybridCache;
+        private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
 
-        public StarLightInvoke(OnlinesSettings init, HybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public StarLightInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
         {
             _init = init;
             _hybridCache = hybridCache;

@@ -21,11 +21,11 @@ namespace Uaflix
     public class UaflixInvoke
     {
         private OnlinesSettings _init;
-        private HybridCache _hybridCache;
+        private IHybridCache _hybridCache;
         private Action<string> _onLog;
         private ProxyManager _proxyManager;
 
-        public UaflixInvoke(OnlinesSettings init, HybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public UaflixInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
         {
             _init = init;
             _hybridCache = hybridCache;

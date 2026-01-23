@@ -15,11 +15,11 @@ namespace Mikai
     public class MikaiInvoke
     {
         private readonly OnlinesSettings _init;
-        private readonly HybridCache _hybridCache;
+        private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
 
-        public MikaiInvoke(OnlinesSettings init, HybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public MikaiInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
         {
             _init = init;
             _hybridCache = hybridCache;

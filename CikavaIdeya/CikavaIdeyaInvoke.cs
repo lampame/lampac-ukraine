@@ -16,11 +16,11 @@ namespace CikavaIdeya
     public class CikavaIdeyaInvoke
     {
         private OnlinesSettings _init;
-        private HybridCache _hybridCache;
+        private IHybridCache _hybridCache;
         private Action<string> _onLog;
         private ProxyManager _proxyManager;
 
-        public CikavaIdeyaInvoke(OnlinesSettings init, HybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public CikavaIdeyaInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
         {
             _init = init;
             _hybridCache = hybridCache;

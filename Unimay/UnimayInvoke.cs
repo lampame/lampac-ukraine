@@ -16,10 +16,10 @@ namespace Unimay
     {
         private OnlinesSettings _init;
         private ProxyManager _proxyManager;
-        private HybridCache _hybridCache;
+        private IHybridCache _hybridCache;
         private Action<string> _onLog;
 
-        public UnimayInvoke(OnlinesSettings init, HybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public UnimayInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
         {
             _init = init;
             _hybridCache = hybridCache;

@@ -26,11 +26,11 @@ namespace UAKino
         private const string PlaylistField = "playlist";
         private const string BlacklistRegex = "(/news/)|(/franchise/)";
         private readonly OnlinesSettings _init;
-        private readonly HybridCache _hybridCache;
+        private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
 
-        public UAKinoInvoke(OnlinesSettings init, HybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public UAKinoInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
         {
             _init = init;
             _hybridCache = hybridCache;

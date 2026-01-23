@@ -17,11 +17,11 @@ namespace Bamboo
     public class BambooInvoke
     {
         private readonly OnlinesSettings _init;
-        private readonly HybridCache _hybridCache;
+        private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
 
-        public BambooInvoke(OnlinesSettings init, HybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public BambooInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
         {
             _init = init;
             _hybridCache = hybridCache;
