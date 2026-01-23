@@ -30,6 +30,7 @@ namespace UaTUT
             var init = await loadKit(ModInit.UaTUT);
             if (!init.enable)
                 return OnError();
+            Initialization(init);
 
             await StatsService.StatsAsync(host);
             if (TouchService.Touch(host))
@@ -289,6 +290,7 @@ namespace UaTUT
             var init = await loadKit(ModInit.UaTUT);
             if (!init.enable)
                 return OnError();
+            Initialization(init);
 
             await StatsService.StatsAsync(host);
             if (TouchService.Touch(host))
@@ -351,6 +353,7 @@ namespace UaTUT
             var init = await loadKit(ModInit.UaTUT);
             if (!init.enable)
                 return OnError();
+            Initialization(init);
 
             await StatsService.StatsAsync(host);
             if (TouchService.Touch(host))
