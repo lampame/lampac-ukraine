@@ -16,7 +16,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace UaTUT
+namespace Bamboo
 {
     public static class UpdateService
     {
