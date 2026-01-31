@@ -24,7 +24,7 @@ namespace StarLight
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            UpdateService.Start(initspace.memoryCache, initspace.nws);
+            
 
             StarLight = new OnlinesSettings("StarLight", "https://tp-back.starlight.digital", streamproxy: false, useproxy: false)
             {

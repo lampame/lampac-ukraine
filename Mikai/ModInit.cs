@@ -24,7 +24,7 @@ namespace Mikai
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            UpdateService.Start(initspace.memoryCache, initspace.nws);
+            
 
             Mikai = new OnlinesSettings("Mikai", "https://mikai.me", streamproxy: false, useproxy: false)
             {

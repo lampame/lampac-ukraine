@@ -30,7 +30,7 @@ namespace Unimay
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            UpdateService.Start(initspace.memoryCache, initspace.nws);
+            
 
             Unimay = new OnlinesSettings("Unimay", "https://api.unimay.media/v1", streamproxy: false, useproxy: false)
             {

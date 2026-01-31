@@ -25,7 +25,7 @@ namespace UaTUT
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            UpdateService.Start(initspace.memoryCache, initspace.nws);
+            
 
             UaTUT = new OnlinesSettings("UaTUT", "https://uk.uatut.fun", streamproxy: false, useproxy: false)
             {

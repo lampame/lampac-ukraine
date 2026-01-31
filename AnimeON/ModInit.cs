@@ -25,7 +25,7 @@ namespace AnimeON
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            UpdateService.Start(initspace.memoryCache, initspace.nws);
+            
 
             AnimeON = new OnlinesSettings("AnimeON", "https://animeon.club", streamproxy: false, useproxy: false)
             {

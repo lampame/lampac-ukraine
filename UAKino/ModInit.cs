@@ -23,7 +23,7 @@ namespace UAKino
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            UpdateService.Start(initspace.memoryCache, initspace.nws);
+            
 
             UAKino = new OnlinesSettings("UAKino", "https://uakino.best", streamproxy: false, useproxy: false)
             {
