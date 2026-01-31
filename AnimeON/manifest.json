@@ -1,6 +1,6 @@
 {
   "enable": true,
-  "version": 3,
+  "version": 3.2,
   "initspace": "AnimeON.ModInit",
   "online": "AnimeON.OnlineApi"
 }
