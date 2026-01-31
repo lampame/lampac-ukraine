@@ -1,0 +1,6 @@
+{
+  "enable": true,
+  "version": 3,
+  "initspace": "Uaflix.ModInit",
+  "online": "Uaflix.OnlineApi"
+}

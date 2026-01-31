@@ -1,0 +1,6 @@
+{
+  "enable": true,
+  "version": 3,
+  "initspace": "UaTUT.ModInit",
+  "online": "UaTUT.OnlineApi"
+}
