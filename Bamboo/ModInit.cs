@@ -24,7 +24,7 @@ namespace Bamboo
 {
     public class ModInit
     {
-        public static double Version => 3.1;
+        public static double Version => 3.2;
 
         public static OnlinesSettings Bamboo;
         public static bool ApnHostProvided;

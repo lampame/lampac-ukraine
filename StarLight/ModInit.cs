@@ -24,7 +24,7 @@ namespace StarLight
 {
     public class ModInit
     {
-        public static double Version => 3.1;
+        public static double Version => 3.2;
 
         public static OnlinesSettings StarLight;
         public static bool ApnHostProvided;

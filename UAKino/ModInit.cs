@@ -23,7 +23,7 @@ namespace UAKino
 {
     public class ModInit
     {
-        public static double Version => 3.1;
+        public static double Version => 3.2;
 
         public static OnlinesSettings UAKino;
         public static bool ApnHostProvided;
