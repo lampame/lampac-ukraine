@@ -52,24 +52,52 @@ namespace AnimeON.Controllers
             {
                 if (s == -1) // Крок 1: Вибір аніме (як сезони)
                 {
-                    var season_tpl = new SeasonTpl(seasons.Count);
-                    for (int i = 0; i < seasons.Count; i++)
+                    var seasonItems = seasons
+                        .Select((anime, index) => new
+                        {
+                            Anime = anime,
+                            Index = index,
+                            SeasonNumber = anime.Season > 0 ? anime.Season : index + 1
+                        })
+                        .GroupBy(x => x.SeasonNumber)
+                        .Select(g => g.First())
+                        .OrderBy(x => x.SeasonNumber)
+                        .ToList();
+
+                    var season_tpl = new SeasonTpl(seasonItems.Count);
+                    foreach (var item in seasonItems)
                     {
-                        var anime = seasons[i];
-                        string seasonName = anime.Season.ToString();
-                        string link = $"{host}/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={i}";
-                        season_tpl.Append(seasonName, link, anime.Season.ToString());
+                        string seasonName = item.SeasonNumber.ToString();
+                        string link = $"{host}/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={item.SeasonNumber}";
+                        season_tpl.Append(seasonName, link, seasonName);
                     }
-                    OnLog($"AnimeON: return seasons count={seasons.Count}");
+                    OnLog($"AnimeON: return seasons count={seasonItems.Count}");
                     return rjson ? Content(season_tpl.ToJson(), "application/json; charset=utf-8") : Content(season_tpl.ToHtml(), "text/html; charset=utf-8");
                 }
                 else // Крок 2/3: Вибір озвучки та епізодів
                 {
-                    if (s >= seasons.Count)
+                    var seasonItems = seasons
+                        .Select((anime, index) => new
+                        {
+                            Anime = anime,
+                            Index = index,
+                            SeasonNumber = anime.Season > 0 ? anime.Season : index + 1
+                        })
+                        .GroupBy(x => x.SeasonNumber)
+                        .Select(g => g.First())
+                        .OrderBy(x => x.SeasonNumber)
+                        .ToList();
+
+                    var selected = seasonItems.FirstOrDefault(x => x.SeasonNumber == s);
+                    if (selected == null && s >= 0 && s < seasons.Count)
+                        selected = new { Anime = seasons[s], Index = s, SeasonNumber = seasons[s].Season > 0 ? seasons[s].Season : s + 1 };
+
+                    if (selected == null)
                         return OnError("animeon", proxyManager);
 
-                    var selectedAnime = seasons[s];
-                    var structure = await invoke.AggregateSerialStructure(selectedAnime.Id, selectedAnime.Season);
+                    var selectedAnime = selected.Anime;
+                    int selectedSeasonNumber = selected.SeasonNumber;
+                    var structure = await invoke.AggregateSerialStructure(selectedAnime.Id, selectedSeasonNumber);
                     if (structure == null || !structure.Voices.Any())
                         return OnError("animeon", proxyManager);
 
@@ -98,7 +126,7 @@ namespace AnimeON.Controllers
                     foreach (var ep in selectedVoiceInfo.Episodes.OrderBy(e => e.Number))
                     {
                         string episodeName = !string.IsNullOrEmpty(ep.Title) ? ep.Title : $"Епізод {ep.Number}";
-                        string seasonStr = selectedAnime.Season.ToString();
+                        string seasonStr = selectedSeasonNumber.ToString();
                         string episodeStr = ep.Number.ToString();
 
                         string streamLink = !string.IsNullOrEmpty(ep.Hls) ? ep.Hls : ep.VideoUrl;
