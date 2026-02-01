@@ -61,6 +61,9 @@ namespace Mikai.Models
 
         [JsonPropertyName("players")]
         public List<MikaiPlayer> Players { get; set; }
+
+        [JsonPropertyName("relations")]
+        public List<MikaiRelation> Relations { get; set; }
     }
 
     public class MikaiMedia
@@ -205,5 +208,29 @@ namespace Mikai.Models
 
         [JsonPropertyName("playLink")]
         public string PlayLink { get; set; }
+    }
+
+    public class MikaiRelation
+    {
+        [JsonPropertyName("relationType")]
+        public string RelationType { get; set; }
+
+        [JsonPropertyName("anime")]
+        public MikaiRelationAnime Anime { get; set; }
+    }
+
+    public class MikaiRelationAnime
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("slug")]
+        public string Slug { get; set; }
+
+        [JsonPropertyName("media")]
+        public MikaiMedia Media { get; set; }
+
+        [JsonPropertyName("details")]
+        public MikaiDetails Details { get; set; }
     }
 }

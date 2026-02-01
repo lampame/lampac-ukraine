@@ -39,7 +39,7 @@ namespace AnimeON.Controllers
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
             OnLog($"AnimeON Index: title={title}, original_title={original_title}, serial={serial}, s={s}, t={t}, year={year}, imdb_id={imdb_id}, kp={kinopoisk_id}");
 
-            var seasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year);
+            var seasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial);
             OnLog($"AnimeON: search results = {seasons?.Count ?? 0}");
             if (seasons == null || seasons.Count == 0)
                 return OnError("animeon", proxyManager);
@@ -52,39 +52,79 @@ namespace AnimeON.Controllers
             {
                 if (s == -1) // Крок 1: Вибір аніме (як сезони)
                 {
-                    var season_tpl = new SeasonTpl(seasons.Count);
-                    for (int i = 0; i < seasons.Count; i++)
+                    var seasonItems = seasons
+                        .Select((anime, index) => new
+                        {
+                            Anime = anime,
+                            Index = index,
+                            SeasonNumber = anime.Season > 0 ? anime.Season : index + 1
+                        })
+                        .GroupBy(x => x.SeasonNumber)
+                        .Select(g => g.First())
+                        .OrderBy(x => x.SeasonNumber)
+                        .ToList();
+
+                    var season_tpl = new SeasonTpl(seasonItems.Count);
+                    foreach (var item in seasonItems)
                     {
-                        var anime = seasons[i];
-                        string seasonName = anime.Season.ToString();
-                        string link = $"{host}/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={i}";
-                        season_tpl.Append(seasonName, link, anime.Season.ToString());
+                        string seasonName = item.SeasonNumber.ToString();
+                        string link = $"{host}/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={item.SeasonNumber}";
+                        season_tpl.Append(seasonName, link, seasonName);
                     }
-                    OnLog($"AnimeON: return seasons count={seasons.Count}");
+                    OnLog($"AnimeON: return seasons count={seasonItems.Count}");
                     return rjson ? Content(season_tpl.ToJson(), "application/json; charset=utf-8") : Content(season_tpl.ToHtml(), "text/html; charset=utf-8");
                 }
                 else // Крок 2/3: Вибір озвучки та епізодів
                 {
-                    if (s >= seasons.Count)
+                    var seasonItems = seasons
+                        .Select((anime, index) => new
+                        {
+                            Anime = anime,
+                            Index = index,
+                            SeasonNumber = anime.Season > 0 ? anime.Season : index + 1
+                        })
+                        .GroupBy(x => x.SeasonNumber)
+                        .Select(g => g.First())
+                        .OrderBy(x => x.SeasonNumber)
+                        .ToList();
+
+                    var selected = seasonItems.FirstOrDefault(x => x.SeasonNumber == s);
+                    if (selected == null && s >= 0 && s < seasons.Count)
+                        selected = new { Anime = seasons[s], Index = s, SeasonNumber = seasons[s].Season > 0 ? seasons[s].Season : s + 1 };
+
+                    if (selected == null)
                         return OnError("animeon", proxyManager);
 
-                    var selectedAnime = seasons[s];
-                    var structure = await invoke.AggregateSerialStructure(selectedAnime.Id, selectedAnime.Season);
+                    var selectedAnime = selected.Anime;
+                    int selectedSeasonNumber = selected.SeasonNumber;
+                    var structure = await invoke.AggregateSerialStructure(selectedAnime.Id, selectedSeasonNumber);
                     if (structure == null || !structure.Voices.Any())
                         return OnError("animeon", proxyManager);
 
                     OnLog($"AnimeON: voices found = {structure.Voices.Count}");
+                    var voiceItems = structure.Voices
+                        .Select(v =>
+                        {
+                            string display = v.Value?.DisplayName;
+                            if (string.IsNullOrWhiteSpace(display))
+                                display = v.Key;
+                            if (string.IsNullOrWhiteSpace(display))
+                                display = "Озвучка";
+                            return new { Key = v.Key, Display = display };
+                        })
+                        .ToList();
+
                     // Автовибір першої озвучки якщо t не задано
                     if (string.IsNullOrEmpty(t))
-                        t = structure.Voices.Keys.First();
+                        t = voiceItems.First().Key;
 
                     // Формуємо список озвучок
                     var voice_tpl = new VoiceTpl();
-                    foreach (var voice in structure.Voices)
+                    foreach (var voice in voiceItems)
                     {
                         string voiceLink = $"{host}/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&t={HttpUtility.UrlEncode(voice.Key)}";
                         bool isActive = voice.Key == t;
-                        voice_tpl.Append(voice.Key, isActive, voiceLink);
+                        voice_tpl.Append(voice.Display, isActive, voiceLink);
                     }
 
                     // Перевірка вибраної озвучки
@@ -98,7 +138,7 @@ namespace AnimeON.Controllers
                     foreach (var ep in selectedVoiceInfo.Episodes.OrderBy(e => e.Number))
                     {
                         string episodeName = !string.IsNullOrEmpty(ep.Title) ? ep.Title : $"Епізод {ep.Number}";
-                        string seasonStr = selectedAnime.Season.ToString();
+                        string seasonStr = selectedSeasonNumber.ToString();
                         string episodeStr = ep.Number.ToString();
 
                         string streamLink = !string.IsNullOrEmpty(ep.Hls) ? ep.Hls : ep.VideoUrl;
@@ -128,10 +168,11 @@ namespace AnimeON.Controllers
 
                     // Повертаємо озвучки + епізоди разом
                     OnLog($"AnimeON: return episodes count={selectedVoiceInfo.Episodes.Count} for voice='{t}' season={selectedAnime.Season}");
+                    episode_tpl.Append(voice_tpl);
                     if (rjson)
-                        return Content(episode_tpl.ToJson(voice_tpl), "application/json; charset=utf-8");
+                        return Content(episode_tpl.ToJson(), "application/json; charset=utf-8");
 
-                    return Content(voice_tpl.ToHtml() + episode_tpl.ToHtml(), "text/html; charset=utf-8");
+                    return Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
                 }
             }
             else // Фільм
