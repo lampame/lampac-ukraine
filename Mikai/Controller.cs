@@ -121,10 +121,11 @@ namespace Mikai.Controllers
                     }
                 }
 
+                episodeTpl.Append(voiceTpl);
                 if (rjson)
-                    return Content(episodeTpl.ToJson(voiceTpl), "application/json; charset=utf-8");
+                    return Content(episodeTpl.ToJson(), "application/json; charset=utf-8");
 
-                return Content(voiceTpl.ToHtml() + episodeTpl.ToHtml(), "text/html; charset=utf-8");
+                return Content(episodeTpl.ToHtml(), "text/html; charset=utf-8");
             }
 
             var movieTpl = new MovieTpl(displayTitle, original_title);
