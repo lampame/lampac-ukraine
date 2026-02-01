@@ -39,7 +39,7 @@ namespace AnimeON.Controllers
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
             OnLog($"AnimeON Index: title={title}, original_title={original_title}, serial={serial}, s={s}, t={t}, year={year}, imdb_id={imdb_id}, kp={kinopoisk_id}");
 
-            var seasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year);
+            var seasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial);
             OnLog($"AnimeON: search results = {seasons?.Count ?? 0}");
             if (seasons == null || seasons.Count == 0)
                 return OnError("animeon", proxyManager);
@@ -102,17 +102,29 @@ namespace AnimeON.Controllers
                         return OnError("animeon", proxyManager);
 
                     OnLog($"AnimeON: voices found = {structure.Voices.Count}");
+                    var voiceItems = structure.Voices
+                        .Select(v =>
+                        {
+                            string display = v.Value?.DisplayName;
+                            if (string.IsNullOrWhiteSpace(display))
+                                display = v.Key;
+                            if (string.IsNullOrWhiteSpace(display))
+                                display = "Озвучка";
+                            return new { Key = v.Key, Display = display };
+                        })
+                        .ToList();
+
                     // Автовибір першої озвучки якщо t не задано
                     if (string.IsNullOrEmpty(t))
-                        t = structure.Voices.Keys.First();
+                        t = voiceItems.First().Key;
 
                     // Формуємо список озвучок
                     var voice_tpl = new VoiceTpl();
-                    foreach (var voice in structure.Voices)
+                    foreach (var voice in voiceItems)
                     {
                         string voiceLink = $"{host}/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&t={HttpUtility.UrlEncode(voice.Key)}";
                         bool isActive = voice.Key == t;
-                        voice_tpl.Append(voice.Key, isActive, voiceLink);
+                        voice_tpl.Append(voice.Display, isActive, voiceLink);
                     }
 
                     // Перевірка вибраної озвучки

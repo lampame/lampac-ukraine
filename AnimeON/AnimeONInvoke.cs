@@ -35,7 +35,7 @@ namespace AnimeON
             return ApnHelper.WrapUrl(_init, url);
         }
 
-        public async Task<List<SearchModel>> Search(string imdb_id, long kinopoisk_id, string title, string original_title, int year)
+        public async Task<List<SearchModel>> Search(string imdb_id, long kinopoisk_id, string title, string original_title, int year, int serial)
         {
             string memKey = $"AnimeON:search:{kinopoisk_id}:{imdb_id}";
             if (_hybridCache.TryGetValue(memKey, out List<SearchModel> res))
@@ -44,7 +44,7 @@ namespace AnimeON
             try
             {
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
-                
+
                 async Task<List<SearchModel>> FindAnime(string query)
                 {
                     if (string.IsNullOrEmpty(query))
@@ -64,7 +64,24 @@ namespace AnimeON
                 var searchResults = await FindAnime(title) ?? await FindAnime(original_title);
                 if (searchResults == null)
                     return null;
-                
+
+                if (serial == 1 && searchResults.Count > 0)
+                {
+                    string fallbackTitleEn = searchResults.FirstOrDefault()?.TitleEn;
+                    if (!string.IsNullOrWhiteSpace(fallbackTitleEn))
+                    {
+                        var extraResults = await FindAnime(fallbackTitleEn);
+                        if (extraResults != null && extraResults.Count > 0)
+                        {
+                            searchResults = searchResults
+                                .Concat(extraResults)
+                                .GroupBy(a => a.Id)
+                                .Select(g => g.First())
+                                .ToList();
+                        }
+                    }
+                }
+
                 if (!string.IsNullOrEmpty(imdb_id))
                 {
                     var seasons = searchResults.Where(a => a.ImdbId == imdb_id).ToList();
@@ -74,7 +91,7 @@ namespace AnimeON
                         return seasons;
                     }
                 }
-                
+
                 // Fallback to first result if no imdb match
                 var firstResult = searchResults.FirstOrDefault();
                 if (firstResult != null)
