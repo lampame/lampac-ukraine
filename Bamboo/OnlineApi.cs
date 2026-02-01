@@ -27,6 +27,13 @@ namespace Bamboo
             var init = ModInit.Bamboo;
             if (init.enable && !init.rip)
             {
+                if (!string.IsNullOrEmpty(original_language))
+                {
+                    var lang = original_language.ToLowerInvariant();
+                    if (lang != "ja" && lang != "jp" && lang != "zh" && lang != "zh-cn" && lang != "zh-hans" && lang != "zh-hant" && lang != "zh-tw" && lang != "zh-hk")
+                        return online;
+                }
+
                 string url = init.overridehost;
                 if (string.IsNullOrEmpty(url) || UpdateService.IsDisconnected())
                     url = $"{host}/bamboo";
