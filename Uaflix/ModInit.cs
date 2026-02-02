@@ -25,7 +25,7 @@ namespace Uaflix
 {
     public class ModInit
     {
-        public static double Version => 3.2;
+        public static double Version => 3.3;
 
         public static OnlinesSettings UaFlix;
         public static bool ApnHostProvided;
