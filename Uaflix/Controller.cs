@@ -306,15 +306,16 @@ namespace Uaflix.Controllers
                     OnLog($"Created EpisodeTpl with {episodes.Count} episodes");
                     
                     // Повертаємо VoiceTpl + EpisodeTpl разом
+                    episode_tpl.Append(voice_tpl);
                     if (rjson)
                     {
                         OnLog($"=== RETURN: episode template with voices JSON ({episodes.Count} episodes) ===");
-                        return Content(episode_tpl.ToJson(voice_tpl), "application/json; charset=utf-8");
+                        return Content(episode_tpl.ToJson(), "application/json; charset=utf-8");
                     }
                     else
                     {
                         OnLog($"=== RETURN: voice + episode template HTML ({episodes.Count} episodes) ===");
-                        return Content(voice_tpl.ToHtml() + episode_tpl.ToHtml(), "text/html; charset=utf-8");
+                        return Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
                     }
                 }
 

@@ -94,10 +94,11 @@ namespace UAKino.Controllers
                     index++;
                 }
 
+                episode_tpl.Append(voice_tpl);
                 if (rjson)
-                    return Content(episode_tpl.ToJson(voice_tpl), "application/json; charset=utf-8");
+                    return Content(episode_tpl.ToJson(), "application/json; charset=utf-8");
 
-                return Content(voice_tpl.ToHtml() + episode_tpl.ToHtml(), "text/html; charset=utf-8");
+                return Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
             }
             else
             {
