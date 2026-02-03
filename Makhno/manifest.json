@@ -1,0 +1,6 @@
+{
+  "enable": true,
+  "version": 1,
+  "initspace": "Makhno.ModInit",
+  "online": "Makhno.OnlineApi"
+}
