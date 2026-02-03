@@ -252,28 +252,6 @@ namespace Makhno
                     };
                 }
 
-                var m3u8Match = Regex.Match(html, @"(https?://[^""'\s>]+\.m3u8[^""'\s>]*)", RegexOptions.IgnoreCase);
-                if (m3u8Match.Success)
-                {
-                    return new PlayerData
-                    {
-                        File = m3u8Match.Groups[1].Value,
-                        Poster = null,
-                        Voices = new List<Voice>()
-                    };
-                }
-
-                var sourceMatch = Regex.Match(html, @"<source[^>]*src=[""']([^""']+)[""']", RegexOptions.IgnoreCase);
-                if (sourceMatch.Success)
-                {
-                    return new PlayerData
-                    {
-                        File = sourceMatch.Groups[1].Value,
-                        Poster = null,
-                        Voices = new List<Voice>()
-                    };
-                }
-
                 string jsonData = ExtractPlayerJson(html);
                 if (jsonData == null)
                     _onLog("Makhno ParsePlayerData: file array not found");
@@ -288,6 +266,30 @@ namespace Makhno
                         File = null,
                         Poster = null,
                         Voices = voices
+                    };
+                }
+
+                var m3u8Match = Regex.Match(html, @"(https?://[^""'\s>]+\.m3u8[^""'\s>]*)", RegexOptions.IgnoreCase);
+                if (m3u8Match.Success)
+                {
+                    _onLog("Makhno ParsePlayerData: fallback m3u8 match");
+                    return new PlayerData
+                    {
+                        File = m3u8Match.Groups[1].Value,
+                        Poster = null,
+                        Voices = new List<Voice>()
+                    };
+                }
+
+                var sourceMatch = Regex.Match(html, @"<source[^>]*src=[""']([^""']+)[""']", RegexOptions.IgnoreCase);
+                if (sourceMatch.Success)
+                {
+                    _onLog("Makhno ParsePlayerData: fallback source match");
+                    return new PlayerData
+                    {
+                        File = sourceMatch.Groups[1].Value,
+                        Poster = null,
+                        Voices = new List<Voice>()
                     };
                 }
 
