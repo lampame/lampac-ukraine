@@ -387,6 +387,14 @@ namespace Makhno
 
         private int FindFileArrayStart(string html)
         {
+            int playerStart = html.IndexOf("Playerjs", StringComparison.OrdinalIgnoreCase);
+            if (playerStart >= 0)
+            {
+                int playerIndex = FindFileArrayStartInRange(html, playerStart);
+                if (playerIndex >= 0)
+                    return playerIndex;
+            }
+
             int index = FindFileArrayIndex(html, "file:'[");
             if (index >= 0)
                 return index;
@@ -398,6 +406,39 @@ namespace Makhno
             var match = Regex.Match(html, @"file\s*:\s*'?\[", RegexOptions.IgnoreCase);
             if (match.Success)
                 return match.Index + match.Value.LastIndexOf('[');
+
+            return -1;
+        }
+
+        private int FindFileArrayStartInRange(string html, int startIndex)
+        {
+            int searchStart = startIndex;
+            int searchEnd = Math.Min(html.Length, startIndex + 200000);
+
+            int tokenIndex = IndexOfIgnoreCase(html, "file:'[", searchStart, searchEnd);
+            if (tokenIndex >= 0)
+                return html.IndexOf('[', tokenIndex);
+
+            tokenIndex = IndexOfIgnoreCase(html, "file:\"[", searchStart, searchEnd);
+            if (tokenIndex >= 0)
+                return html.IndexOf('[', tokenIndex);
+
+            tokenIndex = IndexOfIgnoreCase(html, "file", searchStart, searchEnd);
+            if (tokenIndex >= 0)
+            {
+                int bracketIndex = html.IndexOf('[', tokenIndex);
+                if (bracketIndex >= 0 && bracketIndex < searchEnd)
+                    return bracketIndex;
+            }
+
+            return -1;
+        }
+
+        private int IndexOfIgnoreCase(string text, string value, int startIndex, int endIndex)
+        {
+            int index = text.IndexOf(value, startIndex, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0 && index < endIndex)
+                return index;
 
             return -1;
         }

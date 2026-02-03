@@ -89,7 +89,10 @@ namespace Makhno
             });
 
             if (playerData?.Voices == null || !playerData.Voices.Any())
+            {
+                OnLog("Makhno Play: no voices parsed");
                 return OnError();
+            }
 
             if (string.IsNullOrEmpty(t) || !int.TryParse(t, out int voiceIndex) || voiceIndex >= playerData.Voices.Count)
                 return OnError();
@@ -143,7 +146,10 @@ namespace Makhno
             });
 
             if (playerData?.File == null)
+            {
+                OnLog("Makhno PlayMovie: no file parsed");
                 return OnError();
+            }
 
             string streamUrl = BuildStreamUrl(init, playerData.File);
 
@@ -162,7 +168,10 @@ namespace Makhno
             });
 
             if (playerData?.File == null)
+            {
+                OnLog("Makhno HandleMovie: no file parsed");
                 return OnError();
+            }
 
             string movieLink = $"{host}/makhno/play/movie?imdb_id={HttpUtility.UrlEncode(imdb_id)}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&play=true";
             var tpl = new MovieTpl(title ?? original_title, original_title, 1);
@@ -181,7 +190,10 @@ namespace Makhno
             });
 
             if (playerData?.Voices == null || !playerData.Voices.Any())
+            {
+                OnLog("Makhno HandleSerial: no voices parsed");
                 return OnError();
+            }
 
             if (season == -1)
             {
