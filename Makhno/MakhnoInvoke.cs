@@ -418,12 +418,51 @@ namespace Makhno
                 return null;
 
             int depth = 0;
+            bool inString = false;
+            bool escape = false;
+            char quoteChar = '\0';
+
             for (int i = startIndex; i < text.Length; i++)
             {
                 char ch = text[i];
+
+                if (inString)
+                {
+                    if (escape)
+                    {
+                        escape = false;
+                        continue;
+                    }
+
+                    if (ch == '\\')
+                    {
+                        escape = true;
+                        continue;
+                    }
+
+                    if (ch == quoteChar)
+                    {
+                        inString = false;
+                        quoteChar = '\0';
+                    }
+
+                    continue;
+                }
+
+                if (ch == '"' || ch == '\'')
+                {
+                    inString = true;
+                    quoteChar = ch;
+                    continue;
+                }
+
                 if (ch == '[')
+                {
                     depth++;
-                else if (ch == ']')
+                    continue;
+                }
+
+                if (ch == ']')
                 {
                     depth--;
                     if (depth == 0)
