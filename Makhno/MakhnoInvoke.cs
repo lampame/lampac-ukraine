@@ -366,20 +366,45 @@ namespace Makhno
             if (string.IsNullOrEmpty(html))
                 return null;
 
-            var matches = new[]
-            {
-                Regex.Match(html, @"file\s*:\s*'(\[.*\])'", RegexOptions.Singleline),
-                Regex.Match(html, @"file\s*:\s*""(\[.*\])""", RegexOptions.Singleline),
-                Regex.Match(html, @"file\s*:\s*(\[[\s\S]*?\])", RegexOptions.Singleline)
-            };
+            var startIndex = FindFileArrayStart(html);
+            if (startIndex < 0)
+                return null;
 
-            foreach (var match in matches)
+            string jsonArray = ExtractBracketArray(html, startIndex);
+            if (string.IsNullOrEmpty(jsonArray))
+                return null;
+
+            return jsonArray
+                .Replace("\\'", "'")
+                .Replace("\\\"", "\"");
+        }
+
+        private int FindFileArrayStart(string html)
+        {
+            int fileIndex = html.IndexOf("file", StringComparison.OrdinalIgnoreCase);
+            if (fileIndex < 0)
+                return -1;
+
+            int bracketIndex = html.IndexOf('[', fileIndex);
+            return bracketIndex;
+        }
+
+        private string ExtractBracketArray(string text, int startIndex)
+        {
+            if (startIndex < 0 || startIndex >= text.Length || text[startIndex] != '[')
+                return null;
+
+            int depth = 0;
+            for (int i = startIndex; i < text.Length; i++)
             {
-                if (match.Success)
+                char ch = text[i];
+                if (ch == '[')
+                    depth++;
+                else if (ch == ']')
                 {
-                    return match.Groups[1].Value
-                        .Replace("\\'", "'")
-                        .Replace("\\\"", "\"");
+                    depth--;
+                    if (depth == 0)
+                        return text.Substring(startIndex, i - startIndex + 1);
                 }
             }
 
