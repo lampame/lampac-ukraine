@@ -245,10 +245,11 @@ namespace Makhno
                         if (!string.IsNullOrEmpty(episode.File))
                         {
                             string streamUrl = BuildStreamUrl(init, episode.File);
+                            int seasonNumber = season + 1;
                             episode_tpl.Append(
                                 episode.Title,
                                 title ?? original_title,
-                                season.ToString(),
+                                seasonNumber.ToString(),
                                 (i + 1).ToString("D2"),
                                 streamUrl
                             );
