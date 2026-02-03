@@ -181,11 +181,14 @@ namespace UaTUT
 
                             if (!string.IsNullOrEmpty(episodeFile))
                             {
-                                // Створюємо прямий лінк на епізод через play action
-                                string episodeLink = $"{host}/uatut/play?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&s={s}&season={season}&t={selectedVoice}&episodeId={episode.Id}";
-
-                                // Використовуємо правильний синтаксис EpisodeTpl.Append без poster параметра
-                                episode_tpl.Append(episodeName, title ?? original_title, season.ToString(), (i + 1).ToString("D2"), episodeLink, "call");
+                                string streamUrl = BuildStreamUrl(init, episodeFile);
+                                episode_tpl.Append(
+                                    episodeName,
+                                    title ?? original_title,
+                                    season.ToString(),
+                                    (i + 1).ToString("D2"),
+                                    streamUrl
+                                );
                             }
                         }
                     }

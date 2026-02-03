@@ -244,16 +244,13 @@ namespace Makhno
                         var episode = sortedEpisodes[i];
                         if (!string.IsNullOrEmpty(episode.File))
                         {
-                            string episodeLink = $"{host}/makhno/play?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&season={season}&t={selectedVoice}&episodeId={episode.Id}";
-                            string streamLink = $"{episodeLink}&play=true";
+                            string streamUrl = BuildStreamUrl(init, episode.File);
                             episode_tpl.Append(
                                 episode.Title,
                                 title ?? original_title,
                                 season.ToString(),
                                 (i + 1).ToString("D2"),
-                                accsArgs(episodeLink),
-                                "call",
-                                streamlink: accsArgs(streamLink)
+                                streamUrl
                             );
                         }
                     }

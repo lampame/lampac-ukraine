@@ -90,7 +90,15 @@ namespace UAKino.Controllers
                     int episodeNumber = UAKinoInvoke.TryParseEpisodeNumber(ep.Title) ?? index;
                     string episodeName = string.IsNullOrEmpty(ep.Title) ? $"Епізод {episodeNumber}" : ep.Title;
                     string callUrl = $"{host}/uakino/play?url={HttpUtility.UrlEncode(ep.Url)}&title={HttpUtility.UrlEncode(title ?? original_title)}";
-                    episode_tpl.Append(episodeName, title ?? original_title, "1", episodeNumber.ToString("D2"), accsArgs(callUrl), "call");
+                    episode_tpl.Append(
+                        episodeName,
+                        title ?? original_title,
+                        "1",
+                        episodeNumber.ToString("D2"),
+                        accsArgs(callUrl),
+                        "call",
+                        streamlink: accsArgs($"{callUrl}&play=true")
+                    );
                     index++;
                 }
 
