@@ -275,13 +275,19 @@ namespace Makhno
                 }
 
                 string jsonData = ExtractPlayerJson(html);
+                if (jsonData == null)
+                    _onLog("Makhno ParsePlayerData: file array not found");
+                else
+                    _onLog($"Makhno ParsePlayerData: file array length={jsonData.Length}");
                 if (!string.IsNullOrEmpty(jsonData))
                 {
+                    var voices = ParseVoicesJson(jsonData);
+                    _onLog($"Makhno ParsePlayerData: voices={voices?.Count ?? 0}");
                     return new PlayerData
                     {
                         File = null,
                         Poster = null,
-                        Voices = ParseVoicesJson(jsonData)
+                        Voices = voices
                     };
                 }
 
@@ -381,11 +387,28 @@ namespace Makhno
 
         private int FindFileArrayStart(string html)
         {
-            int fileIndex = html.IndexOf("file", StringComparison.OrdinalIgnoreCase);
-            if (fileIndex < 0)
+            int index = FindFileArrayIndex(html, "file:'[");
+            if (index >= 0)
+                return index;
+
+            index = FindFileArrayIndex(html, "file:\"[");
+            if (index >= 0)
+                return index;
+
+            var match = Regex.Match(html, @"file\s*:\s*'?\[", RegexOptions.IgnoreCase);
+            if (match.Success)
+                return match.Index + match.Value.LastIndexOf('[');
+
+            return -1;
+        }
+
+        private int FindFileArrayIndex(string html, string token)
+        {
+            int tokenIndex = html.IndexOf(token, StringComparison.OrdinalIgnoreCase);
+            if (tokenIndex < 0)
                 return -1;
 
-            int bracketIndex = html.IndexOf('[', fileIndex);
+            int bracketIndex = html.IndexOf('[', tokenIndex);
             return bracketIndex;
         }
 
