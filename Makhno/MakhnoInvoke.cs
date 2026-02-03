@@ -170,7 +170,7 @@ namespace Makhno
                         return NormalizePlayerUrl(src);
                 }
 
-                var urlMatch = Regex.Match(moviePageContent, @"(https?://[^\"'\s>]+/(?:vod|serial)/\d+[^\"'\s>]*)", RegexOptions.IgnoreCase);
+                var urlMatch = Regex.Match(moviePageContent, @"(https?://[^""'\s>]+/(?:vod|serial)/\d+[^""'\s>]*)", RegexOptions.IgnoreCase);
                 if (urlMatch.Success)
                     return NormalizePlayerUrl(urlMatch.Groups[1].Value);
 
@@ -239,11 +239,11 @@ namespace Makhno
 
                 var fileMatch = Regex.Match(html, @"file:'([^']+)'", RegexOptions.IgnoreCase);
                 if (!fileMatch.Success)
-                    fileMatch = Regex.Match(html, @"file:\s*\"([^\"]+)\"", RegexOptions.IgnoreCase);
+                    fileMatch = Regex.Match(html, @"file:\s*""([^""]+)""", RegexOptions.IgnoreCase);
 
                 if (fileMatch.Success && !fileMatch.Groups[1].Value.StartsWith("["))
                 {
-                    var posterMatch = Regex.Match(html, @"poster:[\"']([^\"']+)[\"']", RegexOptions.IgnoreCase);
+                    var posterMatch = Regex.Match(html, @"poster:[""']([^""']+)[""']", RegexOptions.IgnoreCase);
                     return new PlayerData
                     {
                         File = fileMatch.Groups[1].Value,
@@ -252,7 +252,7 @@ namespace Makhno
                     };
                 }
 
-                var m3u8Match = Regex.Match(html, @"(https?://[^\"'\s>]+\.m3u8[^\"'\s>]*)", RegexOptions.IgnoreCase);
+                var m3u8Match = Regex.Match(html, @"(https?://[^""'\s>]+\.m3u8[^""'\s>]*)", RegexOptions.IgnoreCase);
                 if (m3u8Match.Success)
                 {
                     return new PlayerData
@@ -263,7 +263,7 @@ namespace Makhno
                     };
                 }
 
-                var sourceMatch = Regex.Match(html, @"<source[^>]*src=[\"']([^\"']+)[\"']", RegexOptions.IgnoreCase);
+                var sourceMatch = Regex.Match(html, @"<source[^>]*src=[""']([^""']+)[""']", RegexOptions.IgnoreCase);
                 if (sourceMatch.Success)
                 {
                     return new PlayerData
