@@ -274,13 +274,9 @@ namespace Makhno
                     };
                 }
 
-                var jsonMatch = Regex.Match(html, @"file:'(\[.*?\])'", RegexOptions.Singleline);
-                if (jsonMatch.Success)
+                string jsonData = ExtractPlayerJson(html);
+                if (!string.IsNullOrEmpty(jsonData))
                 {
-                    string jsonData = jsonMatch.Groups[1].Value
-                        .Replace("\\'", "'")
-                        .Replace("\\\"", "\"");
-
                     return new PlayerData
                     {
                         File = null,
@@ -363,6 +359,31 @@ namespace Makhno
                 _onLog($"Makhno ParseVoicesJson error: {ex.Message}");
                 return new List<Voice>();
             }
+        }
+
+        private string ExtractPlayerJson(string html)
+        {
+            if (string.IsNullOrEmpty(html))
+                return null;
+
+            var matches = new[]
+            {
+                Regex.Match(html, @"file\s*:\s*'(\[.*\])'", RegexOptions.Singleline),
+                Regex.Match(html, @"file\s*:\s*""(\[.*\])""", RegexOptions.Singleline),
+                Regex.Match(html, @"file\s*:\s*(\[[\s\S]*?\])", RegexOptions.Singleline)
+            };
+
+            foreach (var match in matches)
+            {
+                if (match.Success)
+                {
+                    return match.Groups[1].Value
+                        .Replace("\\'", "'")
+                        .Replace("\\\"", "\"");
+                }
+            }
+
+            return null;
         }
 
         private int? ExtractEpisodeNumber(string value)
