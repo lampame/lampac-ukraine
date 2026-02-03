@@ -113,8 +113,9 @@ namespace UaTUT
                 {
                     var seasonItem = firstVoice.Seasons[i];
                     string seasonName = seasonItem.Title ?? $"Сезон {i + 1}";
-                    string link = $"{host}/uatut?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&season={i}";
-                    season_tpl.Append(seasonName, link, i.ToString());
+                    int seasonNumber = i + 1;
+                    string link = $"{host}/uatut?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&season={seasonNumber}";
+                    season_tpl.Append(seasonName, link, seasonNumber.ToString());
                 }
 
                 OnLog($"UaTUT: found {firstVoice.Seasons.Count} seasons");
@@ -137,8 +138,10 @@ namespace UaTUT
                 if (playerData?.Voices == null || !playerData.Voices.Any())
                     return OnError();
 
+                int seasonIndex = season > 0 ? season - 1 : season;
+
                 // Перевіряємо чи існує вибраний сезон
-                if (season >= playerData.Voices.First().Seasons.Count)
+                if (seasonIndex >= playerData.Voices.First().Seasons.Count || seasonIndex < 0)
                     return OnError();
 
                 var voice_tpl = new VoiceTpl();
@@ -156,7 +159,8 @@ namespace UaTUT
                 {
                     var voice = playerData.Voices[i];
                     string voiceName = voice.Name ?? $"Озвучка {i + 1}";
-                    string voiceLink = $"{host}/uatut?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&season={season}&t={i}";
+                    int seasonNumber = seasonIndex + 1;
+                    string voiceLink = $"{host}/uatut?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&season={seasonNumber}&t={i}";
                     bool isActive = selectedVoice == i.ToString();
                     voice_tpl.Append(voiceName, isActive, voiceLink);
                 }
@@ -166,9 +170,9 @@ namespace UaTUT
                 {
                     var selectedVoiceData = playerData.Voices[voiceIndex];
 
-                    if (season < selectedVoiceData.Seasons.Count)
+                    if (seasonIndex < selectedVoiceData.Seasons.Count)
                     {
-                        var selectedSeason = selectedVoiceData.Seasons[season];
+                        var selectedSeason = selectedVoiceData.Seasons[seasonIndex];
 
                         // Сортуємо епізоди та додаємо правильну нумерацію
                         var sortedEpisodes = selectedSeason.Episodes.OrderBy(e => ExtractEpisodeNumber(e.Title)).ToList();
@@ -182,10 +186,11 @@ namespace UaTUT
                             if (!string.IsNullOrEmpty(episodeFile))
                             {
                                 string streamUrl = BuildStreamUrl(init, episodeFile);
+                                int seasonNumber = seasonIndex + 1;
                                 episode_tpl.Append(
                                     episodeName,
                                     title ?? original_title,
-                                    season.ToString(),
+                                    seasonNumber.ToString(),
                                     (i + 1).ToString("D2"),
                                     streamUrl
                                 );
@@ -399,9 +404,10 @@ namespace UaTUT
             {
                 var selectedVoice = playerData.Voices[voiceIndex];
 
-                if (season >= 0 && season < selectedVoice.Seasons.Count)
+                int seasonIndex = season > 0 ? season - 1 : season;
+                if (seasonIndex >= 0 && seasonIndex < selectedVoice.Seasons.Count)
                 {
-                    var selectedSeasonData = selectedVoice.Seasons[season];
+                    var selectedSeasonData = selectedVoice.Seasons[seasonIndex];
 
                     foreach (var episode in selectedSeasonData.Episodes)
                     {

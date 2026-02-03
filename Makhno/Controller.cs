@@ -98,10 +98,11 @@ namespace Makhno
                 return OnError();
 
             var selectedVoice = playerData.Voices[voiceIndex];
-            if (season < 0 || season >= selectedVoice.Seasons.Count)
+            int seasonIndex = season > 0 ? season - 1 : season;
+            if (seasonIndex < 0 || seasonIndex >= selectedVoice.Seasons.Count)
                 return OnError();
 
-            var selectedSeason = selectedVoice.Seasons[season];
+            var selectedSeason = selectedVoice.Seasons[seasonIndex];
             foreach (var episode in selectedSeason.Episodes)
             {
                 if (episode.Id == episodeId && !string.IsNullOrEmpty(episode.File))
@@ -203,14 +204,16 @@ namespace Makhno
                 {
                     var seasonItem = firstVoice.Seasons[i];
                     string seasonName = seasonItem.Title ?? $"Сезон {i + 1}";
-                    string link = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={i}";
-                    season_tpl.Append(seasonName, link, i.ToString());
+                    int seasonNumber = i + 1;
+                    string link = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}";
+                    season_tpl.Append(seasonName, link, seasonNumber.ToString());
                 }
 
                 return rjson ? Content(season_tpl.ToJson(), "application/json; charset=utf-8") : Content(season_tpl.ToHtml(), "text/html; charset=utf-8");
             }
 
-            if (season < 0 || season >= playerData.Voices.First().Seasons.Count)
+            int seasonIndex = season > 0 ? season - 1 : season;
+            if (seasonIndex < 0 || seasonIndex >= playerData.Voices.First().Seasons.Count)
                 return OnError();
 
             var voice_tpl = new VoiceTpl();
@@ -226,7 +229,8 @@ namespace Makhno
             {
                 var voice = playerData.Voices[i];
                 string voiceName = voice.Name ?? $"Озвучка {i + 1}";
-                string voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={season}&t={i}";
+                int seasonNumber = seasonIndex + 1;
+                string voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}&t={i}";
                 bool isActive = selectedVoice == i.ToString();
                 voice_tpl.Append(voiceName, isActive, voiceLink);
             }
@@ -234,9 +238,9 @@ namespace Makhno
             if (!string.IsNullOrEmpty(selectedVoice) && int.TryParse(selectedVoice, out int voiceIndex) && voiceIndex < playerData.Voices.Count)
             {
                 var selectedVoiceData = playerData.Voices[voiceIndex];
-                if (season < selectedVoiceData.Seasons.Count)
+                if (seasonIndex < selectedVoiceData.Seasons.Count)
                 {
-                    var selectedSeason = selectedVoiceData.Seasons[season];
+                    var selectedSeason = selectedVoiceData.Seasons[seasonIndex];
                     var sortedEpisodes = selectedSeason.Episodes.OrderBy(e => ExtractEpisodeNumber(e.Title)).ToList();
 
                     for (int i = 0; i < sortedEpisodes.Count; i++)
@@ -245,7 +249,7 @@ namespace Makhno
                         if (!string.IsNullOrEmpty(episode.File))
                         {
                             string streamUrl = BuildStreamUrl(init, episode.File);
-                            int seasonNumber = season + 1;
+                            int seasonNumber = seasonIndex + 1;
                             episode_tpl.Append(
                                 episode.Title,
                                 title ?? original_title,
