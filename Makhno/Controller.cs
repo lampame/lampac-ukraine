@@ -267,11 +267,54 @@ namespace Makhno
 
             int requestedSeason = seasonNumbers.Contains(season) ? season : seasonNumbers.First();
 
+            int? seasonVoiceIndexForTpl = null;
             string selectedVoice = t;
-            if (string.IsNullOrEmpty(selectedVoice) || !int.TryParse(selectedVoice, out _))
+            if (string.IsNullOrEmpty(selectedVoice) || !int.TryParse(selectedVoice, out int selectedVoiceIndex))
             {
                 var voiceWithSeason = voiceSeasons.FirstOrDefault(v => v.Seasons.Any(s => s.Number == requestedSeason));
                 selectedVoice = voiceWithSeason != null ? voiceWithSeason.Index.ToString() : voiceSeasons.First().Index.ToString();
+            }
+            else if (selectedVoiceIndex >= 0 && selectedVoiceIndex < playerData.Voices.Count)
+            {
+                seasonVoiceIndexForTpl = selectedVoiceIndex;
+            }
+
+            // Build season template for selected voice (if valid) to keep season list in sync when switching voices.
+            var season_tpl = new SeasonTpl();
+            List<int> seasonNumbersForTpl = seasonNumbers;
+            if (seasonVoiceIndexForTpl.HasValue)
+            {
+                var seasonsForVoiceTpl = GetSeasonsWithNumbers(playerData.Voices[seasonVoiceIndexForTpl.Value])
+                    .Select(s => s.Number)
+                    .Distinct()
+                    .OrderBy(n => n)
+                    .ToList();
+
+                if (seasonsForVoiceTpl.Count > 0)
+                    seasonNumbersForTpl = seasonsForVoiceTpl;
+            }
+
+            foreach (var seasonNumber in seasonNumbersForTpl)
+            {
+                (Season Season, int Number)? seasonItem = null;
+                if (seasonVoiceIndexForTpl.HasValue)
+                {
+                    var voiceSeasonsForT = GetSeasonsWithNumbers(playerData.Voices[seasonVoiceIndexForTpl.Value]);
+                    var match = voiceSeasonsForT.FirstOrDefault(s => s.Number == seasonNumber);
+                    seasonItem = match.Season != null ? match : ((Season Season, int Number)?)null;
+                }
+                else
+                {
+                    var match = voiceSeasons
+                        .SelectMany(v => v.Seasons)
+                        .FirstOrDefault(s => s.Number == seasonNumber);
+                    seasonItem = match.Season != null ? match : ((Season Season, int Number)?)null;
+                }
+
+                string voiceParam = seasonVoiceIndexForTpl.HasValue ? $"&t={seasonVoiceIndexForTpl.Value}" : string.Empty;
+                string seasonName = seasonItem.HasValue ? seasonItem.Value.Season?.Title ?? $"Сезон {seasonNumber}" : $"Сезон {seasonNumber}";
+                string link = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}{voiceParam}";
+                season_tpl.Append(seasonName, link, seasonNumber.ToString());
             }
 
             for (int i = 0; i < playerData.Voices.Count; i++)
@@ -331,6 +374,7 @@ namespace Makhno
                 }
             }
 
+            episode_tpl.Append(season_tpl);
             episode_tpl.Append(voice_tpl);
             if (rjson)
                 return Content(episode_tpl.ToJson(), "application/json; charset=utf-8");
