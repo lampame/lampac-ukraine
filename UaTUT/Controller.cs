@@ -53,20 +53,20 @@ namespace UaTUT
 
             if (serial == 1)
             {
-                return await HandleSeries(searchResults, imdb_id, kinopoisk_id, title, original_title, year, s, season, t, rjson, invoke);
+                return await HandleSeries(searchResults, imdb_id, kinopoisk_id, title, original_title, year, s, season, t, rjson, invoke, preferSeries: true);
             }
             else
             {
-                return await HandleMovie(searchResults, rjson, invoke);
+                return await HandleMovie(searchResults, rjson, invoke, preferSeries: false);
             }
         }
 
-        private async Task<ActionResult> HandleSeries(List<SearchResult> searchResults, string imdb_id, long kinopoisk_id, string title, string original_title, int year, int s, int season, string t, bool rjson, UaTUTInvoke invoke)
+        private async Task<ActionResult> HandleSeries(List<SearchResult> searchResults, string imdb_id, long kinopoisk_id, string title, string original_title, int year, int s, int season, string t, bool rjson, UaTUTInvoke invoke, bool preferSeries)
         {
             var init = ModInit.UaTUT;
 
             // Фільтруємо тільки серіали та аніме
-            var seriesResults = searchResults.Where(r => IsSeriesCategory(r.Category)).ToList();
+            var seriesResults = searchResults.Where(r => IsSeriesCategory(r.Category, preferSeries)).ToList();
 
             if (!seriesResults.Any())
             {
@@ -244,12 +244,12 @@ namespace UaTUT
             return match.Success ? int.Parse(match.Groups[1].Value) : 0;
         }
 
-        private async Task<ActionResult> HandleMovie(List<SearchResult> searchResults, bool rjson, UaTUTInvoke invoke)
+        private async Task<ActionResult> HandleMovie(List<SearchResult> searchResults, bool rjson, UaTUTInvoke invoke, bool preferSeries)
         {
             var init = ModInit.UaTUT;
 
             // Фільтруємо тільки фільми
-            var movieResults = searchResults.Where(r => IsMovieCategory(r.Category)).ToList();
+            var movieResults = searchResults.Where(r => IsMovieCategory(r.Category, preferSeries)).ToList();
 
             if (!movieResults.Any())
             {
@@ -456,25 +456,39 @@ namespace UaTUT
             return cleaned;
         }
 
-        private static bool IsMovieCategory(string category)
+        private static bool IsMovieCategory(string category, bool preferSeries)
         {
             if (string.IsNullOrWhiteSpace(category))
                 return false;
 
             var value = category.Trim().ToLowerInvariant();
+            if (IsAnimeCategory(value))
+                return !preferSeries;
+
             return value == "фільм" || value == "фильм" || value == "мультфільм" || value == "мультфильм" || value == "movie";
         }
 
-        private static bool IsSeriesCategory(string category)
+        private static bool IsSeriesCategory(string category, bool preferSeries)
         {
             if (string.IsNullOrWhiteSpace(category))
                 return false;
 
             var value = category.Trim().ToLowerInvariant();
+            if (IsAnimeCategory(value))
+                return preferSeries;
+
             return value == "серіал" || value == "сериал"
                 || value == "аніме" || value == "аниме"
                 || value == "мультсеріал" || value == "мультсериал"
                 || value == "tv";
+        }
+
+        private static bool IsAnimeCategory(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            return value == "аніме" || value == "аниме";
         }
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)

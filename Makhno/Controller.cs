@@ -326,7 +326,7 @@ namespace Makhno
 
             playUrl = invoke.BuildAshdiUrl(ashdiPath);
 
-            bool isSerial = serial == 1 || IsSerialByCategory(selected.Category) || IsSerialByUrl(playUrl, serial);
+            bool isSerial = serial == 1 || IsSerialByCategory(selected.Category, serial) || IsSerialByUrl(playUrl, serial);
 
             return new ResolveResult
             {
@@ -338,10 +338,16 @@ namespace Makhno
             };
         }
 
-        private bool IsSerialByCategory(string category)
+        private bool IsSerialByCategory(string category, int serial)
         {
             if (string.IsNullOrWhiteSpace(category))
                 return false;
+
+            if (category.Equals("Аніме", StringComparison.OrdinalIgnoreCase)
+                || category.Equals("Аниме", StringComparison.OrdinalIgnoreCase))
+            {
+                return serial == 1;
+            }
 
             return category.Equals("Серіал", StringComparison.OrdinalIgnoreCase)
                 || category.Equals("Сериал", StringComparison.OrdinalIgnoreCase)
