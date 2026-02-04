@@ -196,18 +196,35 @@ namespace Makhno
                 return OnError();
             }
 
-            int maxSeasons = playerData.Voices.Max(v => v.Seasons?.Count ?? 0);
-            if (maxSeasons <= 0)
+            var voiceSeasons = playerData.Voices
+                .Select((voice, index) => new
+                {
+                    Voice = voice,
+                    Index = index,
+                    Seasons = GetSeasonsWithNumbers(voice)
+                })
+                .Where(v => v.Seasons.Count > 0)
+                .ToList();
+
+            var seasonNumbers = voiceSeasons
+                .SelectMany(v => v.Seasons.Select(s => s.Number))
+                .Distinct()
+                .OrderBy(n => n)
+                .ToList();
+
+            if (seasonNumbers.Count == 0)
                 return OnError();
 
             if (season == -1)
             {
                 var season_tpl = new SeasonTpl();
-                for (int i = 0; i < maxSeasons; i++)
+                foreach (var seasonNumber in seasonNumbers)
                 {
-                    var seasonItem = playerData.Voices.Select(v => v.Seasons.ElementAtOrDefault(i)).FirstOrDefault(s => s != null);
-                    string seasonName = seasonItem.Title ?? $"Сезон {i + 1}";
-                    int seasonNumber = i + 1;
+                    var seasonItem = voiceSeasons
+                        .SelectMany(v => v.Seasons)
+                        .FirstOrDefault(s => s.Number == seasonNumber);
+
+                    string seasonName = seasonItem.Season?.Title ?? $"Сезон {seasonNumber}";
                     string link = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}";
                     season_tpl.Append(seasonName, link, seasonNumber.ToString());
                 }
@@ -215,28 +232,28 @@ namespace Makhno
                 return rjson ? Content(season_tpl.ToJson(), "application/json; charset=utf-8") : Content(season_tpl.ToHtml(), "text/html; charset=utf-8");
             }
 
-            int seasonIndex = season > 0 ? season - 1 : season;
-            if (seasonIndex < 0 || seasonIndex >= maxSeasons)
-                return OnError();
-
             var voice_tpl = new VoiceTpl();
             var episode_tpl = new EpisodeTpl();
 
             string selectedVoice = t;
-            if (string.IsNullOrEmpty(selectedVoice) && playerData.Voices.Any())
+            if (string.IsNullOrEmpty(selectedVoice) || !int.TryParse(selectedVoice, out _))
             {
-                selectedVoice = "0";
+                var voiceWithSeason = voiceSeasons.FirstOrDefault(v => v.Seasons.Any(s => s.Number == season));
+                selectedVoice = voiceWithSeason != null ? voiceWithSeason.Index.ToString() : voiceSeasons.First().Index.ToString();
             }
 
             for (int i = 0; i < playerData.Voices.Count; i++)
             {
                 var voice = playerData.Voices[i];
                 string voiceName = voice.Name ?? $"Озвучка {i + 1}";
-                int voiceSeasonIndex = GetSeasonIndexForVoice(voice, seasonIndex);
-                if (voiceSeasonIndex < 0)
+                var seasonsForVoice = GetSeasonsWithNumbers(voice);
+                if (seasonsForVoice.Count == 0)
                     continue;
 
-                int seasonNumber = voiceSeasonIndex + 1;
+                int seasonNumber = seasonsForVoice.Any(s => s.Number == season)
+                    ? season
+                    : seasonsForVoice.Min(s => s.Number);
+
                 string voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}&t={i}";
                 bool isActive = selectedVoice == i.ToString();
                 voice_tpl.Append(voiceName, isActive, voiceLink);
@@ -245,10 +262,14 @@ namespace Makhno
             if (!string.IsNullOrEmpty(selectedVoice) && int.TryParse(selectedVoice, out int voiceIndex) && voiceIndex < playerData.Voices.Count)
             {
                 var selectedVoiceData = playerData.Voices[voiceIndex];
-                int effectiveSeasonIndex = GetSeasonIndexForVoice(selectedVoiceData, seasonIndex);
-                if (effectiveSeasonIndex >= 0)
+                var seasonsForVoice = GetSeasonsWithNumbers(selectedVoiceData);
+                if (seasonsForVoice.Count > 0)
                 {
-                    var selectedSeason = selectedVoiceData.Seasons[effectiveSeasonIndex];
+                    int effectiveSeasonNumber = seasonsForVoice.Any(s => s.Number == season)
+                        ? season
+                        : seasonsForVoice.Min(s => s.Number);
+
+                    var selectedSeason = seasonsForVoice.First(s => s.Number == effectiveSeasonNumber).Season;
                     var sortedEpisodes = selectedSeason.Episodes.OrderBy(e => ExtractEpisodeNumber(e.Title)).ToList();
 
                     for (int i = 0; i < sortedEpisodes.Count; i++)
@@ -257,11 +278,10 @@ namespace Makhno
                         if (!string.IsNullOrEmpty(episode.File))
                         {
                             string streamUrl = BuildStreamUrl(init, episode.File);
-                            int seasonNumber = effectiveSeasonIndex + 1;
                             episode_tpl.Append(
                                 episode.Title,
                                 title ?? original_title,
-                                seasonNumber.ToString(),
+                                effectiveSeasonNumber.ToString(),
                                 (i + 1).ToString("D2"),
                                 streamUrl
                             );
@@ -286,15 +306,29 @@ namespace Makhno
             return match.Success ? int.Parse(match.Groups[1].Value) : 0;
         }
 
-        private int GetSeasonIndexForVoice(Voice voice, int requestedSeasonIndex)
+        private int? ExtractSeasonNumber(string title)
         {
+            if (string.IsNullOrEmpty(title))
+                return null;
+
+            var match = System.Text.RegularExpressions.Regex.Match(title, @"(\d+)");
+            return match.Success ? int.Parse(match.Groups[1].Value) : (int?)null;
+        }
+
+        private List<(Season Season, int Number)> GetSeasonsWithNumbers(Voice voice)
+        {
+            var result = new List<(Season Season, int Number)>();
             if (voice?.Seasons == null || voice.Seasons.Count == 0)
-                return -1;
+                return result;
 
-            if (requestedSeasonIndex >= 0 && requestedSeasonIndex < voice.Seasons.Count)
-                return requestedSeasonIndex;
+            for (int i = 0; i < voice.Seasons.Count; i++)
+            {
+                var season = voice.Seasons[i];
+                int number = ExtractSeasonNumber(season?.Title) ?? (i + 1);
+                result.Add((season, number));
+            }
 
-            return 0;
+            return result;
         }
 
         private async Task<ResolveResult> ResolvePlaySource(string imdbId, string title, string originalTitle, int year, int serial, MakhnoInvoke invoke)
