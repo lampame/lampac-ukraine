@@ -273,16 +273,16 @@ namespace Makhno
                 if (seasonsForVoice.Count == 0)
                     continue;
 
-                bool hasRequestedSeason = seasonsForVoice.Any(s => s.Number == requestedSeason);
                 string voiceLink;
-                if (hasRequestedSeason)
+                if (seasonsForVoice.Count > 1)
                 {
-                    voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={requestedSeason}&t={i}";
+                    // Always show season list for multi-season voices to keep filter correct
+                    voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season=-1&t={i}";
                 }
                 else
                 {
-                    // Force season list for this voice to avoid showing чужі сезони
-                    voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season=-1&t={i}";
+                    int onlySeason = seasonsForVoice[0].Number;
+                    voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={onlySeason}&t={i}";
                 }
                 bool isActive = selectedVoice == i.ToString();
                 voice_tpl.Append(voiceName, isActive, voiceLink);
