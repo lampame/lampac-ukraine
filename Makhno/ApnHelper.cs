@@ -17,12 +17,24 @@ namespace Shared.Engine
             if (conf == null)
                 return false;
 
-            if (!conf.TryGetValue("apn", out var apnToken) || apnToken?.Type != JTokenType.Boolean)
+            if (!conf.TryGetValue("apn", out var apnToken) || apnToken == null)
                 return false;
 
-            enabled = apnToken.Value<bool>();
-            host = conf.Value<string>("apn_host");
-            return true;
+            if (apnToken.Type == JTokenType.Boolean)
+            {
+                enabled = apnToken.Value<bool>();
+                host = conf.Value<string>("apn_host");
+                return true;
+            }
+
+            if (apnToken.Type == JTokenType.String)
+            {
+                host = apnToken.Value<string>();
+                enabled = !string.IsNullOrWhiteSpace(host);
+                return true;
+            }
+
+            return false;
         }
 
         public static void ApplyInitConf(bool enabled, string host, BaseSettings init)

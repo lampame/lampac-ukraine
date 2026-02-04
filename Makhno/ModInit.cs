@@ -54,8 +54,11 @@ namespace Makhno
             };
             var conf = ModuleInvoke.Conf("Makhno", Makhno);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
-            conf.Remove("apn");
-            conf.Remove("apn_host");
+            if (hasApn)
+            {
+                conf.Remove("apn");
+                conf.Remove("apn_host");
+            }
             Makhno = conf.ToObject<OnlinesSettings>();
             if (hasApn)
                 ApnHelper.ApplyInitConf(apnEnabled, apnHost, Makhno);
