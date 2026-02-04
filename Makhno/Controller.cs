@@ -279,6 +279,18 @@ namespace Makhno
                 seasonVoiceIndexForTpl = selectedVoiceIndex;
             }
 
+            HashSet<int> selectedVoiceSeasonSet = null;
+            if (seasonVoiceIndexForTpl.HasValue)
+            {
+                selectedVoiceSeasonSet = GetSeasonsWithNumbers(playerData.Voices[seasonVoiceIndexForTpl.Value])
+                    .Select(s => s.Number)
+                    .ToHashSet();
+            }
+            else
+            {
+                selectedVoiceSeasonSet = seasonNumbers.ToHashSet();
+            }
+
             // Build season template for selected voice (if valid) to keep season list in sync when switching voices.
             var seasonTplForVoice = new SeasonTpl();
             List<int> seasonNumbersForTpl = seasonNumbers;
@@ -327,7 +339,8 @@ namespace Makhno
 
                 string voiceLink;
                 bool hasRequestedSeason = seasonsForVoice.Any(s => s.Number == requestedSeason);
-                if (hasRequestedSeason)
+                bool sameSeasonSet = seasonsForVoice.Select(s => s.Number).ToHashSet().SetEquals(selectedVoiceSeasonSet);
+                if (hasRequestedSeason && sameSeasonSet)
                 {
                     voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={requestedSeason}&t={i}";
                 }
