@@ -280,7 +280,7 @@ namespace Makhno
             }
 
             // Build season template for selected voice (if valid) to keep season list in sync when switching voices.
-            var season_tpl = new SeasonTpl();
+            var seasonTplForVoice = new SeasonTpl();
             List<int> seasonNumbersForTpl = seasonNumbers;
             if (seasonVoiceIndexForTpl.HasValue)
             {
@@ -314,7 +314,7 @@ namespace Makhno
                 string voiceParam = seasonVoiceIndexForTpl.HasValue ? $"&t={seasonVoiceIndexForTpl.Value}" : string.Empty;
                 string seasonName = seasonItem.HasValue ? seasonItem.Value.Season?.Title ?? $"Сезон {seasonNumber}" : $"Сезон {seasonNumber}";
                 string link = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}{voiceParam}";
-                season_tpl.Append(seasonName, link, seasonNumber.ToString());
+                seasonTplForVoice.Append(seasonName, link, seasonNumber.ToString());
             }
 
             for (int i = 0; i < playerData.Voices.Count; i++)
@@ -374,12 +374,11 @@ namespace Makhno
                 }
             }
 
-            episode_tpl.Append(season_tpl);
             episode_tpl.Append(voice_tpl);
             if (rjson)
                 return Content(episode_tpl.ToJson(), "application/json; charset=utf-8");
 
-            return Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
+            return Content(seasonTplForVoice.ToHtml() + episode_tpl.ToHtml(), "text/html; charset=utf-8");
         }
 
         private int ExtractEpisodeNumber(string title)
