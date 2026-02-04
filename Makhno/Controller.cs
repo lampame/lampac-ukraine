@@ -206,6 +206,13 @@ namespace Makhno
                 .Where(v => v.Seasons.Count > 0)
                 .ToList();
 
+            OnLog($"Makhno SeasonDebug: voices={playerData.Voices.Count}, withSeasons={voiceSeasons.Count}, t={t}, season={season}");
+            foreach (var v in voiceSeasons)
+            {
+                var seasonList = string.Join(", ", v.Seasons.Select(s => $"{s.Number}:{s.Season?.Title}"));
+                OnLog($"Makhno SeasonDebug: voice[{v.Index}]='{v.Voice?.Name}', seasons=[{seasonList}]");
+            }
+
             var seasonNumbers = voiceSeasons
                 .SelectMany(v => v.Seasons.Select(s => s.Number))
                 .Distinct()
