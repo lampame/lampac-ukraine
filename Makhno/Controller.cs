@@ -217,6 +217,18 @@ namespace Makhno
 
             if (season == -1)
             {
+                if (int.TryParse(t, out int seasonVoiceIndex) && seasonVoiceIndex >= 0 && seasonVoiceIndex < playerData.Voices.Count)
+                {
+                    var seasonsForVoice = GetSeasonsWithNumbers(playerData.Voices[seasonVoiceIndex])
+                        .Select(s => s.Number)
+                        .Distinct()
+                        .OrderBy(n => n)
+                        .ToList();
+
+                    if (seasonsForVoice.Count > 0)
+                        seasonNumbers = seasonsForVoice;
+                }
+
                 var season_tpl = new SeasonTpl();
                 foreach (var seasonNumber in seasonNumbers)
                 {
