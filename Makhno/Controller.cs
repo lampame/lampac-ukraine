@@ -235,10 +235,12 @@ namespace Makhno
             var voice_tpl = new VoiceTpl();
             var episode_tpl = new EpisodeTpl();
 
+            int requestedSeason = seasonNumbers.Contains(season) ? season : seasonNumbers.First();
+
             string selectedVoice = t;
             if (string.IsNullOrEmpty(selectedVoice) || !int.TryParse(selectedVoice, out _))
             {
-                var voiceWithSeason = voiceSeasons.FirstOrDefault(v => v.Seasons.Any(s => s.Number == season));
+                var voiceWithSeason = voiceSeasons.FirstOrDefault(v => v.Seasons.Any(s => s.Number == requestedSeason));
                 selectedVoice = voiceWithSeason != null ? voiceWithSeason.Index.ToString() : voiceSeasons.First().Index.ToString();
             }
 
@@ -250,8 +252,8 @@ namespace Makhno
                 if (seasonsForVoice.Count == 0)
                     continue;
 
-                int seasonNumber = seasonsForVoice.Any(s => s.Number == season)
-                    ? season
+                int seasonNumber = seasonsForVoice.Any(s => s.Number == requestedSeason)
+                    ? requestedSeason
                     : seasonsForVoice.Min(s => s.Number);
 
                 string voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}&t={i}";
@@ -265,9 +267,15 @@ namespace Makhno
                 var seasonsForVoice = GetSeasonsWithNumbers(selectedVoiceData);
                 if (seasonsForVoice.Count > 0)
                 {
-                    int effectiveSeasonNumber = seasonsForVoice.Any(s => s.Number == season)
-                        ? season
+                    int effectiveSeasonNumber = seasonsForVoice.Any(s => s.Number == requestedSeason)
+                        ? requestedSeason
                         : seasonsForVoice.Min(s => s.Number);
+
+                    if (effectiveSeasonNumber != season)
+                    {
+                        string redirectUrl = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={effectiveSeasonNumber}&t={voiceIndex}";
+                        return UpdateService.Validate(Redirect(redirectUrl));
+                    }
 
                     var selectedSeason = seasonsForVoice.First(s => s.Number == effectiveSeasonNumber).Season;
                     var sortedEpisodes = selectedSeason.Episodes.OrderBy(e => ExtractEpisodeNumber(e.Title)).ToList();
