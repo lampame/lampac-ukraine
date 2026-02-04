@@ -57,11 +57,14 @@ namespace Mikai.Controllers
 
             if (isSerial)
             {
-                var seasonNumbers = voices.Values
-                    .SelectMany(v => v.Seasons.Keys)
-                    .Distinct()
-                    .OrderBy(n => n)
-                    .ToList();
+                bool restrictByVoice = !string.IsNullOrEmpty(t) && voices.TryGetValue(t, out var voiceForSeasons);
+                var seasonNumbers = restrictByVoice
+                    ? GetSeasonSet(voiceForSeasons).OrderBy(n => n).ToList()
+                    : voices.Values
+                        .SelectMany(v => GetSeasonSet(v))
+                        .Distinct()
+                        .OrderBy(n => n)
+                        .ToList();
 
                 if (seasonNumbers.Count == 0)
                     return OnError("mikai", _proxyManager);
@@ -72,6 +75,8 @@ namespace Mikai.Controllers
                     foreach (var seasonNumber in seasonNumbers)
                     {
                         string link = $"{host}/mikai?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={seasonNumber}";
+                        if (restrictByVoice)
+                            link += $"&t={HttpUtility.UrlEncode(t)}";
                         seasonTpl.Append($"{seasonNumber}", link, seasonNumber.ToString());
                     }
 
@@ -89,16 +94,29 @@ namespace Mikai.Controllers
 
                 if (string.IsNullOrEmpty(t))
                     t = voicesForSeason[0].Key;
+                else if (!voices.ContainsKey(t))
+                    t = voicesForSeason[0].Key;
 
                 var voiceTpl = new VoiceTpl();
+                var selectedVoiceInfo = voices[t];
+                var selectedSeasonSet = GetSeasonSet(selectedVoiceInfo);
                 foreach (var voice in voicesForSeason)
                 {
-                    string voiceLink = $"{host}/mikai?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&t={HttpUtility.UrlEncode(voice.Key)}";
+                    var targetSeasonSet = GetSeasonSet(voice.Value);
+                    bool sameSeasonSet = targetSeasonSet.SetEquals(selectedSeasonSet);
+                    string voiceLink = $"{host}/mikai?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1";
+                    if (sameSeasonSet)
+                        voiceLink += $"&s={s}&t={HttpUtility.UrlEncode(voice.Key)}";
+                    else
+                        voiceLink += $"&s=-1&t={HttpUtility.UrlEncode(voice.Key)}";
                     voiceTpl.Append(voice.Key, voice.Key == t, voiceLink);
                 }
 
                 if (!voices.ContainsKey(t) || !voices[t].Seasons.ContainsKey(s))
-                    return OnError("mikai", _proxyManager);
+                {
+                    string redirectUrl = $"{host}/mikai?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s=-1&t={HttpUtility.UrlEncode(t)}";
+                    return Redirect(redirectUrl);
+                }
 
                 var episodeTpl = new EpisodeTpl();
                 foreach (var ep in voices[t].Seasons[s].OrderBy(e => e.Number))
@@ -365,6 +383,17 @@ namespace Mikai.Controllers
 
             return streamLink.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase) ||
                    streamLink.Contains("moonanime.art", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static HashSet<int> GetSeasonSet(MikaiVoiceInfo voice)
+        {
+            if (voice?.Seasons == null || voice.Seasons.Count == 0)
+                return new HashSet<int>();
+
+            return voice.Seasons
+                .Where(kv => kv.Value != null && kv.Value.Any(ep => !string.IsNullOrEmpty(ep.Url)))
+                .Select(kv => kv.Key)
+                .ToHashSet();
         }
 
         private static string StripLampacArgs(string url)
