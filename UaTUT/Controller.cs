@@ -66,7 +66,7 @@ namespace UaTUT
             var init = ModInit.UaTUT;
 
             // Фільтруємо тільки серіали та аніме
-            var seriesResults = searchResults.Where(r => r.Category == "Серіал" || r.Category == "Аніме").ToList();
+            var seriesResults = searchResults.Where(r => IsSeriesCategory(r.Category)).ToList();
 
             if (!seriesResults.Any())
             {
@@ -249,7 +249,7 @@ namespace UaTUT
             var init = ModInit.UaTUT;
 
             // Фільтруємо тільки фільми
-            var movieResults = searchResults.Where(r => r.Category == "Фільм").ToList();
+            var movieResults = searchResults.Where(r => IsMovieCategory(r.Category)).ToList();
 
             if (!movieResults.Any())
             {
@@ -454,6 +454,27 @@ namespace UaTUT
 
             cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
             return cleaned;
+        }
+
+        private static bool IsMovieCategory(string category)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+                return false;
+
+            var value = category.Trim().ToLowerInvariant();
+            return value == "фільм" || value == "фильм" || value == "мультфільм" || value == "мультфильм" || value == "movie";
+        }
+
+        private static bool IsSeriesCategory(string category)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+                return false;
+
+            var value = category.Trim().ToLowerInvariant();
+            return value == "серіал" || value == "сериал"
+                || value == "аніме" || value == "аниме"
+                || value == "мультсеріал" || value == "мультсериал"
+                || value == "tv";
         }
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)

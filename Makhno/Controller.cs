@@ -344,7 +344,12 @@ namespace Makhno
                 return false;
 
             return category.Equals("Серіал", StringComparison.OrdinalIgnoreCase)
-                || category.Equals("Аніме", StringComparison.OrdinalIgnoreCase);
+                || category.Equals("Сериал", StringComparison.OrdinalIgnoreCase)
+                || category.Equals("Аніме", StringComparison.OrdinalIgnoreCase)
+                || category.Equals("Аниме", StringComparison.OrdinalIgnoreCase)
+                || category.Equals("Мультсеріал", StringComparison.OrdinalIgnoreCase)
+                || category.Equals("Мультсериал", StringComparison.OrdinalIgnoreCase)
+                || category.Equals("TV", StringComparison.OrdinalIgnoreCase);
         }
 
         private bool IsSerialByUrl(string url, int serial)
