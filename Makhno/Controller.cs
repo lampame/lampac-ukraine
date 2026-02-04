@@ -242,17 +242,19 @@ namespace Makhno
                     if (seasonVoiceIndex.HasValue)
                     {
                         var voiceSeasonsForT = GetSeasonsWithNumbers(playerData.Voices[seasonVoiceIndex.Value]);
-                        seasonItem = voiceSeasonsForT.FirstOrDefault(s => s.Number == seasonNumber);
+                        var match = voiceSeasonsForT.FirstOrDefault(s => s.Number == seasonNumber);
+                        seasonItem = match.Season != null ? match : ((Season Season, int Number)?)null;
                     }
                     else
                     {
-                        seasonItem = voiceSeasons
+                        var match = voiceSeasons
                             .SelectMany(v => v.Seasons)
                             .FirstOrDefault(s => s.Number == seasonNumber);
+                        seasonItem = match.Season != null ? match : ((Season Season, int Number)?)null;
                     }
 
                     string voiceParam = seasonVoiceIndex.HasValue ? $"&t={seasonVoiceIndex.Value}" : string.Empty;
-                    string seasonName = seasonItem.Season?.Title ?? $"Сезон {seasonNumber}";
+                    string seasonName = seasonItem.HasValue ? seasonItem.Value.Season?.Title ?? $"Сезон {seasonNumber}" : $"Сезон {seasonNumber}";
                     string link = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}{voiceParam}";
                     season_tpl.Append(seasonName, link, seasonNumber.ToString());
                 }
