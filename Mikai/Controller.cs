@@ -116,7 +116,7 @@ namespace Mikai.Controllers
                     }
                     else
                     {
-                        string playUrl = HostStreamProxy(init, accsArgs(streamLink));
+                        string playUrl = BuildStreamUrl(init, streamLink, headers: null, forceProxy: false);
                         episodeTpl.Append(episodeName, displayTitle, s.ToString(), ep.Number.ToString(), playUrl);
                     }
                 }
@@ -142,7 +142,7 @@ namespace Mikai.Controllers
                 }
                 else
                 {
-                    string playUrl = HostStreamProxy(init, accsArgs(episode.Url));
+                    string playUrl = BuildStreamUrl(init, episode.Url, headers: null, forceProxy: false);
                     movieTpl.Append(voice.DisplayName, playUrl);
                 }
             }
@@ -367,9 +367,30 @@ namespace Mikai.Controllers
                    streamLink.Contains("moonanime.art", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static string StripLampacArgs(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(
+                url,
+                @"([?&])(account_email|uid|nws_id)=[^&]*",
+                "$1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
+        }
+
         private string BuildStreamUrl(OnlinesSettings init, string streamLink, List<HeadersModel> headers, bool forceProxy)
         {
-            string link = accsArgs(streamLink);
+            string link = streamLink?.Trim();
+            if (string.IsNullOrEmpty(link))
+                return link;
+
+            link = StripLampacArgs(link);
+
             if (ApnHelper.IsEnabled(init))
             {
                 if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))

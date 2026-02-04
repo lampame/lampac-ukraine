@@ -161,7 +161,7 @@ namespace AnimeON.Controllers
                         }
                         else
                         {
-                            string playUrl = HostStreamProxy(init, accsArgs(streamLink));
+                            string playUrl = BuildStreamUrl(init, streamLink, headers: null, forceProxy: false);
                             episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, playUrl);
                         }
                     }
@@ -217,7 +217,7 @@ namespace AnimeON.Controllers
                         }
                         else
                         {
-                            tpl.Append(translationName, HostStreamProxy(init, accsArgs(streamLink)));
+                            tpl.Append(translationName, BuildStreamUrl(init, streamLink, headers: null, forceProxy: false));
                         }
                     }
                 }
@@ -376,9 +376,30 @@ namespace AnimeON.Controllers
             return UpdateService.Validate(Content(jsonResult, "application/json; charset=utf-8"));
         }
 
+        private static string StripLampacArgs(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(
+                url,
+                @"([?&])(account_email|uid|nws_id)=[^&]*",
+                "$1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
+        }
+
         string BuildStreamUrl(OnlinesSettings init, string streamLink, List<HeadersModel> headers, bool forceProxy)
         {
-            string link = accsArgs(streamLink);
+            string link = streamLink?.Trim();
+            if (string.IsNullOrEmpty(link))
+                return link;
+
+            link = StripLampacArgs(link);
+
             if (ApnHelper.IsEnabled(init))
             {
                 if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))

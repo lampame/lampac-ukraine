@@ -104,7 +104,8 @@ namespace Unimay.Controllers
                     if (string.IsNullOrEmpty(masterUrl))
                         return OnError("no stream");
 
-                    return UpdateService.Validate(Redirect(HostStreamProxy(init, accsArgs(masterUrl), proxy: proxyManager.Get())));
+                    string cleaned = StripLampacArgs(masterUrl?.Trim());
+                    return UpdateService.Validate(Redirect(HostStreamProxy(init, cleaned, proxy: proxyManager.Get())));
                 }
 
                 if (itemType == "Фільм")
@@ -139,6 +140,22 @@ namespace Unimay.Controllers
 
                 return OnError("unsupported type");
             });
+        }
+
+        private static string StripLampacArgs(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(
+                url,
+                @"([?&])(account_email|uid|nws_id)=[^&]*",
+                "$1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
         }
     }
 }

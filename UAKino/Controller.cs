@@ -92,7 +92,7 @@ namespace UAKino.Controllers
                     string callUrl = $"{host}/uakino/play?url={HttpUtility.UrlEncode(ep.Url)}&title={HttpUtility.UrlEncode(title ?? original_title)}";
                     if (!string.IsNullOrEmpty(ep.Url) && ep.Url.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase))
                     {
-                        string playUrl = HostStreamProxy(init, accsArgs(ep.Url));
+                        string playUrl = BuildStreamUrl(init, ep.Url);
                         episode_tpl.Append(
                             episodeName,
                             title ?? original_title,
@@ -165,9 +165,30 @@ namespace UAKino.Controllers
             return UpdateService.Validate(Content(jsonResult, "application/json; charset=utf-8"));
         }
 
+        private static string StripLampacArgs(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(
+                url,
+                @"([?&])(account_email|uid|nws_id)=[^&]*",
+                "$1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
+        }
+
         string BuildStreamUrl(OnlinesSettings init, string streamLink)
         {
-            string link = accsArgs(streamLink);
+            string link = streamLink?.Trim();
+            if (string.IsNullOrEmpty(link))
+                return link;
+
+            link = StripLampacArgs(link);
+
             if (ApnHelper.IsEnabled(init))
             {
                 if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))
