@@ -206,12 +206,7 @@ namespace Makhno
                 .Where(v => v.Seasons.Count > 0)
                 .ToList();
 
-            OnLog($"Makhno SeasonDebug: voices={playerData.Voices.Count}, withSeasons={voiceSeasons.Count}, t={t}, season={season}");
-            foreach (var v in voiceSeasons)
-            {
-                var seasonList = string.Join(", ", v.Seasons.Select(s => $"{s.Number}:{s.Season?.Title}"));
-                OnLog($"Makhno SeasonDebug: voice[{v.Index}]='{v.Voice?.Name}', seasons=[{seasonList}]");
-            }
+            // Debug logging disabled to avoid noisy output in production.
 
             var seasonNumbers = voiceSeasons
                 .SelectMany(v => v.Seasons.Select(s => s.Number))
@@ -224,9 +219,13 @@ namespace Makhno
 
             if (season == -1)
             {
-                if (int.TryParse(t, out int seasonVoiceIndex) && seasonVoiceIndex >= 0 && seasonVoiceIndex < playerData.Voices.Count)
+                int? seasonVoiceIndex = null;
+                if (int.TryParse(t, out int tIndex) && tIndex >= 0 && tIndex < playerData.Voices.Count)
+                    seasonVoiceIndex = tIndex;
+
+                if (seasonVoiceIndex.HasValue)
                 {
-                    var seasonsForVoice = GetSeasonsWithNumbers(playerData.Voices[seasonVoiceIndex])
+                    var seasonsForVoice = GetSeasonsWithNumbers(playerData.Voices[seasonVoiceIndex.Value])
                         .Select(s => s.Number)
                         .Distinct()
                         .OrderBy(n => n)
@@ -239,12 +238,20 @@ namespace Makhno
                 var season_tpl = new SeasonTpl();
                 foreach (var seasonNumber in seasonNumbers)
                 {
-                    var seasonItem = voiceSeasons
-                        .SelectMany(v => v.Seasons)
-                        .FirstOrDefault(s => s.Number == seasonNumber);
+                    (Season Season, int Number)? seasonItem = null;
+                    if (seasonVoiceIndex.HasValue)
+                    {
+                        var voiceSeasonsForT = GetSeasonsWithNumbers(playerData.Voices[seasonVoiceIndex.Value]);
+                        seasonItem = voiceSeasonsForT.FirstOrDefault(s => s.Number == seasonNumber);
+                    }
+                    else
+                    {
+                        seasonItem = voiceSeasons
+                            .SelectMany(v => v.Seasons)
+                            .FirstOrDefault(s => s.Number == seasonNumber);
+                    }
 
-                    var preferredVoice = voiceSeasons.FirstOrDefault(v => v.Seasons.Any(s => s.Number == seasonNumber));
-                    string voiceParam = preferredVoice != null ? $"&t={preferredVoice.Index}" : string.Empty;
+                    string voiceParam = seasonVoiceIndex.HasValue ? $"&t={seasonVoiceIndex.Value}" : string.Empty;
                     string seasonName = seasonItem.Season?.Title ?? $"Сезон {seasonNumber}";
                     string link = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}{voiceParam}";
                     season_tpl.Append(seasonName, link, seasonNumber.ToString());
@@ -274,16 +281,16 @@ namespace Makhno
                     continue;
 
                 string voiceLink;
-                if (seasonsForVoice.Count > 1)
+                bool hasRequestedSeason = seasonsForVoice.Any(s => s.Number == requestedSeason);
+                if (hasRequestedSeason)
                 {
-                    // Always show season list for multi-season voices to keep filter correct
-                    voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season=-1&t={i}";
+                    voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={requestedSeason}&t={i}";
                 }
                 else
                 {
-                    int onlySeason = seasonsForVoice[0].Number;
-                    voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={onlySeason}&t={i}";
+                    voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season=-1&t={i}";
                 }
+
                 bool isActive = selectedVoice == i.ToString();
                 voice_tpl.Append(voiceName, isActive, voiceLink);
             }
@@ -294,17 +301,14 @@ namespace Makhno
                 var seasonsForVoice = GetSeasonsWithNumbers(selectedVoiceData);
                 if (seasonsForVoice.Count > 0)
                 {
-                    int effectiveSeasonNumber = seasonsForVoice.Any(s => s.Number == requestedSeason)
-                        ? requestedSeason
-                        : seasonsForVoice.Min(s => s.Number);
-
-                    if (effectiveSeasonNumber != season)
+                    bool hasRequestedSeason = seasonsForVoice.Any(s => s.Number == requestedSeason);
+                    if (!hasRequestedSeason)
                     {
-                        string redirectUrl = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={effectiveSeasonNumber}&t={voiceIndex}";
+                        string redirectUrl = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season=-1&t={voiceIndex}";
                         return UpdateService.Validate(Redirect(redirectUrl));
                     }
 
-                    var selectedSeason = seasonsForVoice.First(s => s.Number == effectiveSeasonNumber).Season;
+                    var selectedSeason = seasonsForVoice.First(s => s.Number == requestedSeason).Season;
                     var sortedEpisodes = selectedSeason.Episodes.OrderBy(e => ExtractEpisodeNumber(e.Title)).ToList();
 
                     for (int i = 0; i < sortedEpisodes.Count; i++)
@@ -316,7 +320,7 @@ namespace Makhno
                             episode_tpl.Append(
                                 episode.Title,
                                 title ?? original_title,
-                                effectiveSeasonNumber.ToString(),
+                                requestedSeason.ToString(),
                                 (i + 1).ToString("D2"),
                                 streamUrl
                             );
