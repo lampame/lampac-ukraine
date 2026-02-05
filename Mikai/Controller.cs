@@ -57,7 +57,8 @@ namespace Mikai.Controllers
 
             if (isSerial)
             {
-                bool restrictByVoice = !string.IsNullOrEmpty(t) && voices.TryGetValue(t, out var voiceForSeasons);
+                MikaiVoiceInfo voiceForSeasons = null;
+                bool restrictByVoice = !string.IsNullOrEmpty(t) && voices.TryGetValue(t, out voiceForSeasons);
                 var seasonNumbers = restrictByVoice
                     ? GetSeasonSet(voiceForSeasons).OrderBy(n => n).ToList()
                     : voices.Values

@@ -168,7 +168,8 @@ namespace Uaflix.Controllers
                 if (s == -1)
                 {
                     List<int> allSeasons;
-                    bool restrictByVoice = !string.IsNullOrEmpty(t) && structure.Voices.TryGetValue(t, out var tVoice) && IsAshdiVoice(tVoice);
+                    VoiceInfo tVoice = null;
+                    bool restrictByVoice = !string.IsNullOrEmpty(t) && structure.Voices.TryGetValue(t, out tVoice) && IsAshdiVoice(tVoice);
                     if (restrictByVoice)
                     {
                         allSeasons = GetSeasonSet(tVoice).OrderBy(sn => sn).ToList();
