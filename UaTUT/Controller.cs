@@ -25,7 +25,7 @@ namespace UaTUT
         }
 
         [HttpGet]
-        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, int season = -1, bool rjson = false)
+        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, int season = -1, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -45,6 +45,17 @@ namespace UaTUT
                 return await invoke.Search(original_title ?? title, imdb_id);
             });
 
+            if (checksearch)
+            {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError();
+
+                if (searchResults != null && searchResults.Any())
+                    return Content("data-json=", "text/plain; charset=utf-8");
+
+                return OnError();
+            }
+
             if (searchResults == null || !searchResults.Any())
             {
                 OnLog("UaTUT: No search results found");
@@ -53,20 +64,20 @@ namespace UaTUT
 
             if (serial == 1)
             {
-                return await HandleSeries(searchResults, imdb_id, kinopoisk_id, title, original_title, year, s, season, t, rjson, invoke);
+                return await HandleSeries(searchResults, imdb_id, kinopoisk_id, title, original_title, year, s, season, t, rjson, invoke, preferSeries: true);
             }
             else
             {
-                return await HandleMovie(searchResults, rjson, invoke);
+                return await HandleMovie(searchResults, rjson, invoke, preferSeries: false);
             }
         }
 
-        private async Task<ActionResult> HandleSeries(List<SearchResult> searchResults, string imdb_id, long kinopoisk_id, string title, string original_title, int year, int s, int season, string t, bool rjson, UaTUTInvoke invoke)
+        private async Task<ActionResult> HandleSeries(List<SearchResult> searchResults, string imdb_id, long kinopoisk_id, string title, string original_title, int year, int s, int season, string t, bool rjson, UaTUTInvoke invoke, bool preferSeries)
         {
             var init = ModInit.UaTUT;
 
             // Фільтруємо тільки серіали та аніме
-            var seriesResults = searchResults.Where(r => r.Category == "Серіал" || r.Category == "Аніме").ToList();
+            var seriesResults = searchResults.Where(r => IsSeriesCategory(r.Category, preferSeries)).ToList();
 
             if (!seriesResults.Any())
             {
@@ -113,8 +124,9 @@ namespace UaTUT
                 {
                     var seasonItem = firstVoice.Seasons[i];
                     string seasonName = seasonItem.Title ?? $"Сезон {i + 1}";
-                    string link = $"{host}/uatut?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&season={i}";
-                    season_tpl.Append(seasonName, link, i.ToString());
+                    int seasonNumber = i + 1;
+                    string link = $"{host}/uatut?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&season={seasonNumber}";
+                    season_tpl.Append(seasonName, link, seasonNumber.ToString());
                 }
 
                 OnLog($"UaTUT: found {firstVoice.Seasons.Count} seasons");
@@ -137,8 +149,10 @@ namespace UaTUT
                 if (playerData?.Voices == null || !playerData.Voices.Any())
                     return OnError();
 
+                int seasonIndex = season > 0 ? season - 1 : season;
+
                 // Перевіряємо чи існує вибраний сезон
-                if (season >= playerData.Voices.First().Seasons.Count)
+                if (seasonIndex >= playerData.Voices.First().Seasons.Count || seasonIndex < 0)
                     return OnError();
 
                 var voice_tpl = new VoiceTpl();
@@ -156,7 +170,8 @@ namespace UaTUT
                 {
                     var voice = playerData.Voices[i];
                     string voiceName = voice.Name ?? $"Озвучка {i + 1}";
-                    string voiceLink = $"{host}/uatut?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&season={season}&t={i}";
+                    int seasonNumber = seasonIndex + 1;
+                    string voiceLink = $"{host}/uatut?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&season={seasonNumber}&t={i}";
                     bool isActive = selectedVoice == i.ToString();
                     voice_tpl.Append(voiceName, isActive, voiceLink);
                 }
@@ -166,9 +181,9 @@ namespace UaTUT
                 {
                     var selectedVoiceData = playerData.Voices[voiceIndex];
 
-                    if (season < selectedVoiceData.Seasons.Count)
+                    if (seasonIndex < selectedVoiceData.Seasons.Count)
                     {
-                        var selectedSeason = selectedVoiceData.Seasons[season];
+                        var selectedSeason = selectedVoiceData.Seasons[seasonIndex];
 
                         // Сортуємо епізоди та додаємо правильну нумерацію
                         var sortedEpisodes = selectedSeason.Episodes.OrderBy(e => ExtractEpisodeNumber(e.Title)).ToList();
@@ -181,11 +196,15 @@ namespace UaTUT
 
                             if (!string.IsNullOrEmpty(episodeFile))
                             {
-                                // Створюємо прямий лінк на епізод через play action
-                                string episodeLink = $"{host}/uatut/play?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&s={s}&season={season}&t={selectedVoice}&episodeId={episode.Id}";
-
-                                // Використовуємо правильний синтаксис EpisodeTpl.Append без poster параметра
-                                episode_tpl.Append(episodeName, title ?? original_title, season.ToString(), (i + 1).ToString("D2"), episodeLink, "call");
+                                string streamUrl = BuildStreamUrl(init, episodeFile);
+                                int seasonNumber = seasonIndex + 1;
+                                episode_tpl.Append(
+                                    episodeName,
+                                    title ?? original_title,
+                                    seasonNumber.ToString(),
+                                    (i + 1).ToString("D2"),
+                                    streamUrl
+                                );
                             }
                         }
                     }
@@ -236,12 +255,12 @@ namespace UaTUT
             return match.Success ? int.Parse(match.Groups[1].Value) : 0;
         }
 
-        private async Task<ActionResult> HandleMovie(List<SearchResult> searchResults, bool rjson, UaTUTInvoke invoke)
+        private async Task<ActionResult> HandleMovie(List<SearchResult> searchResults, bool rjson, UaTUTInvoke invoke, bool preferSeries)
         {
             var init = ModInit.UaTUT;
 
             // Фільтруємо тільки фільми
-            var movieResults = searchResults.Where(r => r.Category == "Фільм").ToList();
+            var movieResults = searchResults.Where(r => IsMovieCategory(r.Category, preferSeries)).ToList();
 
             if (!movieResults.Any())
             {
@@ -396,9 +415,10 @@ namespace UaTUT
             {
                 var selectedVoice = playerData.Voices[voiceIndex];
 
-                if (season >= 0 && season < selectedVoice.Seasons.Count)
+                int seasonIndex = season > 0 ? season - 1 : season;
+                if (seasonIndex >= 0 && seasonIndex < selectedVoice.Seasons.Count)
                 {
-                    var selectedSeasonData = selectedVoice.Seasons[season];
+                    var selectedSeasonData = selectedVoice.Seasons[seasonIndex];
 
                     foreach (var episode in selectedSeasonData.Episodes)
                     {
@@ -431,9 +451,65 @@ namespace UaTUT
             return OnError();
         }
 
+        private static string StripLampacArgs(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(
+                url,
+                @"([?&])(account_email|uid|nws_id)=[^&]*",
+                "$1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
+        }
+
+        private static bool IsMovieCategory(string category, bool preferSeries)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+                return false;
+
+            var value = category.Trim().ToLowerInvariant();
+            if (IsAnimeCategory(value))
+                return !preferSeries;
+
+            return value == "фільм" || value == "фильм" || value == "мультфільм" || value == "мультфильм" || value == "movie";
+        }
+
+        private static bool IsSeriesCategory(string category, bool preferSeries)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+                return false;
+
+            var value = category.Trim().ToLowerInvariant();
+            if (IsAnimeCategory(value))
+                return preferSeries;
+
+            return value == "серіал" || value == "сериал"
+                || value == "аніме" || value == "аниме"
+                || value == "мультсеріал" || value == "мультсериал"
+                || value == "tv";
+        }
+
+        private static bool IsAnimeCategory(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            return value == "аніме" || value == "аниме";
+        }
+
         string BuildStreamUrl(OnlinesSettings init, string streamLink)
         {
-            string link = accsArgs(streamLink);
+            string link = streamLink?.Trim();
+            if (string.IsNullOrEmpty(link))
+                return link;
+
+            link = StripLampacArgs(link);
+
             if (ApnHelper.IsEnabled(init))
             {
                 if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))

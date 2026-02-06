@@ -28,7 +28,7 @@ namespace AnimeON.Controllers
         
         [HttpGet]
         [Route("animeon")]
-        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, bool rjson = false)
+        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -37,6 +37,19 @@ namespace AnimeON.Controllers
                 return Forbid();
 
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
+
+            if (checksearch)
+            {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError("animeon", proxyManager);
+
+                var checkSeasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial);
+                if (checkSeasons != null && checkSeasons.Count > 0)
+                    return Content("data-json=", "text/plain; charset=utf-8");
+
+                return OnError("animeon", proxyManager);
+            }
+
             OnLog($"AnimeON Index: title={title}, original_title={original_title}, serial={serial}, s={s}, t={t}, year={year}, imdb_id={imdb_id}, kp={kinopoisk_id}");
 
             var seasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial);
@@ -161,7 +174,7 @@ namespace AnimeON.Controllers
                         }
                         else
                         {
-                            string playUrl = HostStreamProxy(init, accsArgs(streamLink));
+                            string playUrl = BuildStreamUrl(init, streamLink, headers: null, forceProxy: false);
                             episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, playUrl);
                         }
                     }
@@ -217,7 +230,7 @@ namespace AnimeON.Controllers
                         }
                         else
                         {
-                            tpl.Append(translationName, HostStreamProxy(init, accsArgs(streamLink)));
+                            tpl.Append(translationName, BuildStreamUrl(init, streamLink, headers: null, forceProxy: false));
                         }
                     }
                 }
@@ -376,9 +389,30 @@ namespace AnimeON.Controllers
             return UpdateService.Validate(Content(jsonResult, "application/json; charset=utf-8"));
         }
 
+        private static string StripLampacArgs(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(
+                url,
+                @"([?&])(account_email|uid|nws_id)=[^&]*",
+                "$1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
+        }
+
         string BuildStreamUrl(OnlinesSettings init, string streamLink, List<HeadersModel> headers, bool forceProxy)
         {
-            string link = accsArgs(streamLink);
+            string link = streamLink?.Trim();
+            if (string.IsNullOrEmpty(link))
+                return link;
+
+            link = StripLampacArgs(link);
+
             if (ApnHelper.IsEnabled(init))
             {
                 if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))

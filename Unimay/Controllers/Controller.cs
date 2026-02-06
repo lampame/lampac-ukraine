@@ -23,7 +23,7 @@ namespace Unimay.Controllers
 
         [HttpGet]
         [Route("unimay")]
-        async public ValueTask<ActionResult> Index(string title, string original_title, string code, int serial = -1, int s = -1, int e = -1, bool play = false, bool rjson = false)
+        async public ValueTask<ActionResult> Index(string title, string original_title, string code, int serial = -1, int s = -1, int e = -1, bool play = false, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -32,6 +32,18 @@ namespace Unimay.Controllers
                 return badInitMsg;
 
             var invoke = new UnimayInvoke(init, hybridCache, OnLog, proxyManager);
+
+            if (checksearch)
+            {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError("unimay");
+
+                var searchResults = await invoke.Search(title, original_title, serial);
+                if (searchResults?.Content != null && searchResults.Content.Count > 0)
+                    return Content("data-json=", "text/plain; charset=utf-8");
+
+                return OnError("unimay");
+            }
 
             if (!string.IsNullOrEmpty(code))
             {
@@ -104,7 +116,8 @@ namespace Unimay.Controllers
                     if (string.IsNullOrEmpty(masterUrl))
                         return OnError("no stream");
 
-                    return UpdateService.Validate(Redirect(HostStreamProxy(init, accsArgs(masterUrl), proxy: proxyManager.Get())));
+                    string cleaned = StripLampacArgs(masterUrl?.Trim());
+                    return UpdateService.Validate(Redirect(HostStreamProxy(init, cleaned, proxy: proxyManager.Get())));
                 }
 
                 if (itemType == "Фільм")
@@ -139,6 +152,22 @@ namespace Unimay.Controllers
 
                 return OnError("unsupported type");
             });
+        }
+
+        private static string StripLampacArgs(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(
+                url,
+                @"([?&])(account_email|uid|nws_id)=[^&]*",
+                "$1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
         }
     }
 }

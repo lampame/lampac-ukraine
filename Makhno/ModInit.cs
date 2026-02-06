@@ -1,13 +1,12 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 using Shared;
 using Shared.Engine;
-using Shared.Models.Module;
+using Newtonsoft.Json.Linq;
 using Shared.Models.Online.Settings;
+using Shared.Models.Module;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.Extensions.Caching.Memory;
-using Newtonsoft.Json;
 using Shared.Models;
 using Shared.Models.Events;
 using System;
@@ -20,20 +19,19 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-
-namespace AnimeON
+namespace Makhno
 {
     public class ModInit
     {
-        public static double Version => 3.4;
+        public static double Version => 1.7;
 
-        public static OnlinesSettings AnimeON;
+        public static OnlinesSettings Makhno;
         public static bool ApnHostProvided;
 
         public static OnlinesSettings Settings
         {
-            get => AnimeON;
-            set => AnimeON = value;
+            get => Makhno;
+            set => Makhno = value;
         }
 
         /// <summary>
@@ -41,12 +39,11 @@ namespace AnimeON
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            
-
-            AnimeON = new OnlinesSettings("AnimeON", "https://animeon.club", streamproxy: false, useproxy: false)
+            Makhno = new OnlinesSettings("Makhno", "https://wormhole.lampame.v6.rocks", streamproxy: false, useproxy: false)
             {
-                displayname = "🇯🇵 AnimeON",
+                displayname = "Махно",
                 displayindex = 0,
+                apihost = "https://uk.uatut.fun/watch",
                 proxy = new Shared.Models.Base.ProxySettings()
                 {
                     useAuth = true,
@@ -55,26 +52,29 @@ namespace AnimeON
                     list = new string[] { "socks5://ip:port" }
                 }
             };
-            var conf = ModuleInvoke.Conf("AnimeON", AnimeON);
+            var conf = ModuleInvoke.Conf("Makhno", Makhno);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
-            conf.Remove("apn");
-            conf.Remove("apn_host");
-            AnimeON = conf.ToObject<OnlinesSettings>();
             if (hasApn)
-                ApnHelper.ApplyInitConf(apnEnabled, apnHost, AnimeON);
+            {
+                conf.Remove("apn");
+                conf.Remove("apn_host");
+            }
+            Makhno = conf.ToObject<OnlinesSettings>();
+            if (hasApn)
+                ApnHelper.ApplyInitConf(apnEnabled, apnHost, Makhno);
             ApnHostProvided = hasApn && apnEnabled && !string.IsNullOrWhiteSpace(apnHost);
             if (hasApn && apnEnabled)
             {
-                AnimeON.streamproxy = false;
+                Makhno.streamproxy = false;
             }
-            else if (AnimeON.streamproxy)
+            else if (Makhno.streamproxy)
             {
-                AnimeON.apnstream = false;
-                AnimeON.apn = null;
+                Makhno.apnstream = false;
+                Makhno.apn = null;
             }
 
             // Виводити "уточнити пошук"
-            AppInit.conf.online.with_search.Add("animeon");
+            AppInit.conf.online.with_search.Add("makhno");
         }
     }
 

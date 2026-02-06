@@ -23,7 +23,7 @@ namespace UAKino.Controllers
 
         [HttpGet]
         [Route("uakino")]
-        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, bool rjson = false, string href = null)
+        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, bool rjson = false, string href = null, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -32,6 +32,18 @@ namespace UAKino.Controllers
                 return Forbid();
 
             var invoke = new UAKinoInvoke(init, hybridCache, OnLog, proxyManager);
+
+            if (checksearch)
+            {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError("uakino", proxyManager);
+
+                var searchResults = await invoke.Search(title, original_title, serial);
+                if (searchResults != null && searchResults.Count > 0)
+                    return Content("data-json=", "text/plain; charset=utf-8");
+
+                return OnError("uakino", proxyManager);
+            }
 
             string itemUrl = href;
             if (string.IsNullOrEmpty(itemUrl))
@@ -90,7 +102,29 @@ namespace UAKino.Controllers
                     int episodeNumber = UAKinoInvoke.TryParseEpisodeNumber(ep.Title) ?? index;
                     string episodeName = string.IsNullOrEmpty(ep.Title) ? $"Епізод {episodeNumber}" : ep.Title;
                     string callUrl = $"{host}/uakino/play?url={HttpUtility.UrlEncode(ep.Url)}&title={HttpUtility.UrlEncode(title ?? original_title)}";
-                    episode_tpl.Append(episodeName, title ?? original_title, "1", episodeNumber.ToString("D2"), accsArgs(callUrl), "call");
+                    if (!string.IsNullOrEmpty(ep.Url) && ep.Url.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string playUrl = BuildStreamUrl(init, ep.Url);
+                        episode_tpl.Append(
+                            episodeName,
+                            title ?? original_title,
+                            "1",
+                            episodeNumber.ToString("D2"),
+                            playUrl
+                        );
+                    }
+                    else
+                    {
+                        episode_tpl.Append(
+                            episodeName,
+                            title ?? original_title,
+                            "1",
+                            episodeNumber.ToString("D2"),
+                            accsArgs(callUrl),
+                            "call",
+                            streamlink: accsArgs($"{callUrl}&play=true")
+                        );
+                    }
                     index++;
                 }
 
@@ -143,9 +177,30 @@ namespace UAKino.Controllers
             return UpdateService.Validate(Content(jsonResult, "application/json; charset=utf-8"));
         }
 
+        private static string StripLampacArgs(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(
+                url,
+                @"([?&])(account_email|uid|nws_id)=[^&]*",
+                "$1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
+        }
+
         string BuildStreamUrl(OnlinesSettings init, string streamLink)
         {
-            string link = accsArgs(streamLink);
+            string link = streamLink?.Trim();
+            if (string.IsNullOrEmpty(link))
+                return link;
+
+            link = StripLampacArgs(link);
+
             if (ApnHelper.IsEnabled(init))
             {
                 if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))

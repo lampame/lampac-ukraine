@@ -27,7 +27,7 @@ namespace CikavaIdeya.Controllers
         
         [HttpGet]
         [Route("cikavaideya")]
-        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, int e = -1, bool play = false, bool rjson = false)
+        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, int e = -1, bool play = false, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -36,6 +36,18 @@ namespace CikavaIdeya.Controllers
                 return Forbid();
 
             var invoke = new CikavaIdeyaInvoke(init, hybridCache, OnLog, proxyManager);
+
+            if (checksearch)
+            {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError("cikavaideya", proxyManager);
+
+                var checkEpisodes = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial == 0);
+                if (checkEpisodes != null && checkEpisodes.Count > 0)
+                    return Content("data-json=", "text/plain; charset=utf-8");
+
+                return OnError("cikavaideya", proxyManager);
+            }
 
             var episodesInfo = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial == 0);
             if (episodesInfo == null)
@@ -388,7 +400,10 @@ namespace CikavaIdeya.Controllers
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)
         {
-            string link = accsArgs(streamLink);
+            string link = StripLampacArgs(streamLink?.Trim());
+            if (string.IsNullOrEmpty(link))
+                return link;
+
             if (ApnHelper.IsEnabled(init))
             {
                 if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))
@@ -401,6 +416,22 @@ namespace CikavaIdeya.Controllers
             }
 
             return HostStreamProxy(init, link);
+        }
+
+        private static string StripLampacArgs(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(
+                url,
+                @"([?&])(account_email|uid|nws_id)=[^&]*",
+                "$1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
         }
     }
 }

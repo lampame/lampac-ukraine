@@ -47,6 +47,9 @@ namespace Uaflix.Controllers
             // Обробка параметра checksearch - повертаємо спеціальну відповідь для валідації
             if (checksearch)
             {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError("uaflix", proxyManager);
+
                 try
                 {
                     string filmTitle = !string.IsNullOrEmpty(title) ? title : original_title;
@@ -167,11 +170,22 @@ namespace Uaflix.Controllers
                 // s == -1: Вибір сезону
                 if (s == -1)
                 {
-                    var allSeasons = structure.Voices
-                        .SelectMany(v => v.Value.Seasons.Keys)
-                        .Distinct()
-                        .OrderBy(sn => sn)
-                        .ToList();
+                    List<int> allSeasons;
+                    VoiceInfo tVoice = null;
+                    bool restrictByVoice = !string.IsNullOrEmpty(t) && structure.Voices.TryGetValue(t, out tVoice) && IsAshdiVoice(tVoice);
+                    if (restrictByVoice)
+                    {
+                        allSeasons = GetSeasonSet(tVoice).OrderBy(sn => sn).ToList();
+                        OnLog($"Ashdi voice selected (t='{t}'), seasons count={allSeasons.Count}");
+                    }
+                    else
+                    {
+                        allSeasons = structure.Voices
+                            .SelectMany(v => GetSeasonSet(v.Value))
+                            .Distinct()
+                            .OrderBy(sn => sn)
+                            .ToList();
+                    }
 
                     OnLog($"Found {allSeasons.Count} seasons in structure: {string.Join(", ", allSeasons)}");
 
@@ -205,6 +219,8 @@ namespace Uaflix.Controllers
                     foreach (var season in seasonsWithValidEpisodes)
                     {
                         string link = $"{host}/uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={season}&href={HttpUtility.UrlEncode(filmUrl)}";
+                        if (restrictByVoice)
+                            link += $"&t={HttpUtility.UrlEncode(t)}";
                         season_tpl.Append($"{season}", link, season.ToString());
                         OnLog($"Added season {season} to template");
                     }
@@ -239,12 +255,31 @@ namespace Uaflix.Controllers
                         t = voicesForSeason[0].DisplayName;
                         OnLog($"Auto-selected first voice: {t}");
                     }
-                    
+                    else if (!structure.Voices.ContainsKey(t))
+                    {
+                        t = voicesForSeason[0].DisplayName;
+                        OnLog($"Voice '{t}' not found, fallback to first voice: {t}");
+                    }
+
                     // Створюємо VoiceTpl з усіма озвучками
                     var voice_tpl = new VoiceTpl();
+                    var selectedVoiceInfo = structure.Voices[t];
+                    var selectedSeasonSet = GetSeasonSet(selectedVoiceInfo);
+                    bool selectedIsAshdi = IsAshdiVoice(selectedVoiceInfo);
+
                     foreach (var voice in voicesForSeason)
                     {
-                        string voiceLink = $"{host}/uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&t={HttpUtility.UrlEncode(voice.DisplayName)}&href={HttpUtility.UrlEncode(filmUrl)}";
+                        bool targetIsAshdi = IsAshdiVoice(voice.Info);
+                        var targetSeasonSet = GetSeasonSet(voice.Info);
+                        bool sameSeasonSet = targetSeasonSet.SetEquals(selectedSeasonSet);
+                        bool needSeasonReset = (selectedIsAshdi || targetIsAshdi) && !sameSeasonSet;
+
+                        string voiceLink = $"{host}/uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&href={HttpUtility.UrlEncode(filmUrl)}";
+                        if (needSeasonReset)
+                            voiceLink += $"&s=-1&t={HttpUtility.UrlEncode(voice.DisplayName)}";
+                        else
+                            voiceLink += $"&s={s}&t={HttpUtility.UrlEncode(voice.DisplayName)}";
+
                         bool isActive = voice.DisplayName == t;
                         voice_tpl.Append(voice.DisplayName, isActive, voiceLink);
                     }
@@ -261,6 +296,13 @@ namespace Uaflix.Controllers
                     if (!structure.Voices[t].Seasons.ContainsKey(s))
                     {
                         OnLog($"Season {s} not found for voice '{t}'");
+                        if (IsAshdiVoice(structure.Voices[t]))
+                        {
+                            string redirectUrl = $"{host}/uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s=-1&t={HttpUtility.UrlEncode(t)}&href={HttpUtility.UrlEncode(filmUrl)}";
+                            OnLog($"Ashdi voice missing season, redirect to season selector: {redirectUrl}");
+                            return Redirect(redirectUrl);
+                        }
+
                         OnLog("=== RETURN: season not found for voice OnError ===");
                         return OnError("uaflix", proxyManager);
                     }
@@ -336,7 +378,10 @@ namespace Uaflix.Controllers
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)
         {
-            string link = accsArgs(streamLink);
+            string link = StripLampacArgs(streamLink?.Trim());
+            if (string.IsNullOrEmpty(link))
+                return link;
+
             if (ApnHelper.IsEnabled(init))
             {
                 if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))
@@ -349,6 +394,41 @@ namespace Uaflix.Controllers
             }
 
             return HostStreamProxy(init, link);
+        }
+
+        private static string StripLampacArgs(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(
+                url,
+                @"([?&])(account_email|uid|nws_id)=[^&]*",
+                "$1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
+        }
+
+        private static bool IsAshdiVoice(VoiceInfo voice)
+        {
+            if (voice == null || string.IsNullOrEmpty(voice.PlayerType))
+                return false;
+
+            return voice.PlayerType == "ashdi-serial" || voice.PlayerType == "ashdi-vod";
+        }
+
+        private static HashSet<int> GetSeasonSet(VoiceInfo voice)
+        {
+            if (voice?.Seasons == null || voice.Seasons.Count == 0)
+                return new HashSet<int>();
+
+            return voice.Seasons
+                .Where(kv => kv.Value != null && kv.Value.Any(ep => !string.IsNullOrEmpty(ep.File)))
+                .Select(kv => kv.Key)
+                .ToHashSet();
         }
     }
 }
