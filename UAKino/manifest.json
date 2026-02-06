@@ -1,6 +1,0 @@
-{
-  "enable": true,
-  "version": 3,
-  "initspace": "UAKino.ModInit",
-  "online": "UAKino.OnlineApi"
-}

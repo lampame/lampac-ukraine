@@ -1,6 +1,0 @@
-{
-  "enable": true,
-  "version": 3,
-  "initspace": "CikavaIdeya.ModInit",
-  "online": "CikavaIdeya.OnlineApi"
-}
