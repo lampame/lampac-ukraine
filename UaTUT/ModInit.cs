@@ -24,7 +24,7 @@ namespace UaTUT
 {
     public class ModInit
     {
-        public static double Version => 3.4;
+        public static double Version => 3.5;
 
         public static OnlinesSettings UaTUT;
         public static bool ApnHostProvided;

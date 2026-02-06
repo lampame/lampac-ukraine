@@ -24,7 +24,7 @@ namespace Mikai
 {
     public class ModInit
     {
-        public static double Version => 3.4;
+        public static double Version => 3.5;
 
         public static OnlinesSettings Mikai;
         public static bool ApnHostProvided;

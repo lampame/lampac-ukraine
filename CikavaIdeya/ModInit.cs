@@ -30,7 +30,7 @@ namespace CikavaIdeya
 {
     public class ModInit
     {
-        public static double Version => 3.2;
+        public static double Version => 010100100100100101010000;
 
         public static OnlinesSettings CikavaIdeya;
         public static bool ApnHostProvided;
