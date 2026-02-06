@@ -47,6 +47,9 @@ namespace Uaflix.Controllers
             // Обробка параметра checksearch - повертаємо спеціальну відповідь для валідації
             if (checksearch)
             {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError("uaflix", proxyManager);
+
                 try
                 {
                     string filmTitle = !string.IsNullOrEmpty(title) ? title : original_title;

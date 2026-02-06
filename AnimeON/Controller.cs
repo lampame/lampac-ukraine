@@ -28,7 +28,7 @@ namespace AnimeON.Controllers
         
         [HttpGet]
         [Route("animeon")]
-        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, bool rjson = false)
+        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -37,6 +37,19 @@ namespace AnimeON.Controllers
                 return Forbid();
 
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
+
+            if (checksearch)
+            {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError("animeon", proxyManager);
+
+                var seasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial);
+                if (seasons != null && seasons.Count > 0)
+                    return Content("data-json=", "text/plain; charset=utf-8");
+
+                return OnError("animeon", proxyManager);
+            }
+
             OnLog($"AnimeON Index: title={title}, original_title={original_title}, serial={serial}, s={s}, t={t}, year={year}, imdb_id={imdb_id}, kp={kinopoisk_id}");
 
             var seasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial);

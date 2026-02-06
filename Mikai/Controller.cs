@@ -24,7 +24,7 @@ namespace Mikai.Controllers
 
         [HttpGet]
         [Route("mikai")]
-        public async Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, bool rjson = false)
+        public async Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -33,6 +33,19 @@ namespace Mikai.Controllers
                 return Forbid();
 
             var invoke = new MikaiInvoke(init, hybridCache, OnLog, _proxyManager);
+
+            if (checksearch)
+            {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError("mikai", _proxyManager);
+
+                var searchResults = await invoke.Search(title, original_title, year);
+                if (searchResults != null && searchResults.Count > 0)
+                    return Content("data-json=", "text/plain; charset=utf-8");
+
+                return OnError("mikai", _proxyManager);
+            }
+
             OnLog($"Mikai Index: title={title}, original_title={original_title}, serial={serial}, s={s}, t={t}, year={year}");
 
             var searchResults = await invoke.Search(title, original_title, year);

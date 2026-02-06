@@ -25,7 +25,7 @@ namespace UaTUT
         }
 
         [HttpGet]
-        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, int season = -1, bool rjson = false)
+        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, int season = -1, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -44,6 +44,17 @@ namespace UaTUT
             {
                 return await invoke.Search(original_title ?? title, imdb_id);
             });
+
+            if (checksearch)
+            {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError();
+
+                if (searchResults != null && searchResults.Any())
+                    return Content("data-json=", "text/plain; charset=utf-8");
+
+                return OnError();
+            }
 
             if (searchResults == null || !searchResults.Any())
             {

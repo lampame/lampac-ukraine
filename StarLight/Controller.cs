@@ -25,7 +25,7 @@ namespace StarLight.Controllers
 
         [HttpGet]
         [Route("starlight")]
-        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, int s = -1, bool rjson = false, string href = null)
+        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, int s = -1, bool rjson = false, string href = null, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -34,6 +34,18 @@ namespace StarLight.Controllers
                 return Forbid();
 
             var invoke = new StarLightInvoke(init, hybridCache, OnLog, proxyManager);
+
+            if (checksearch)
+            {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError("starlight", proxyManager);
+
+                var searchResults = await invoke.Search(title, original_title);
+                if (searchResults != null && searchResults.Count > 0)
+                    return Content("data-json=", "text/plain; charset=utf-8");
+
+                return OnError("starlight", proxyManager);
+            }
 
             string itemUrl = href;
             if (string.IsNullOrEmpty(itemUrl))

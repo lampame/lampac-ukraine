@@ -27,7 +27,7 @@ namespace CikavaIdeya.Controllers
         
         [HttpGet]
         [Route("cikavaideya")]
-        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, int e = -1, bool play = false, bool rjson = false)
+        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, int e = -1, bool play = false, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -36,6 +36,18 @@ namespace CikavaIdeya.Controllers
                 return Forbid();
 
             var invoke = new CikavaIdeyaInvoke(init, hybridCache, OnLog, proxyManager);
+
+            if (checksearch)
+            {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError("cikavaideya", proxyManager);
+
+                var episodesInfo = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial == 0);
+                if (episodesInfo != null && episodesInfo.Count > 0)
+                    return Content("data-json=", "text/plain; charset=utf-8");
+
+                return OnError("cikavaideya", proxyManager);
+            }
 
             var episodesInfo = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial == 0);
             if (episodesInfo == null)
