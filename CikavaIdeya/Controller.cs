@@ -42,8 +42,8 @@ namespace CikavaIdeya.Controllers
                 if (AppInit.conf?.online?.checkOnlineSearch != true)
                     return OnError("cikavaideya", proxyManager);
 
-                var episodesInfo = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial == 0);
-                if (episodesInfo != null && episodesInfo.Count > 0)
+                var checkEpisodes = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial == 0);
+                if (checkEpisodes != null && checkEpisodes.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
                 return OnError("cikavaideya", proxyManager);

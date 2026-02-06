@@ -43,8 +43,8 @@ namespace AnimeON.Controllers
                 if (AppInit.conf?.online?.checkOnlineSearch != true)
                     return OnError("animeon", proxyManager);
 
-                var seasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial);
-                if (seasons != null && seasons.Count > 0)
+                var checkSeasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial);
+                if (checkSeasons != null && checkSeasons.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
                 return OnError("animeon", proxyManager);

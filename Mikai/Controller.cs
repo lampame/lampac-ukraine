@@ -39,8 +39,8 @@ namespace Mikai.Controllers
                 if (AppInit.conf?.online?.checkOnlineSearch != true)
                     return OnError("mikai", _proxyManager);
 
-                var searchResults = await invoke.Search(title, original_title, year);
-                if (searchResults != null && searchResults.Count > 0)
+                var checkResults = await invoke.Search(title, original_title, year);
+                if (checkResults != null && checkResults.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
                 return OnError("mikai", _proxyManager);
