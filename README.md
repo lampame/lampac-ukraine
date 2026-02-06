@@ -1,14 +1,18 @@
 # Ukraine online source for Lampac
 
-- [x] AnimeON
-- [x] BambooUA
-- [x] CikavaIdeya
-- [x] StarLight
-- [x] UAKino
+## Sources
+### TVShows and Movies
+
 - [x] UAFlix
 - [x] UATuTFun
-- [x] Unimay
+- [x] Makhno 
+- [x] StarLight
 
+### Anime and Dorama
+- [x] AnimeON
+- [x] BambooUA
+- [x] Unimay
+- [x] Mikai 
 
 ## Installation
 
@@ -36,11 +40,12 @@ Create or update the module/repository.yaml file
   modules:
     - AnimeON
     - Unimay
-    - CikavaIdeya
+    - Mikai
+    - UATuT
     - Uaflix
     - UaTUT
     - Bamboo
-    - UAKino
+    - Makhno
     - StarLight
 ```
 
@@ -77,8 +82,8 @@ Sources with APN support:
 - AnimeON
 - Uaflix
 - UaTUT
-- CikavaIdeya
-- UAKino
+- Mikai
+- Makhno
 
 ## Donate
 
