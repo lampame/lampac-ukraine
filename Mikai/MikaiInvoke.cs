@@ -44,7 +44,7 @@ namespace Mikai
                     var headers = DefaultHeaders();
 
                     _onLog($"Mikai: using proxy {_proxyManager.CurrentProxyIp} for {searchUrl}");
-                    string json = await Http.Get(searchUrl, headers: headers, proxy: _proxyManager.Get());
+                    string json = await Http.Get(_init.cors(searchUrl), headers: headers, proxy: _proxyManager.Get());
                     if (string.IsNullOrEmpty(json))
                         return null;
 
@@ -88,7 +88,7 @@ namespace Mikai
                 var headers = DefaultHeaders();
 
                 _onLog($"Mikai: using proxy {_proxyManager.CurrentProxyIp} for {url}");
-                string json = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+                string json = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(json))
                     return null;
 
@@ -139,7 +139,7 @@ namespace Mikai
                 };
 
                 _onLog($"Mikai: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
-                string html = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
+                string html = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -160,6 +160,9 @@ namespace Mikai
             if (!ApnHelper.IsAshdiUrl(url))
                 return url;
 
+            if (!string.IsNullOrWhiteSpace(_init.webcorshost))
+                return url;
+
             return ApnHelper.WrapUrl(_init, url);
         }
 
@@ -175,7 +178,7 @@ namespace Mikai
 
                 string requestUrl = AshdiRequestUrl(url);
                 _onLog($"Mikai: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
-                string html = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
+                string html = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
                     return null;
 

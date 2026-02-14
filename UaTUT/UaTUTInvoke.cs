@@ -65,7 +65,7 @@ namespace UaTUT
             _onLog($"UaTUT searching: {url}");
 
             var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") };
-            var response = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+            var response = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
 
             if (string.IsNullOrEmpty(response))
                 return null;
@@ -91,7 +91,7 @@ namespace UaTUT
                 _onLog($"UaTUT getting movie page: {url}");
 
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") };
-                var response = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+                var response = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
 
                 return response;
             }
@@ -130,13 +130,13 @@ namespace UaTUT
             try
             {
                 string requestUrl = playerUrl;
-                if (ApnHelper.IsAshdiUrl(playerUrl) && ApnHelper.IsEnabled(_init))
+                if (ApnHelper.IsAshdiUrl(playerUrl) && ApnHelper.IsEnabled(_init) && string.IsNullOrWhiteSpace(_init.webcorshost))
                     requestUrl = ApnHelper.WrapUrl(_init, playerUrl);
 
                 _onLog($"UaTUT getting player data from: {requestUrl}");
 
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") };
-                var response = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
+                var response = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
 
                 if (string.IsNullOrEmpty(response))
                     return null;

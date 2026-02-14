@@ -46,7 +46,7 @@ namespace Makhno
                     new HeadersModel("User-Agent", Http.UserAgent)
                 };
 
-                string response = await Http.Get(url, timeoutSeconds: 4, headers: headers, proxy: _proxyManager.Get());
+                string response = await Http.Get(_init.cors(url), timeoutSeconds: 4, headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrWhiteSpace(response))
                     return null;
 
@@ -98,7 +98,7 @@ namespace Makhno
                 new HeadersModel("User-Agent", Http.UserAgent)
             };
 
-            var response = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+            var response = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
 
             if (string.IsNullOrEmpty(response))
                 return null;
@@ -127,7 +127,7 @@ namespace Makhno
                 {
                     new HeadersModel("User-Agent", Http.UserAgent)
                 };
-                var response = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+                var response = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
 
                 return response;
             }
@@ -212,12 +212,12 @@ namespace Makhno
                     headers.Add(new HeadersModel("Referer", "https://ashdi.vip/"));
                 }
 
-                if (ApnHelper.IsAshdiUrl(playerUrl) && ApnHelper.IsEnabled(_init))
+                if (ApnHelper.IsAshdiUrl(playerUrl) && ApnHelper.IsEnabled(_init) && string.IsNullOrWhiteSpace(_init.webcorshost))
                     requestUrl = ApnHelper.WrapUrl(_init, playerUrl);
 
                 _onLog($"Makhno getting player data from: {requestUrl}");
 
-                var response = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
+                var response = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(response))
                     return null;
 
@@ -725,7 +725,7 @@ namespace Makhno
                 };
 
                 string json = JsonConvert.SerializeObject(payload, Formatting.None);
-                await Http.Post(WormholeHost, json, timeoutSeconds: 6, headers: headers, proxy: _proxyManager.Get());
+                await Http.Post(_init.cors(WormholeHost), json, timeoutSeconds: 6, headers: headers, proxy: _proxyManager.Get());
                 return true;
             }
             catch (Exception ex)

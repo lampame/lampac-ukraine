@@ -50,7 +50,7 @@ namespace Bamboo
                 };
 
                 _onLog?.Invoke($"Bamboo search: {searchUrl}");
-                string html = await Http.Get(searchUrl, headers: headers, proxy: _proxyManager.Get());
+                string html = await Http.Get(_init.cors(searchUrl), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -109,7 +109,7 @@ namespace Bamboo
                 };
 
                 _onLog?.Invoke($"Bamboo series page: {href}");
-                string html = await Http.Get(href, headers: headers, proxy: _proxyManager.Get());
+                string html = await Http.Get(_init.cors(href), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -183,7 +183,7 @@ namespace Bamboo
                 };
 
                 _onLog?.Invoke($"Bamboo movie page: {href}");
-                string html = await Http.Get(href, headers: headers, proxy: _proxyManager.Get());
+                string html = await Http.Get(_init.cors(href), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
                     return null;
 

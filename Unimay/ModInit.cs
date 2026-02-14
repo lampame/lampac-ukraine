@@ -30,7 +30,7 @@ namespace Unimay
 {
     public class ModInit
     {
-        public static double Version => 3.3;
+        public static double Version => 3.4;
 
         public static OnlinesSettings Unimay;
 
@@ -147,7 +147,7 @@ namespace Unimay
                     else
                     {
                         _disconnectTime = Connect?.IsNoiseEnabled == true
-                            ? DateTime.UtcNow.AddHours(Random.Shared.Next(1, 16))
+                            ? DateTime.UtcNow.AddHours(Random.Shared.Next(1, 4))
                             : DateTime.UtcNow;
                     }
                 }

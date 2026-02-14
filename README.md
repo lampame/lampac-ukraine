@@ -60,6 +60,7 @@ modules - optional, if not specified, all modules from the repository will be in
     "enable": true,
     "domain": "https://uaflix.net",
     "displayname": "Uaflix",
+    "webcorshost": null,
     "streamproxy": false,
     "useproxy": false,
     "proxy": {
@@ -75,6 +76,11 @@ modules - optional, if not specified, all modules from the repository will be in
     "apn_host": "domaine.com/{encodeurl}"
   }
 ```
+
+Parameter compatibility:
+- `webcorshost` + `useproxy`: work together (parsing via CORS host, and network output can go through a proxy with `useproxy`).
+- `webcorshost` does not conflict with `streamproxy`: CORS is used for parsing, `streamproxy` is used for streaming.
+- `webcorshost` does not conflict with `apn`: APN is used at the streaming stage, not for regular parsing.
 
 ## APN support
 

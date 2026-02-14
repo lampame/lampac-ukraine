@@ -54,7 +54,7 @@ namespace StarLight
             try
             {
                 _onLog?.Invoke($"StarLight search: {url}");
-                string payload = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+                string payload = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(payload))
                     return null;
 
@@ -112,7 +112,7 @@ namespace StarLight
             try
             {
                 _onLog?.Invoke($"StarLight project: {href}");
-                string payload = await Http.Get(href, headers: headers, proxy: _proxyManager.Get());
+                string payload = await Http.Get(_init.cors(href), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(payload))
                     return null;
 
@@ -193,7 +193,7 @@ namespace StarLight
                 try
                 {
                     _onLog?.Invoke($"StarLight season: {seasonUrl}");
-                    string payload = await Http.Get(seasonUrl, headers: headers, proxy: _proxyManager.Get());
+                    string payload = await Http.Get(_init.cors(seasonUrl), headers: headers, proxy: _proxyManager.Get());
                     if (string.IsNullOrEmpty(payload))
                         continue;
 
@@ -279,7 +279,7 @@ namespace StarLight
             try
             {
                 _onLog?.Invoke($"StarLight stream: {url}");
-                string payload = await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+                string payload = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(payload))
                     return null;
 

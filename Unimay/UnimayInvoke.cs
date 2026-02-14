@@ -39,7 +39,7 @@ namespace Unimay
                 string searchUrl = $"{_init.host}/release/search?page=0&page_size=10&title={searchQuery}";
 
                 var headers = httpHeaders(_init);
-                SearchResponse root = await Http.Get<SearchResponse>(searchUrl, timeoutSeconds: 8, proxy: _proxyManager.Get(), headers: headers);
+                SearchResponse root = await Http.Get<SearchResponse>(_init.cors(searchUrl), timeoutSeconds: 8, proxy: _proxyManager.Get(), headers: headers);
 
                 if (root == null || root.Content == null || root.Content.Count == 0)
                 {
@@ -69,7 +69,7 @@ namespace Unimay
                 string releaseUrl = $"{_init.host}/release?code={code}";
 
                 var headers = httpHeaders(_init);
-                ReleaseResponse root = await Http.Get<ReleaseResponse>(releaseUrl, timeoutSeconds: 8, proxy: _proxyManager.Get(), headers: headers);
+                ReleaseResponse root = await Http.Get<ReleaseResponse>(_init.cors(releaseUrl), timeoutSeconds: 8, proxy: _proxyManager.Get(), headers: headers);
 
                 if (root == null)
                 {

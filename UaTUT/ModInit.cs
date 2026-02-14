@@ -24,7 +24,7 @@ namespace UaTUT
 {
     public class ModInit
     {
-        public static double Version => 3.5;
+        public static double Version => 3.6;
 
         public static OnlinesSettings UaTUT;
         public static bool ApnHostProvided;
@@ -159,7 +159,7 @@ namespace UaTUT
                     else
                     {
                         _disconnectTime = Connect?.IsNoiseEnabled == true
-                            ? DateTime.UtcNow.AddHours(Random.Shared.Next(1, 16))
+                            ? DateTime.UtcNow.AddHours(Random.Shared.Next(1, 4))
                             : DateTime.UtcNow;
                     }
                 }

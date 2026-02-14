@@ -23,7 +23,7 @@ namespace Makhno
 {
     public class ModInit
     {
-        public static double Version => 1.7;
+        public static double Version => 1.8;
 
         public static OnlinesSettings Makhno;
         public static bool ApnHostProvided;
@@ -159,7 +159,7 @@ namespace Makhno
                     else
                     {
                         _disconnectTime = Connect?.IsNoiseEnabled == true
-                            ? DateTime.UtcNow.AddHours(Random.Shared.Next(1, 16))
+                            ? DateTime.UtcNow.AddHours(Random.Shared.Next(1, 4))
                             : DateTime.UtcNow;
                     }
                 }

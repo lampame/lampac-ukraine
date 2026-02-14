@@ -32,6 +32,9 @@ namespace AnimeON
             if (!ApnHelper.IsAshdiUrl(url))
                 return url;
 
+            if (!string.IsNullOrWhiteSpace(_init.webcorshost))
+                return url;
+
             return ApnHelper.WrapUrl(_init, url);
         }
 
@@ -53,7 +56,7 @@ namespace AnimeON
                     string searchUrl = $"{_init.host}/api/anime/search?text={System.Web.HttpUtility.UrlEncode(query)}";
 
                     _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {searchUrl}");
-                    string searchJson = await Http.Get(searchUrl, headers: headers, proxy: _proxyManager.Get());
+                    string searchJson = await Http.Get(_init.cors(searchUrl), headers: headers, proxy: _proxyManager.Get());
                     if (string.IsNullOrEmpty(searchJson))
                         return null;
 
@@ -116,7 +119,7 @@ namespace AnimeON
             string fundubsUrl = $"{_init.host}/api/player/{animeId}/translations";
 
             _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {fundubsUrl}");
-            string fundubsJson = await Http.Get(fundubsUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
+            string fundubsJson = await Http.Get(_init.cors(fundubsUrl), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
             if (string.IsNullOrEmpty(fundubsJson))
                 return null;
 
@@ -142,7 +145,7 @@ namespace AnimeON
             string episodesUrl = $"{_init.host}/api/player/{animeId}/episodes?take=100&skip=-1&playerId={playerId}&translationId={fundubId}";
 
             _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {episodesUrl}");
-            string episodesJson = await Http.Get(episodesUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
+            string episodesJson = await Http.Get(_init.cors(episodesUrl), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
             if (string.IsNullOrEmpty(episodesJson))
                 return null;
 
@@ -161,7 +164,7 @@ namespace AnimeON
                 };
 
                 _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
-                string html = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
+                string html = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -191,7 +194,7 @@ namespace AnimeON
 
                 string requestUrl = AshdiRequestUrl(url);
                 _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
-                string html = await Http.Get(requestUrl, headers: headers, proxy: _proxyManager.Get());
+                string html = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -216,7 +219,7 @@ namespace AnimeON
                 string url = $"{_init.host}/api/player/{episodeId}/episode";
 
                 _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {url}");
-                string json = await Http.Get(url, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
+                string json = await Http.Get(_init.cors(url), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(json))
                     return null;
 

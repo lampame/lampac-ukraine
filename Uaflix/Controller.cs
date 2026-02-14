@@ -56,7 +56,7 @@ namespace Uaflix.Controllers
                     string searchUrl = $"{init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(filmTitle)}";
                     var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) };
 
-                    var searchHtml = await Http.Get(searchUrl, headers: headers, proxy: proxyManager.Get(), timeoutSeconds: 10);
+                    var searchHtml = await Http.Get(init.cors(searchUrl), headers: headers, proxy: proxyManager.Get(), timeoutSeconds: 10);
 
                     // Швидка перевірка наявності результатів без повного парсингу
                     if (!string.IsNullOrEmpty(searchHtml) &&

@@ -248,7 +248,7 @@ namespace AnimeON.Controllers
         {
             string fundubsUrl = $"{init.host}/api/player/{animeId}/translations";
 
-            string fundubsJson = await Http.Get(fundubsUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
+            string fundubsJson = await Http.Get(init.cors(fundubsUrl), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
             if (string.IsNullOrEmpty(fundubsJson))
                 return null;
 
@@ -273,7 +273,7 @@ namespace AnimeON.Controllers
         {
             string episodesUrl = $"{init.host}/api/player/{animeId}/episodes?take=100&skip=-1&playerId={playerId}&translationId={fundubId}";
 
-            string episodesJson = await Http.Get(episodesUrl, headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
+            string episodesJson = await Http.Get(init.cors(episodesUrl), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
             if (string.IsNullOrEmpty(episodesJson))
                 return null;
 
@@ -297,7 +297,7 @@ namespace AnimeON.Controllers
 
                     string searchUrl = $"{init.host}/api/anime/search?text={HttpUtility.UrlEncode(query)}";
 
-                    string searchJson = await Http.Get(searchUrl, headers: headers);
+                    string searchJson = await Http.Get(init.cors(searchUrl), headers: headers);
                     if (string.IsNullOrEmpty(searchJson))
                         return null;
 
