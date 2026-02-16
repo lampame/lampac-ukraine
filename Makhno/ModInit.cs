@@ -23,7 +23,7 @@ namespace Makhno
 {
     public class ModInit
     {
-        public static double Version => 1.8;
+        public static double Version => 1.9;
 
         public static OnlinesSettings Makhno;
         public static bool ApnHostProvided;
@@ -39,7 +39,7 @@ namespace Makhno
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            Makhno = new OnlinesSettings("Makhno", "https://wormhole.lampame.v6.rocks", streamproxy: false, useproxy: false)
+            Makhno = new OnlinesSettings("Makhno", "https://wh.lme.isroot.in", streamproxy: false, useproxy: false)
             {
                 displayname = "Махно",
                 displayindex = 0,
