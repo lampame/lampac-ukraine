@@ -91,6 +91,12 @@ Sources with APN support:
 - Mikai
 - Makhno
 
+## Source/player availability check script
+
+```bash
+wget -O check.sh https://raw.githubusercontent.com/lampac-ukraine/lampac-ukraine/main/check.sh && sh check.sh
+```
+
 ## Donate
 
 Support the author: https://lampame.donatik.me
