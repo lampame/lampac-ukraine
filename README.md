@@ -94,7 +94,7 @@ Sources with APN support:
 ## Source/player availability check script
 
 ```bash
-wget -O check.sh https://raw.githubusercontent.com/lampac-ukraine/lampac-ukraine/main/check.sh && sh check.sh
+wget -O check.sh https://raw.githubusercontent.com/lampame/lampac-ukraine/main/check.sh && sh check.sh
 ```
 
 ## Donate
