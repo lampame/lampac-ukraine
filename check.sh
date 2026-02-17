@@ -305,7 +305,7 @@ for provider in $PROVIDERS; do
   done
 
   if [ -z "$stream_url" ]; then
-    printf '%s|%s|%s\n' "$provider" "$sample_player" "NO_STREAM_IN_PLAYER" >> "$stream_tmp"
+    printf '%s|%s|%s\n' "$provider" "$sample_player" "GEO_BLOCK" >> "$stream_tmp"
     continue
   fi
 
@@ -321,7 +321,7 @@ echo "=== Звіт 1: Джерело - сторінка/плеєр ==="
 while IFS='|' read -r source_name page_url page_status provider_list geo_note; do
   [ -z "$source_name" ] && continue
   if [ -n "$geo_note" ]; then
-    echo "- ${source_name}: сторінка ${page_status}, плеєр: ${provider_list} (${geo_note})"
+    echo "- ${source_name}: сторінка ${page_status%%(*}(${geo_note}), плеєр: ${provider_list}"
   else
     echo "- ${source_name}: сторінка ${page_status}, плеєр: ${provider_list}"
   fi
