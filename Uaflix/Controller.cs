@@ -87,6 +87,11 @@ namespace Uaflix.Controllers
             {
                 // Визначаємо URL для парсингу - або з параметра t, або з episode_url
                 string urlToParse = !string.IsNullOrEmpty(t) ? t : Request.Query["episode_url"];
+                if (string.IsNullOrWhiteSpace(urlToParse))
+                {
+                    OnLog("=== RETURN: play missing url OnError ===");
+                    return OnError("uaflix", proxyManager);
+                }
                 
                 var playResult = await invoke.ParseEpisode(urlToParse);
                 if (playResult.streams != null && playResult.streams.Count > 0)
@@ -96,7 +101,7 @@ namespace Uaflix.Controllers
                 }
                 
                 OnLog("=== RETURN: play no streams ===");
-                return UpdateService.Validate(Content("Uaflix", "text/html; charset=utf-8"));
+                return OnError("uaflix", proxyManager);
             }
             
             // Якщо є episode_url але немає play=true, це виклик для отримання інформації про стрім (для method: 'call')
@@ -114,36 +119,55 @@ namespace Uaflix.Controllers
                 }
                 
                 OnLog("=== RETURN: call method no streams ===");
-                return UpdateService.Validate(Content("Uaflix", "text/html; charset=utf-8"));
+                return OnError("uaflix", proxyManager);
             }
 
             string filmUrl = href;
 
             if (string.IsNullOrEmpty(filmUrl))
             {
-                var searchResults = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, title);
+                var searchResults = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial, original_language, source, title);
                 if (searchResults == null || searchResults.Count == 0)
                 {
                     OnLog("No search results found");
                     OnLog("=== RETURN: no search results OnError ===");
                     return OnError("uaflix", proxyManager);
                 }
-                
-                // Для фільмів і серіалів показуємо вибір тільки якщо більше одного результату
-                if (searchResults.Count > 1)
+
+                var selectedResult = invoke.SelectBestSearchResult(searchResults, title, original_title, year);
+                if (selectedResult == null && searchResults.Count == 1)
+                    selectedResult = searchResults[0];
+
+                if (selectedResult != null)
                 {
-                    var similar_tpl = new SimilarTpl(searchResults.Count);
-                    foreach (var res in searchResults)
+                    filmUrl = selectedResult.Url;
+                    OnLog($"Auto-selected best search result: {selectedResult.Url} (score={selectedResult.MatchScore}, year={selectedResult.Year})");
+                }
+                else
+                {
+                    var orderedResults = searchResults
+                        .OrderByDescending(i => i.MatchScore)
+                        .ToList();
+
+                    var similar_tpl = new SimilarTpl(orderedResults.Count);
+                    foreach (var res in orderedResults)
                     {
                         string link = $"{host}/uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(res.Url)}";
-                        similar_tpl.Append(res.Title, res.Year.ToString(), string.Empty, link, res.PosterUrl);
+                        string y = res.Year > 0 ? res.Year.ToString() : string.Empty;
+                        string details = res.Category switch
+                        {
+                            "films" => "Фільм",
+                            "serials" => "Серіал",
+                            "anime" => "Аніме",
+                            _ => string.Empty
+                        };
+
+                        similar_tpl.Append(res.Title, y, details, link, res.PosterUrl);
                     }
-                    OnLog($"=== RETURN: similar items ({searchResults.Count}) ===");
+
+                    OnLog($"=== RETURN: similar items ({orderedResults.Count}) ===");
                     return rjson ? Content(similar_tpl.ToJson(), "application/json; charset=utf-8") : Content(similar_tpl.ToHtml(), "text/html; charset=utf-8");
                 }
-
-                filmUrl = searchResults[0].Url;
-                OnLog($"Auto-selected first search result: {filmUrl}");
             }
 
             if (serial == 1)
