@@ -1,0 +1,6 @@
+{
+  "enable": true,
+  "version": 3,
+  "initspace": "KlonFUN.ModInit",
+  "online": "KlonFUN.OnlineApi"
+}
