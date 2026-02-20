@@ -54,24 +54,213 @@ namespace Uaflix
             if (string.IsNullOrEmpty(iframeUrl))
                 return null;
 
+            string normalized = iframeUrl.Trim().ToLowerInvariant();
+
             // Перевіряємо на підтримувані типи плеєрів
-            if (iframeUrl.Contains("ashdi.vip/serial/"))
+            if (normalized.Contains("ashdi.vip/serial/"))
                 return "ashdi-serial";
-            else if (iframeUrl.Contains("ashdi.vip/vod/"))
+            else if (normalized.Contains("ashdi.vip/vod/"))
                 return "ashdi-vod";
-            else if (iframeUrl.Contains("zetvideo.net/serial/"))
+            else if (normalized.Contains("zetvideo.net/serial/"))
                 return "zetvideo-serial";
-            else if (iframeUrl.Contains("zetvideo.net/vod/"))
+            else if (normalized.Contains("zetvideo.net/vod/"))
                 return "zetvideo-vod";
 
             // Перевіряємо на небажані типи плеєрів (трейлери, реклама тощо)
-            if (iframeUrl.Contains("youtube.com/embed/") ||
-                iframeUrl.Contains("youtu.be/") ||
-                iframeUrl.Contains("vimeo.com/") ||
-                iframeUrl.Contains("dailymotion.com/"))
+            if (normalized.Contains("youtube.com/embed/") ||
+                normalized.Contains("youtu.be/") ||
+                normalized.Contains("vimeo.com/") ||
+                normalized.Contains("dailymotion.com/"))
                 return "trailer"; // Ігноруємо відеохостинги з трейлерами
 
             return null;
+        }
+
+        private string NormalizeIframeUrl(string iframeUrl)
+        {
+            if (string.IsNullOrWhiteSpace(iframeUrl))
+                return null;
+
+            string url = WebUtility.HtmlDecode(iframeUrl.Trim()).Replace("&amp;", "&");
+            if (url.StartsWith("//"))
+                url = "https:" + url;
+
+            return url;
+        }
+
+        private string ExtractIframeFromMeta(HtmlDocument doc)
+        {
+            if (doc?.DocumentNode == null)
+                return null;
+
+            var meta = doc.DocumentNode.SelectSingleNode("//meta[@property='og:video:iframe']");
+            if (meta == null)
+                return null;
+
+            string content = meta.GetAttributeValue("content", null);
+            if (string.IsNullOrWhiteSpace(content))
+                return null;
+
+            var match = Regex.Match(content, "src=['\\\"]([^'\\\"]+)['\\\"]", RegexOptions.IgnoreCase);
+            if (!match.Success)
+                return null;
+
+            return NormalizeIframeUrl(match.Groups[1].Value);
+        }
+
+        private string ExtractIframeUrl(HtmlDocument doc)
+        {
+            if (doc?.DocumentNode == null)
+                return null;
+
+            var iframeNode = doc.DocumentNode.SelectSingleNode("//div[contains(@class, 'video-box')]//iframe")
+                ?? doc.DocumentNode.SelectSingleNode("//iframe");
+
+            string iframeUrl = iframeNode?.GetAttributeValue("src", null);
+            iframeUrl = NormalizeIframeUrl(iframeUrl);
+            if (!string.IsNullOrEmpty(iframeUrl))
+                return iframeUrl;
+
+            return ExtractIframeFromMeta(doc);
+        }
+
+        private async Task<(string iframeUrl, string playerType)> ProbeEpisodePlayer(string pageUrl)
+        {
+            if (string.IsNullOrWhiteSpace(pageUrl))
+                return (null, null);
+
+            string memKey = $"UaFlix:episode-player:{pageUrl}";
+            if (_hybridCache.TryGetValue(memKey, out EpisodePlayerInfo cached))
+                return (cached?.IframeUrl, cached?.PlayerType);
+
+            try
+            {
+                var headers = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", "Mozilla/5.0"),
+                    new HeadersModel("Referer", _init.host)
+                };
+
+                string html = await Http.Get(_init.cors(pageUrl), headers: headers, proxy: _proxyManager.Get());
+                if (string.IsNullOrWhiteSpace(html))
+                    return (null, null);
+
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+
+                string iframeUrl = ExtractIframeUrl(doc);
+                string playerType = DeterminePlayerType(iframeUrl);
+
+                _hybridCache.Set(memKey, new EpisodePlayerInfo
+                {
+                    IframeUrl = iframeUrl,
+                    PlayerType = playerType
+                }, cacheTime(20));
+
+                return (iframeUrl, playerType);
+            }
+            catch (Exception ex)
+            {
+                _onLog($"ProbeEpisodePlayer error ({pageUrl}): {ex.Message}");
+                return (null, null);
+            }
+        }
+
+        private async Task<(string iframeUrl, string playerType)> ProbeSeasonPlayer(List<EpisodeLinkInfo> seasonEpisodes)
+        {
+            if (seasonEpisodes == null || seasonEpisodes.Count == 0)
+                return (null, null);
+
+            foreach (var episode in seasonEpisodes.OrderBy(e => e.episode))
+            {
+                if (episode == null || string.IsNullOrWhiteSpace(episode.url))
+                    continue;
+
+                var probed = await ProbeEpisodePlayer(episode.url);
+                string playerType = probed.playerType;
+
+                episode.iframeUrl = probed.iframeUrl;
+                episode.playerType = playerType;
+
+                if (string.IsNullOrWhiteSpace(playerType))
+                    continue;
+
+                if (playerType == "trailer")
+                    continue;
+
+                return probed;
+            }
+
+            return (null, null);
+        }
+
+        private static string NormalizeSerialPlayerKey(string playerType, string iframeUrl)
+        {
+            if (string.IsNullOrWhiteSpace(playerType) || string.IsNullOrWhiteSpace(iframeUrl))
+                return iframeUrl;
+
+            if (playerType == "ashdi-serial")
+            {
+                var match = Regex.Match(iframeUrl, @"(https://ashdi\.vip/serial/\d+)", RegexOptions.IgnoreCase);
+                if (match.Success)
+                    return match.Groups[1].Value;
+            }
+
+            return iframeUrl;
+        }
+
+        private void MergeVoices(SerialAggregatedStructure structure, List<VoiceInfo> voices)
+        {
+            if (structure == null || voices == null || voices.Count == 0)
+                return;
+
+            foreach (var voice in voices)
+            {
+                if (voice == null || string.IsNullOrWhiteSpace(voice.DisplayName))
+                    continue;
+
+                if (!structure.Voices.TryGetValue(voice.DisplayName, out VoiceInfo existing))
+                {
+                    structure.Voices[voice.DisplayName] = voice;
+                    continue;
+                }
+
+                foreach (var season in voice.Seasons)
+                    existing.Seasons[season.Key] = season.Value;
+            }
+        }
+
+        private void AddVodSeasonEpisodes(SerialAggregatedStructure structure, string playerType, int season, List<EpisodeLinkInfo> seasonEpisodes)
+        {
+            if (structure == null || string.IsNullOrWhiteSpace(playerType) || seasonEpisodes == null || seasonEpisodes.Count == 0)
+                return;
+
+            string displayName = playerType == "ashdi-vod" ? "Uaflix #3" : "Uaflix #2";
+            if (!structure.Voices.ContainsKey(displayName))
+            {
+                structure.Voices[displayName] = new VoiceInfo
+                {
+                    Name = "Uaflix",
+                    PlayerType = playerType,
+                    DisplayName = displayName,
+                    Seasons = new Dictionary<int, List<EpisodeInfo>>()
+                };
+            }
+
+            var episodes = seasonEpisodes
+                .OrderBy(ep => ep.episode)
+                .Select(ep => new EpisodeInfo
+                {
+                    Number = ep.episode,
+                    Title = ep.title,
+                    File = ep.url,
+                    Id = ep.url,
+                    Poster = null,
+                    Subtitle = null
+                })
+                .ToList();
+
+            structure.Voices[displayName].Seasons[season] = episodes;
         }
         
         /// <summary>
@@ -307,205 +496,126 @@ namespace Uaflix
                 _onLog($"AggregateSerialStructure: Using cached structure for {serialUrl}");
                 return cached;
             }
-            
+
             try
             {
-                // Edge Case 1: Перевірка валідності URL
                 if (string.IsNullOrEmpty(serialUrl) || !Uri.IsWellFormedUriString(serialUrl, UriKind.Absolute))
                 {
                     _onLog($"AggregateSerialStructure: Invalid URL: {serialUrl}");
                     return null;
                 }
-                
-                // Отримати список всіх епізодів
+
                 var paginationInfo = await GetPaginationInfo(serialUrl);
-                if (paginationInfo?.Episodes == null || !paginationInfo.Episodes.Any())
-                {
-                    _onLog($"AggregateSerialStructure: No episodes found for {serialUrl}");
-                    return null;
-                }
-                
+
                 var structure = new SerialAggregatedStructure
                 {
                     SerialUrl = serialUrl,
                     Voices = new Dictionary<string, VoiceInfo>(),
-                    AllEpisodes = paginationInfo.Episodes
+                    AllEpisodes = paginationInfo?.Episodes ?? new List<EpisodeLinkInfo>()
                 };
-                
-                // Групуємо епізоди по сезонах
-                var episodesBySeason = paginationInfo.Episodes
-                    .GroupBy(e => e.season)
-                    .ToDictionary(g => g.Key, g => g.ToList());
-                
-                _onLog($"AggregateSerialStructure: Processing {episodesBySeason.Count} seasons");
-                
-                // Для кожного сезону беремо перший епізод та визначаємо тип плеєра
-                foreach (var seasonGroup in episodesBySeason)
+
+                var serialPlayersProcessed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                bool hasPaginationEpisodes = paginationInfo?.Episodes != null && paginationInfo.Episodes.Any();
+
+                if (hasPaginationEpisodes)
                 {
-                    int season = seasonGroup.Key;
-                    var firstEpisode = seasonGroup.Value.First();
-                    
-                    _onLog($"AggregateSerialStructure: Processing season {season}, first episode: {firstEpisode.url}");
-                    
-                    // Отримати HTML епізоду та знайти iframe
-                    var headers = new List<HeadersModel>() { 
-                        new HeadersModel("User-Agent", "Mozilla/5.0"), 
-                        new HeadersModel("Referer", _init.host) 
-                    };
-                    
-                    string html = await Http.Get(_init.cors(firstEpisode.url), headers: headers, proxy: _proxyManager.Get());
-                    
-                    var doc = new HtmlDocument();
-                    doc.LoadHtml(html);
-                    var iframe = doc.DocumentNode.SelectSingleNode("//div[contains(@class, 'video-box')]//iframe");
-                    
-                    if (iframe == null)
-                    {
-                        _onLog($"AggregateSerialStructure: No iframe found for season {season}");
-                        continue;
-                    }
-                    
-                    string iframeUrl = iframe.GetAttributeValue("src", "").Replace("&amp;", "&");
-                    if (iframeUrl.StartsWith("//"))
-                        iframeUrl = "https:" + iframeUrl;
-                    
-                    // Edge Case 2: Перевірка валідності iframe URL
-                    if (string.IsNullOrEmpty(iframeUrl))
-                    {
-                        _onLog($"AggregateSerialStructure: Empty iframe URL for season {season}");
-                        continue;
-                    }
-                    
-                    string playerType = DeterminePlayerType(iframeUrl);
-                    _onLog($"AggregateSerialStructure: Season {season} has playerType: {playerType}");
+                    var episodesBySeason = paginationInfo.Episodes
+                        .GroupBy(e => e.season)
+                        .ToDictionary(g => g.Key, g => g.ToList());
 
-                    // Edge Case 3: Невідомий тип плеєра або YouTube трейлер
-                    if (string.IsNullOrEmpty(playerType))
-                    {
-                        _onLog($"AggregateSerialStructure: Unknown player type for iframe {iframeUrl} in season {season}");
-                        continue;
-                    }
+                    _onLog($"AggregateSerialStructure: Processing {episodesBySeason.Count} seasons");
 
-                    // Ігноруємо трейлери та небажані відеохостинги
-                    if (playerType == "trailer")
+                    foreach (var seasonGroup in episodesBySeason)
                     {
-                        _onLog($"AggregateSerialStructure: Ignoring trailer/video host for iframe {iframeUrl} in season {season}");
-                        continue;
-                    }
-                    
-                    if (playerType == "ashdi-serial" || playerType == "zetvideo-serial")
-                    {
-                        // Парсимо багатосерійний плеєр
-                        var voices = await ParseMultiEpisodePlayer(iframeUrl, playerType);
-                        
-                        // Edge Case 4: Порожній результат парсингу
-                        if (voices == null || !voices.Any())
+                        int season = seasonGroup.Key;
+                        _onLog($"AggregateSerialStructure: Processing season {season}");
+
+                        var seasonProbe = await ProbeSeasonPlayer(seasonGroup.Value);
+                        if (string.IsNullOrWhiteSpace(seasonProbe.playerType))
                         {
-                            _onLog($"AggregateSerialStructure: No voices found in {playerType} for season {season}");
+                            _onLog($"AggregateSerialStructure: Season {season} has no supported player");
                             continue;
                         }
-                        
-                        foreach (var voice in voices)
+
+                        if (seasonProbe.playerType == "ashdi-serial" || seasonProbe.playerType == "zetvideo-serial")
                         {
-                            // Edge Case 5: Перевірка валідності озвучки
-                            if (voice == null || string.IsNullOrEmpty(voice.DisplayName))
+                            string serialKey = NormalizeSerialPlayerKey(seasonProbe.playerType, seasonProbe.iframeUrl);
+                            if (!serialPlayersProcessed.Add(serialKey))
                             {
-                                _onLog($"AggregateSerialStructure: Invalid voice data in season {season}");
+                                _onLog($"AggregateSerialStructure: Serial player already parsed for season {season}: {serialKey}");
                                 continue;
                             }
-                            
-                            // Додаємо або об'єднуємо з існуючою озвучкою
-                            if (!structure.Voices.ContainsKey(voice.DisplayName))
+
+                            var voices = await ParseMultiEpisodePlayer(seasonProbe.iframeUrl, seasonProbe.playerType);
+                            if (voices == null || voices.Count == 0)
                             {
-                                structure.Voices[voice.DisplayName] = voice;
+                                _onLog($"AggregateSerialStructure: No voices in serial player for season {season}");
+                                continue;
                             }
-                            else
-                            {
-                                // Об'єднуємо сезони
-                                foreach (var seasonEpisodes in voice.Seasons)
-                                {
-                                    structure.Voices[voice.DisplayName].Seasons[seasonEpisodes.Key] = seasonEpisodes.Value;
-                                }
-                            }
+
+                            MergeVoices(structure, voices);
+                            _onLog($"AggregateSerialStructure: Parsed serial player {seasonProbe.playerType}, voices={voices.Count}");
+                            continue;
                         }
-                    }
-                    else if (playerType == "zetvideo-vod")
-                    {
-                        _onLog($"AggregateSerialStructure: Processing zetvideo-vod for season {season} with {seasonGroup.Value.Count} episodes");
-                        
-                        // Для zetvideo-vod створюємо озвучку з реальними епізодами
-                        string displayName = "Uaflix #2";
-                        
-                        if (!structure.Voices.ContainsKey(displayName))
+
+                        if (seasonProbe.playerType == "ashdi-vod" || seasonProbe.playerType == "zetvideo-vod")
                         {
-                            structure.Voices[displayName] = new VoiceInfo
-                            {
-                                Name = "Uaflix",
-                                PlayerType = "zetvideo-vod",
-                                DisplayName = displayName,
-                                Seasons = new Dictionary<int, List<EpisodeInfo>>()
-                            };
+                            AddVodSeasonEpisodes(structure, seasonProbe.playerType, season, seasonGroup.Value);
+                            _onLog($"AggregateSerialStructure: Added vod season {season}, episodes={seasonGroup.Value.Count}");
+                            continue;
                         }
-                        
-                        // Створюємо епізоди для цього сезону з посиланнями на сторінки епізодів
-                        var episodes = new List<EpisodeInfo>();
-                        foreach (var episodeInfo in seasonGroup.Value)
-                        {
-                            episodes.Add(new EpisodeInfo
-                            {
-                                Number = episodeInfo.episode,
-                                Title = episodeInfo.title,
-                                File = episodeInfo.url, // URL сторінки епізоду для використання в call
-                                Id = episodeInfo.url,
-                                Poster = null,
-                                Subtitle = null
-                            });
-                        }
-                        
-                        structure.Voices[displayName].Seasons[season] = episodes;
-                        
-                        _onLog($"AggregateSerialStructure: Created voice with {episodes.Count} episodes for season {season} in zetvideo-vod");
-                    }
-                    else if (playerType == "ashdi-vod")
-                    {
-                        _onLog($"AggregateSerialStructure: Processing ashdi-vod for season {season} with {seasonGroup.Value.Count} episodes");
-                        
-                        // Для ashdi-vod створюємо озвучку з реальними епізодами
-                        string displayName = "Uaflix #3";
-                        
-                        if (!structure.Voices.ContainsKey(displayName))
-                        {
-                            structure.Voices[displayName] = new VoiceInfo
-                            {
-                                Name = "Uaflix",
-                                PlayerType = "ashdi-vod",
-                                DisplayName = displayName,
-                                Seasons = new Dictionary<int, List<EpisodeInfo>>()
-                            };
-                        }
-                        
-                        // Створюємо епізоди для цього сезону з посиланнями на сторінки епізодів
-                        var episodes = new List<EpisodeInfo>();
-                        foreach (var episodeInfo in seasonGroup.Value)
-                        {
-                            episodes.Add(new EpisodeInfo
-                            {
-                                Number = episodeInfo.episode,
-                                Title = episodeInfo.title,
-                                File = episodeInfo.url, // URL сторінки епізоду для використання в call
-                                Id = episodeInfo.url,
-                                Poster = null,
-                                Subtitle = null
-                            });
-                        }
-                        
-                        structure.Voices[displayName].Seasons[season] = episodes;
-                        
-                        _onLog($"AggregateSerialStructure: Created voice with {episodes.Count} episodes for season {season} in ashdi-vod");
+
+                        _onLog($"AggregateSerialStructure: Unsupported player {seasonProbe.playerType} for season {season}");
                     }
                 }
-                
-                // Edge Case 8: Перевірка наявності озвучок після агрегації
+                else
+                {
+                    _onLog($"AggregateSerialStructure: No episodes from pagination for {serialUrl}, fallback to page iframe");
+
+                    var serialProbe = await ProbeEpisodePlayer(serialUrl);
+                    if (string.IsNullOrWhiteSpace(serialProbe.playerType))
+                    {
+                        _onLog($"AggregateSerialStructure: Fallback probe failed for {serialUrl}");
+                        return null;
+                    }
+
+                    if (serialProbe.playerType == "ashdi-serial" || serialProbe.playerType == "zetvideo-serial")
+                    {
+                        var voices = await ParseMultiEpisodePlayer(serialProbe.iframeUrl, serialProbe.playerType);
+                        if (voices == null || voices.Count == 0)
+                        {
+                            _onLog($"AggregateSerialStructure: Fallback serial player has no voices for {serialUrl}");
+                            return null;
+                        }
+
+                        MergeVoices(structure, voices);
+                        _onLog($"AggregateSerialStructure: Fallback serial player parsed, voices={voices.Count}");
+                    }
+                    else if (serialProbe.playerType == "ashdi-vod" || serialProbe.playerType == "zetvideo-vod")
+                    {
+                        var syntheticEpisodes = new List<EpisodeLinkInfo>
+                        {
+                            new EpisodeLinkInfo
+                            {
+                                url = serialUrl,
+                                title = "Епізод 1",
+                                season = 1,
+                                episode = 1,
+                                iframeUrl = serialProbe.iframeUrl,
+                                playerType = serialProbe.playerType
+                            }
+                        };
+
+                        structure.AllEpisodes = syntheticEpisodes;
+                        AddVodSeasonEpisodes(structure, serialProbe.playerType, 1, syntheticEpisodes);
+                    }
+                    else
+                    {
+                        _onLog($"AggregateSerialStructure: Fallback player is not supported for serial: {serialProbe.playerType}");
+                        return null;
+                    }
+                }
+
                 if (!structure.Voices.Any())
                 {
                     _onLog($"AggregateSerialStructure: No voices found after aggregation for {serialUrl}");
@@ -526,7 +636,7 @@ namespace Uaflix
                     }
                     return null;
                 }
-                
+
                 _hybridCache.Set(memKey, structure, cacheTime(40));
                 _onLog($"AggregateSerialStructure: Cached structure with {structure.Voices.Count} total voices");
 
@@ -557,99 +667,440 @@ namespace Uaflix
         
         #endregion
 
-        public async Task<List<SearchResult>> Search(string imdb_id, long kinopoisk_id, string title, string original_title, int year, string search_query)
+        public async Task<List<SearchResult>> Search(string imdb_id, long kinopoisk_id, string title, string original_title, int year, int serial, string original_language, string source, string search_query)
         {
-            string memKey = $"UaFlix:search:{kinopoisk_id}:{imdb_id}:{search_query}";
-            if (_hybridCache.TryGetValue(memKey, out List<SearchResult> res))
-                return res;
+            bool allowAnime = IsAnimeRequest(title, original_title, original_language, source);
+            string memKey = $"UaFlix:search:{kinopoisk_id}:{imdb_id}:{serial}:{year}:{allowAnime}:{title}:{original_title}:{search_query}";
+            if (_hybridCache.TryGetValue(memKey, out List<SearchResult> cached))
+                return cached;
 
             try
             {
-                string filmTitle = !string.IsNullOrEmpty(original_title) ? original_title : (!string.IsNullOrEmpty(title) ? title : search_query);
-                string searchUrl = $"{_init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(filmTitle)}";
-                var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
-
-                var searchHtml = await Http.Get(_init.cors(searchUrl), headers: headers, proxy: _proxyManager.Get());
-                var doc = new HtmlDocument();
-                doc.LoadHtml(searchHtml);
-
-                // Спробуємо різні селектори для пошуку результатів
-                var filmNodes = doc.DocumentNode.SelectNodes("//a[contains(@class, 'sres-wrap')]") ??
-                               doc.DocumentNode.SelectNodes("//div[contains(@class, 'sres-item')]//a") ??
-                               doc.DocumentNode.SelectNodes("//div[contains(@class, 'search-result')]//a") ??
-                               doc.DocumentNode.SelectNodes("//a[contains(@href, '/serials/') or contains(@href, '/films/')]");
-
-                if (filmNodes == null || filmNodes.Count == 0)
+                var queries = new List<string>()
                 {
-                    _onLog($"Search: No search results found with any selector for query: {filmTitle}");
+                    original_title,
+                    title,
+                    search_query
+                }
+                .Where(q => !string.IsNullOrWhiteSpace(q))
+                .Select(q => q.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+                if (queries.Count == 0)
                     return null;
-                }
 
-                res = new List<SearchResult>();
-                foreach (var filmNode in filmNodes)
+                var headers = new List<HeadersModel>()
                 {
-                    try
-                    {
-                        var h2Node = filmNode.SelectSingleNode(".//h2") ?? filmNode.SelectSingleNode(".//h3");
-                        if (h2Node == null) continue;
+                    new HeadersModel("User-Agent", "Mozilla/5.0"),
+                    new HeadersModel("Referer", _init.host)
+                };
 
-                        string filmUrl = filmNode.GetAttributeValue("href", "");
-                        if (string.IsNullOrEmpty(filmUrl)) continue;
-
-                        if (!filmUrl.StartsWith("http"))
-                            filmUrl = _init.host + filmUrl;
-
-                        // Спробуємо різні способи отримати рік
-                        int filmYear = 0;
-                        var descNode = filmNode.SelectSingleNode(".//div[contains(@class, 'sres-desc')]") ??
-                                      filmNode.SelectSingleNode(".//span[contains(@class, 'year')]") ??
-                                      filmNode.SelectSingleNode(".//*[contains(text(), '20')]");
-
-                        if (descNode != null)
-                        {
-                            string yearText = descNode.InnerText ?? "";
-                            var yearMatch = Regex.Match(yearText, @"(?:19|20)\d{2}");
-                            if (yearMatch.Success)
-                                int.TryParse(yearMatch.Value, out filmYear);
-                        }
-
-                        // Спробуємо різні селектори для постера
-                        var posterNode = filmNode.SelectSingleNode(".//img[@src]") ??
-                                        filmNode.SelectSingleNode(".//img[@data-src]") ??
-                                        filmNode.SelectSingleNode(".//div[contains(@class, 'poster')]//img");
-
-                        string posterUrl = posterNode?.GetAttributeValue("src", "") ?? posterNode?.GetAttributeValue("data-src", "");
-                        if (!string.IsNullOrEmpty(posterUrl) && !posterUrl.StartsWith("http"))
-                            posterUrl = _init.host + posterUrl;
-
-                        res.Add(new SearchResult
-                        {
-                            Title = h2Node.InnerText.Trim(),
-                            Url = filmUrl,
-                            Year = filmYear,
-                            PosterUrl = posterUrl
-                        });
-
-                        _onLog($"Search: Found result - {h2Node.InnerText.Trim()}, URL: {filmUrl}");
-                    }
-                    catch (Exception ex)
-                    {
-                        _onLog($"Search: Error processing film node: {ex.Message}");
+                var uniqueByUrl = new Dictionary<string, SearchResult>(StringComparer.OrdinalIgnoreCase);
+                foreach (string query in queries)
+                {
+                    string searchUrl = $"{_init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(query)}";
+                    string searchHtml = await Http.Get(_init.cors(searchUrl), headers: headers, proxy: _proxyManager.Get());
+                    if (string.IsNullOrWhiteSpace(searchHtml))
                         continue;
+
+                    var doc = new HtmlDocument();
+                    doc.LoadHtml(searchHtml);
+
+                    var filmNodes = doc.DocumentNode.SelectNodes("//a[contains(@class, 'sres-wrap')]");
+                    if (filmNodes == null || filmNodes.Count == 0)
+                        continue;
+
+                    foreach (var filmNode in filmNodes)
+                    {
+                        try
+                        {
+                            var h2Node = filmNode.SelectSingleNode(".//h2") ?? filmNode.SelectSingleNode(".//h3");
+                            if (h2Node == null)
+                                continue;
+
+                            string filmUrl = filmNode.GetAttributeValue("href", "");
+                            if (string.IsNullOrWhiteSpace(filmUrl))
+                                continue;
+
+                            if (!filmUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                                filmUrl = _init.host + filmUrl;
+
+                            if (uniqueByUrl.ContainsKey(filmUrl))
+                                continue;
+
+                            var descNode = filmNode.SelectSingleNode(".//div[contains(@class, 'sres-desc')]") ??
+                                           filmNode.SelectSingleNode(".//span[contains(@class, 'year')]");
+                            int filmYear = ExtractYear(descNode?.InnerText);
+
+                            var posterNode = filmNode.SelectSingleNode(".//img[@src]") ??
+                                            filmNode.SelectSingleNode(".//img[@data-src]");
+                            string posterUrl = posterNode?.GetAttributeValue("src", "") ?? posterNode?.GetAttributeValue("data-src", "");
+                            if (!string.IsNullOrEmpty(posterUrl) && !posterUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                                posterUrl = _init.host + posterUrl;
+
+                            string category = ExtractCategoryFromUrl(filmUrl);
+                            bool isAnime = string.Equals(category, "anime", StringComparison.OrdinalIgnoreCase);
+
+                            uniqueByUrl[filmUrl] = new SearchResult
+                            {
+                                Title = WebUtility.HtmlDecode(h2Node.InnerText?.Trim() ?? string.Empty),
+                                Url = filmUrl,
+                                Year = filmYear,
+                                PosterUrl = posterUrl,
+                                Category = category,
+                                IsAnime = isAnime
+                            };
+                        }
+                        catch (Exception ex)
+                        {
+                            _onLog($"Search: Error processing film node: {ex.Message}");
+                        }
                     }
                 }
 
-                if (res.Count > 0)
+                if (uniqueByUrl.Count == 0)
+                    return null;
+
+                var results = uniqueByUrl.Values.ToList();
+                results = FilterByContentType(results, serial, allowAnime);
+                if (results.Count == 0)
+                    return null;
+
+                await EnrichSearchResults(results, year);
+
+                foreach (var result in results)
                 {
-                    _hybridCache.Set(memKey, res, cacheTime(20));
-                    return res;
+                    result.TitleMatched = HasStrongTitleMatch(result, title, original_title);
+                    result.YearMatched = year > 0 && result.Year == year;
+                    result.MatchScore = BuildMatchScore(result, title, original_title, year, serial, allowAnime);
                 }
+
+                results = results
+                    .OrderByDescending(r => r.MatchScore)
+                    .ThenByDescending(r => r.TitleMatched)
+                    .ThenByDescending(r => r.YearMatched)
+                    .ThenBy(r => r.Title)
+                    .ToList();
+
+                _hybridCache.Set(memKey, results, cacheTime(20));
+                return results;
             }
             catch (Exception ex)
             {
                 _onLog($"UaFlix search error: {ex.Message}");
+                return null;
             }
+        }
+
+        public bool IsAnimeRequest(string title, string originalTitle, string originalLanguage, string source)
+        {
+            string combined = $"{title} {originalTitle} {source}".ToLowerInvariant();
+            if (combined.Contains("anime") || combined.Contains("аніме"))
+                return true;
+
+            return string.Equals(originalLanguage, "ja", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public SearchResult SelectBestSearchResult(List<SearchResult> results, string title, string originalTitle, int year)
+        {
+            if (results == null || results.Count == 0)
+                return null;
+
+            var ordered = results
+                .OrderByDescending(r => r.MatchScore)
+                .ToList();
+
+            if (ordered.Count == 1)
+                return ordered[0];
+
+            if (year > 0)
+            {
+                var strict = ordered
+                    .Where(r => r.TitleMatched && r.YearMatched)
+                    .ToList();
+
+                if (strict.Count == 1)
+                    return strict[0];
+
+                if (strict.Count > 1)
+                    return null;
+            }
+            else
+            {
+                var titleOnly = ordered.Where(r => r.TitleMatched).ToList();
+                if (titleOnly.Count == 1)
+                    return titleOnly[0];
+            }
+
             return null;
+        }
+
+        private async Task EnrichSearchResults(List<SearchResult> results, int targetYear)
+        {
+            if (results == null || results.Count == 0)
+                return;
+
+            var tasks = results.Select(async result =>
+            {
+                if (result == null || string.IsNullOrWhiteSpace(result.Url))
+                    return;
+
+                if (targetYear <= 0 && result.Year > 0 && !string.IsNullOrWhiteSpace(result.Category))
+                    return;
+
+                var meta = await LoadSearchMeta(result.Url);
+                if (meta == null)
+                    return;
+
+                if (result.Year <= 0 && meta.Year > 0)
+                    result.Year = meta.Year;
+
+                if (string.IsNullOrWhiteSpace(result.Category))
+                    result.Category = meta.Category;
+
+                if (!result.IsAnime && meta.IsAnime)
+                    result.IsAnime = true;
+            });
+
+            await Task.WhenAll(tasks);
+        }
+
+        private async Task<SearchMeta> LoadSearchMeta(string url)
+        {
+            string memKey = $"UaFlix:searchmeta:{url}";
+            if (_hybridCache.TryGetValue(memKey, out SearchMeta cached))
+                return cached;
+
+            var meta = new SearchMeta
+            {
+                Category = ExtractCategoryFromUrl(url)
+            };
+            meta.IsAnime = string.Equals(meta.Category, "anime", StringComparison.OrdinalIgnoreCase);
+
+            try
+            {
+                var headers = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", "Mozilla/5.0"),
+                    new HeadersModel("Referer", _init.host)
+                };
+
+                string html = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+                if (!string.IsNullOrWhiteSpace(html))
+                {
+                    var doc = new HtmlDocument();
+                    doc.LoadHtml(html);
+
+                    var yearNode = doc.DocumentNode.SelectSingleNode("//li[contains(@class, 'vis')]//span[contains(@class, 'year')]");
+                    int year = ExtractYear(yearNode?.InnerText);
+                    if (year <= 0)
+                    {
+                        var createdNode = doc.DocumentNode.SelectSingleNode("//*[@itemprop='dateCreated']");
+                        year = ExtractYear(createdNode?.GetAttributeValue("content", null) ?? createdNode?.InnerText);
+                    }
+
+                    meta.Year = year;
+                }
+            }
+            catch (Exception ex)
+            {
+                _onLog($"LoadSearchMeta error: {ex.Message}");
+            }
+
+            _hybridCache.Set(memKey, meta, cacheTime(60));
+            return meta;
+        }
+
+        private List<SearchResult> FilterByContentType(List<SearchResult> input, int serial, bool allowAnime)
+        {
+            if (input == null || input.Count == 0)
+                return new List<SearchResult>();
+
+            string expected = serial == 1 ? "serials" : "films";
+
+            var filtered = input
+                .Where(i => allowAnime || !i.IsAnime)
+                .Where(i => string.IsNullOrWhiteSpace(i.Category) || i.Category == expected || (allowAnime && i.IsAnime))
+                .ToList();
+
+            if (filtered.Count > 0)
+                return filtered;
+
+            return input
+                .Where(i => allowAnime || !i.IsAnime)
+                .ToList();
+        }
+
+        private int BuildMatchScore(SearchResult result, string title, string originalTitle, int year, int serial, bool allowAnime)
+        {
+            if (result == null)
+                return 0;
+
+            int score = 0;
+            if (result.TitleMatched)
+                score += 100;
+            else
+                score += ComputePartialTitleScore(result?.Title, title, originalTitle);
+
+            if (year > 0)
+            {
+                if (result.Year == year)
+                    score += 60;
+                else if (result.Year > 0 && Math.Abs(result.Year - year) == 1)
+                    score += 10;
+                else if (result.Year > 0)
+                    score -= 15;
+            }
+
+            if (serial == 1)
+            {
+                if (string.Equals(result.Category, "serials", StringComparison.OrdinalIgnoreCase))
+                    score += 25;
+                else if (string.Equals(result.Category, "films", StringComparison.OrdinalIgnoreCase))
+                    score -= 10;
+            }
+            else
+            {
+                if (string.Equals(result.Category, "films", StringComparison.OrdinalIgnoreCase))
+                    score += 25;
+                else if (string.Equals(result.Category, "serials", StringComparison.OrdinalIgnoreCase))
+                    score -= 10;
+            }
+
+            if (result.IsAnime && !allowAnime)
+                score -= 80;
+
+            return score;
+        }
+
+        private int ComputePartialTitleScore(string candidateTitle, string title, string originalTitle)
+        {
+            var candidateTokens = ToTitleTokens(candidateTitle);
+            if (candidateTokens.Count == 0)
+                return 0;
+
+            var targetTokens = ToTitleTokens(title);
+            foreach (var token in ToTitleTokens(originalTitle))
+                targetTokens.Add(token);
+
+            if (targetTokens.Count == 0)
+                return 0;
+
+            int overlap = candidateTokens.Count(t => targetTokens.Contains(t));
+            double ratio = overlap / (double)Math.Max(candidateTokens.Count, targetTokens.Count);
+
+            if (ratio >= 0.85) return 70;
+            if (ratio >= 0.65) return 50;
+            if (ratio >= 0.45) return 30;
+            if (ratio >= 0.30) return 15;
+            return 0;
+        }
+
+        private bool HasStrongTitleMatch(SearchResult result, string title, string originalTitle)
+        {
+            if (result == null)
+                return false;
+
+            var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string candidate in new[] { title, originalTitle })
+            {
+                string normalized = NormalizeTitle(candidate);
+                if (!string.IsNullOrWhiteSpace(normalized))
+                    targets.Add(normalized);
+            }
+
+            if (targets.Count == 0)
+                return false;
+
+            foreach (string part in SplitTitleParts(result.Title))
+            {
+                string normalizedPart = NormalizeTitle(part);
+                if (string.IsNullOrWhiteSpace(normalizedPart))
+                    continue;
+
+                if (targets.Contains(normalizedPart))
+                    return true;
+
+                foreach (string target in targets)
+                {
+                    if (normalizedPart.Length >= 6 && target.Length >= 6 &&
+                        (normalizedPart.Contains(target, StringComparison.OrdinalIgnoreCase) ||
+                         target.Contains(normalizedPart, StringComparison.OrdinalIgnoreCase)))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static IEnumerable<string> SplitTitleParts(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return Enumerable.Empty<string>();
+
+            return title
+                .Split(new[] { '/', '|', '•' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(part => WebUtility.HtmlDecode(part.Trim()));
+        }
+
+        private static HashSet<string> ToTitleTokens(string value)
+        {
+            string normalized = NormalizeTitle(value);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            return normalized
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(token => token.Length > 1)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeTitle(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            string text = WebUtility.HtmlDecode(value).ToLowerInvariant();
+            text = Regex.Replace(text, @"[^\p{L}\p{Nd}\s]+", " ");
+            text = Regex.Replace(text, @"\b(season|сезон|частина|part|ova|special|movie|film)\b", " ");
+            text = Regex.Replace(text, @"\s+", " ").Trim();
+            return text;
+        }
+
+        private static int ExtractYear(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return 0;
+
+            var match = Regex.Match(text, @"(?:19|20)\d{2}");
+            if (match.Success && int.TryParse(match.Value, out int year))
+                return year;
+
+            return 0;
+        }
+
+        private static string ExtractCategoryFromUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return null;
+
+            try
+            {
+                var uri = new Uri(url);
+                string first = uri.AbsolutePath.Trim('/').Split('/').FirstOrDefault()?.ToLowerInvariant();
+
+                if (first == "film")
+                    return "films";
+                if (first == "serial")
+                    return "serials";
+
+                return first;
+            }
+            catch
+            {
+                return null;
+            }
         }
         
         public async Task<FilmInfo> GetFilmInfo(string filmUrl)
@@ -850,13 +1301,9 @@ namespace Uaflix
                     }
                 }
 
-                var iframe = doc.DocumentNode.SelectSingleNode("//div[contains(@class, 'video-box')]//iframe");
-                if (iframe != null)
+                string iframeUrl = ExtractIframeUrl(doc);
+                if (!string.IsNullOrEmpty(iframeUrl))
                 {
-                    string iframeUrl = iframe.GetAttributeValue("src", "").Replace("&", "&");
-                    if (iframeUrl.StartsWith("//"))
-                        iframeUrl = "https:" + iframeUrl;
-
                     if (iframeUrl.Contains("ashdi.vip/serial/"))
                     {
                         result.ashdi_url = iframeUrl;
@@ -1007,6 +1454,19 @@ namespace Uaflix
                     return st;
             }
             return null;
+        }
+
+        sealed class EpisodePlayerInfo
+        {
+            public string IframeUrl { get; set; }
+            public string PlayerType { get; set; }
+        }
+
+        sealed class SearchMeta
+        {
+            public int Year { get; set; }
+            public string Category { get; set; }
+            public bool IsAnime { get; set; }
         }
         
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
