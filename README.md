@@ -7,6 +7,7 @@
 - [x] UATuTFun
 - [x] Makhno 
 - [x] StarLight
+- [x] KlonFUN
 
 ### Anime and Dorama
 - [x] AnimeON
@@ -47,6 +48,7 @@ Create or update the module/repository.yaml file
     - Bamboo
     - Makhno
     - StarLight
+    - KlonFUN
 ```
 
 branch - optional, default main
@@ -90,6 +92,7 @@ Sources with APN support:
 - UaTUT
 - Mikai
 - Makhno
+- KlonFUN
 
 ## Source/player availability check script
 

@@ -18,6 +18,7 @@ UaTUT|https://uk.uatut.fun/watch/2851|
 AnimeON|https://animeon.club/anime/924-provodzhalnicya-friren|https://animeon.club/api/player/47960/episode
 Bamboo|https://bambooua.com/dorama/938-18_again.html|
 Mikai|https://mikai.me/anime/1272-friren-shcho-provodzhaie-v-ostanniu-put|https://api.mikai.me/v1/anime/1272
+KlonFUN|https://klon.fun/filmy/3887-marsianyn-marsiianyn-rozshyrena-versiia.html|
 SRC
 )
 
