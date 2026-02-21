@@ -281,12 +281,33 @@ namespace UaTUT
                     continue;
 
                 var playerData = await invoke.GetPlayerData(playerUrl);
-                if (playerData?.File == null)
+                var movieStreams = playerData?.Movies?
+                    .Where(m => m != null && !string.IsNullOrEmpty(m.File))
+                    .ToList() ?? new List<MovieVariant>();
+
+                if (movieStreams.Count == 0 && !string.IsNullOrEmpty(playerData?.File))
+                {
+                    movieStreams.Add(new MovieVariant
+                    {
+                        File = playerData.File,
+                        Title = "Основне джерело",
+                        Quality = "auto"
+                    });
+                }
+
+                if (movieStreams.Count == 0)
                     continue;
 
                 string movieName = $"{movie.Title} ({movie.Year})";
-                string movieLink = $"{host}/uatut/play/movie?imdb_id={movie.Id}&title={HttpUtility.UrlEncode(movie.Title)}&year={movie.Year}";
-                movie_tpl.Append(movieName, movieLink, "call");
+                foreach (var variant in movieStreams)
+                {
+                    string variantName = !string.IsNullOrWhiteSpace(variant.Title)
+                        ? variant.Title
+                        : "Варіант";
+
+                    string label = $"{movieName} - {variantName}";
+                    movie_tpl.Append(label, BuildStreamUrl(init, variant.File));
+                }
             }
 
             if (movie_tpl.data == null || movie_tpl.data.Count == 0)
@@ -301,7 +322,7 @@ namespace UaTUT
 
         [HttpGet]
         [Route("play/movie")]
-        async public Task<ActionResult> PlayMovie(long imdb_id, string title, int year, bool play = false, bool rjson = false)
+        async public Task<ActionResult> PlayMovie(long imdb_id, string title, int year, string stream = null, bool play = false, bool rjson = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -344,12 +365,16 @@ namespace UaTUT
                 return OnError();
 
             var playerData = await invoke.GetPlayerData(playerUrl);
-            if (playerData?.File == null)
+            string selectedFile = HttpUtility.UrlDecode(stream);
+            if (string.IsNullOrWhiteSpace(selectedFile))
+                selectedFile = playerData?.Movies?.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m.File))?.File ?? playerData?.File;
+
+            if (string.IsNullOrWhiteSpace(selectedFile))
                 return OnError();
 
-            OnLog($"UaTUT PlayMovie: Found direct file: {playerData.File}");
+            OnLog($"UaTUT PlayMovie: обрано потік {selectedFile}");
 
-            string streamUrl = BuildStreamUrl(init, playerData.File);
+            string streamUrl = BuildStreamUrl(init, selectedFile);
 
             // Якщо play=true, робимо Redirect, інакше повертаємо JSON
             if (play)

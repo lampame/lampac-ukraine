@@ -21,6 +21,8 @@ namespace KlonFUN
         private static readonly Regex DirectFileRegex = new Regex(@"file\s*:\s*['""](?<url>https?://[^'"">\s]+\.m3u8[^'"">\s]*)['""]", RegexOptions.Singleline | RegexOptions.IgnoreCase);
         private static readonly Regex YearRegex = new Regex(@"(19|20)\d{2}", RegexOptions.IgnoreCase);
         private static readonly Regex NumberRegex = new Regex(@"(\d+)", RegexOptions.IgnoreCase);
+        private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase);
+        private static readonly Regex QualityFhdRegex = new Regex(@"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b", RegexOptions.IgnoreCase);
 
         private readonly OnlinesSettings _init;
         private readonly IHybridCache _hybridCache;
@@ -181,7 +183,7 @@ namespace KlonFUN
 
             try
             {
-                string playerHtml = await GetPlayerHtml(playerUrl);
+                string playerHtml = await GetPlayerHtml(WithAshdiMultivoice(playerUrl));
                 if (string.IsNullOrWhiteSpace(playerHtml))
                     return null;
 
@@ -197,9 +199,7 @@ namespace KlonFUN
                         if (string.IsNullOrWhiteSpace(link))
                             continue;
 
-                        string voiceTitle = CleanText(item.Value<string>("title"));
-                        if (string.IsNullOrWhiteSpace(voiceTitle))
-                            voiceTitle = $"Варіант {index}";
+                        string voiceTitle = FormatMovieTitle(item.Value<string>("title"), link, index);
 
                         streams.Add(new MovieStream
                         {
@@ -218,7 +218,7 @@ namespace KlonFUN
                     {
                         streams.Add(new MovieStream
                         {
-                            Title = "Основне джерело",
+                            Title = FormatMovieTitle("Основне джерело", directMatch.Groups["url"].Value, 1),
                             Link = directMatch.Groups["url"].Value
                         });
                     }
@@ -632,6 +632,50 @@ namespace KlonFUN
             count++;
             voiceCounter[baseName] = count;
             return $"{baseName} #{count}";
+        }
+
+        private static string WithAshdiMultivoice(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return url;
+
+            if (url.IndexOf("ashdi.vip/vod/", StringComparison.OrdinalIgnoreCase) < 0)
+                return url;
+
+            if (url.IndexOf("multivoice", StringComparison.OrdinalIgnoreCase) >= 0)
+                return url;
+
+            return url.Contains("?") ? $"{url}&multivoice" : $"{url}?multivoice";
+        }
+
+        private static string FormatMovieTitle(string rawTitle, string streamUrl, int index)
+        {
+            string title = CleanText(rawTitle);
+            if (string.IsNullOrWhiteSpace(title))
+                title = $"Варіант {index}";
+
+            string tag = DetectQualityTag($"{title} {streamUrl}");
+            if (string.IsNullOrWhiteSpace(tag))
+                return title;
+
+            if (title.StartsWith("[4K]", StringComparison.OrdinalIgnoreCase) || title.StartsWith("[FHD]", StringComparison.OrdinalIgnoreCase))
+                return title;
+
+            return $"{tag} {title}";
+        }
+
+        private static string DetectQualityTag(string source)
+        {
+            if (string.IsNullOrWhiteSpace(source))
+                return null;
+
+            if (Quality4kRegex.IsMatch(source))
+                return "[4K]";
+
+            if (QualityFhdRegex.IsMatch(source))
+                return "[FHD]";
+
+            return null;
         }
 
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)

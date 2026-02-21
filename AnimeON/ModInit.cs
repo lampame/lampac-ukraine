@@ -25,7 +25,7 @@ namespace AnimeON
 {
     public class ModInit
     {
-        public static double Version => 3.5;
+        public static double Version => 3.6;
 
         public static OnlinesSettings AnimeON;
         public static bool ApnHostProvided;

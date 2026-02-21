@@ -392,9 +392,34 @@ namespace Uaflix.Controllers
             }
             else // Фільм
             {
-                string link = $"{host}/uaflix?t={HttpUtility.UrlEncode(filmUrl)}&play=true";
-                var tpl = new MovieTpl(title, original_title, 1);
-                tpl.Append(title, accsArgs(link), method: "play");
+                var playResult = await invoke.ParseEpisode(filmUrl);
+                if (playResult?.streams == null || playResult.streams.Count == 0)
+                {
+                    OnLog("=== RETURN: movie no streams ===");
+                    return OnError("uaflix", proxyManager);
+                }
+
+                var tpl = new MovieTpl(title, original_title, playResult.streams.Count);
+                int index = 1;
+                foreach (var stream in playResult.streams)
+                {
+                    if (stream == null || string.IsNullOrEmpty(stream.link))
+                        continue;
+
+                    string label = !string.IsNullOrWhiteSpace(stream.title)
+                        ? stream.title
+                        : $"Варіант {index}";
+
+                    tpl.Append(label, BuildStreamUrl(init, stream.link));
+                    index++;
+                }
+
+                if (tpl.data == null || tpl.data.Count == 0)
+                {
+                    OnLog("=== RETURN: movie template empty ===");
+                    return OnError("uaflix", proxyManager);
+                }
+
                 OnLog("=== RETURN: movie template ===");
                 return rjson ? Content(tpl.ToJson(), "application/json; charset=utf-8") : Content(tpl.ToHtml(), "text/html; charset=utf-8");
             }

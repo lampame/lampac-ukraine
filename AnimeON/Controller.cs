@@ -223,6 +223,21 @@ namespace AnimeON.Controllers
                         string translationName = $"[{player.Name}] {fundub.Fundub.Name}";
 
                         bool needsResolve = player.Name?.ToLower() == "moon" || player.Name?.ToLower() == "ashdi";
+                        if (streamLink.Contains("ashdi.vip/vod", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var ashdiStreams = await invoke.ParseAshdiPageStreams(streamLink);
+                            if (ashdiStreams != null && ashdiStreams.Count > 0)
+                            {
+                                foreach (var ashdiStream in ashdiStreams)
+                                {
+                                    string optionName = $"{translationName} {ashdiStream.title}";
+                                    string callUrl = $"{host}/animeon/play?url={HttpUtility.UrlEncode(ashdiStream.link)}";
+                                    tpl.Append(optionName, accsArgs(callUrl), "call");
+                                }
+                                continue;
+                            }
+                        }
+
                         if (needsResolve || streamLink.Contains("moonanime.art/iframe/") || streamLink.Contains("ashdi.vip/vod"))
                         {
                             string callUrl = $"{host}/animeon/play?url={HttpUtility.UrlEncode(streamLink)}";
