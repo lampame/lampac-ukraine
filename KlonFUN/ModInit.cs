@@ -18,7 +18,7 @@ namespace KlonFUN
 {
     public class ModInit
     {
-        public static double Version => 1.0;
+        public static double Version => 1.1;
 
         public static OnlinesSettings KlonFUN;
         public static bool ApnHostProvided;

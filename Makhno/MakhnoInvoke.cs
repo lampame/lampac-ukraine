@@ -19,6 +19,8 @@ namespace Makhno
     {
         private const string WormholeHost = "http://wormhole.lampame.v6.rocks/";
         private const string AshdiHost = "https://ashdi.vip";
+        private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase);
+        private static readonly Regex QualityFhdRegex = new Regex(@"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b", RegexOptions.IgnoreCase);
 
         private readonly OnlinesSettings _init;
         private readonly IHybridCache _hybridCache;
@@ -201,19 +203,20 @@ namespace Makhno
 
             try
             {
-                string requestUrl = playerUrl;
+                string sourceUrl = WithAshdiMultivoice(playerUrl);
+                string requestUrl = sourceUrl;
                 var headers = new List<HeadersModel>()
                 {
                     new HeadersModel("User-Agent", Http.UserAgent)
                 };
 
-                if (playerUrl.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase))
+                if (sourceUrl.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase))
                 {
                     headers.Add(new HeadersModel("Referer", "https://ashdi.vip/"));
                 }
 
-                if (ApnHelper.IsAshdiUrl(playerUrl) && ApnHelper.IsEnabled(_init) && string.IsNullOrWhiteSpace(_init.webcorshost))
-                    requestUrl = ApnHelper.WrapUrl(_init, playerUrl);
+                if (ApnHelper.IsAshdiUrl(sourceUrl) && ApnHelper.IsEnabled(_init) && string.IsNullOrWhiteSpace(_init.webcorshost))
+                    requestUrl = ApnHelper.WrapUrl(_init, sourceUrl);
 
                 _onLog($"Makhno getting player data from: {requestUrl}");
 
@@ -243,12 +246,22 @@ namespace Makhno
 
                 if (fileMatch.Success && !fileMatch.Groups[1].Value.StartsWith("["))
                 {
+                    string file = fileMatch.Groups[1].Value;
                     var posterMatch = Regex.Match(html, @"poster:[""']([^""']+)[""']", RegexOptions.IgnoreCase);
                     return new PlayerData
                     {
-                        File = fileMatch.Groups[1].Value,
+                        File = file,
                         Poster = posterMatch.Success ? posterMatch.Groups[1].Value : null,
-                        Voices = new List<Voice>()
+                        Voices = new List<Voice>(),
+                        Movies = new List<MovieVariant>()
+                        {
+                            new MovieVariant
+                            {
+                                File = file,
+                                Quality = DetectQualityTag(file) ?? "auto",
+                                Title = BuildMovieTitle("Основне джерело", file, 1)
+                            }
+                        }
                     };
                 }
 
@@ -260,12 +273,14 @@ namespace Makhno
                 if (!string.IsNullOrEmpty(jsonData))
                 {
                     var voices = ParseVoicesJson(jsonData);
+                    var movies = ParseMovieVariantsJson(jsonData);
                     _onLog($"Makhno ParsePlayerData: voices={voices?.Count ?? 0}");
                     return new PlayerData
                     {
-                        File = null,
+                        File = movies.FirstOrDefault()?.File,
                         Poster = null,
-                        Voices = voices
+                        Voices = voices,
+                        Movies = movies
                     };
                 }
 
@@ -277,7 +292,16 @@ namespace Makhno
                     {
                         File = m3u8Match.Groups[1].Value,
                         Poster = null,
-                        Voices = new List<Voice>()
+                        Voices = new List<Voice>(),
+                        Movies = new List<MovieVariant>()
+                        {
+                            new MovieVariant
+                            {
+                                File = m3u8Match.Groups[1].Value,
+                                Quality = DetectQualityTag(m3u8Match.Groups[1].Value) ?? "auto",
+                                Title = BuildMovieTitle("Основне джерело", m3u8Match.Groups[1].Value, 1)
+                            }
+                        }
                     };
                 }
 
@@ -289,7 +313,16 @@ namespace Makhno
                     {
                         File = sourceMatch.Groups[1].Value,
                         Poster = null,
-                        Voices = new List<Voice>()
+                        Voices = new List<Voice>(),
+                        Movies = new List<MovieVariant>()
+                        {
+                            new MovieVariant
+                            {
+                                File = sourceMatch.Groups[1].Value,
+                                Quality = DetectQualityTag(sourceMatch.Groups[1].Value) ?? "auto",
+                                Title = BuildMovieTitle("Основне джерело", sourceMatch.Groups[1].Value, 1)
+                            }
+                        }
                     };
                 }
 
@@ -366,6 +399,41 @@ namespace Makhno
             {
                 _onLog($"Makhno ParseVoicesJson error: {ex.Message}");
                 return new List<Voice>();
+            }
+        }
+
+        private List<MovieVariant> ParseMovieVariantsJson(string jsonData)
+        {
+            try
+            {
+                var voicesArray = JsonConvert.DeserializeObject<List<JObject>>(jsonData);
+                var movies = new List<MovieVariant>();
+                if (voicesArray == null || voicesArray.Count == 0)
+                    return movies;
+
+                int index = 1;
+                foreach (var item in voicesArray)
+                {
+                    string file = item?["file"]?.ToString();
+                    if (string.IsNullOrWhiteSpace(file))
+                        continue;
+
+                    string rawTitle = item["title"]?.ToString();
+                    movies.Add(new MovieVariant
+                    {
+                        File = file,
+                        Quality = DetectQualityTag($"{rawTitle} {file}") ?? "auto",
+                        Title = BuildMovieTitle(rawTitle, file, index)
+                    });
+                    index++;
+                }
+
+                return movies;
+            }
+            catch (Exception ex)
+            {
+                _onLog($"Makhno ParseMovieVariantsJson error: {ex.Message}");
+                return new List<MovieVariant>();
             }
         }
 
@@ -529,6 +597,69 @@ namespace Makhno
                 return num;
 
             return null;
+        }
+
+        private static string WithAshdiMultivoice(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return url;
+
+            if (url.IndexOf("ashdi.vip/vod/", StringComparison.OrdinalIgnoreCase) < 0)
+                return url;
+
+            if (url.IndexOf("multivoice", StringComparison.OrdinalIgnoreCase) >= 0)
+                return url;
+
+            return url.Contains("?") ? $"{url}&multivoice" : $"{url}?multivoice";
+        }
+
+        private static string BuildMovieTitle(string rawTitle, string file, int index)
+        {
+            string title = string.IsNullOrWhiteSpace(rawTitle) ? $"Варіант {index}" : StripMoviePrefix(WebUtility.HtmlDecode(rawTitle).Trim());
+            string qualityTag = DetectQualityTag($"{title} {file}");
+
+            if (string.IsNullOrWhiteSpace(qualityTag))
+                return title;
+
+            if (title.StartsWith("[4K]", StringComparison.OrdinalIgnoreCase) || title.StartsWith("[FHD]", StringComparison.OrdinalIgnoreCase))
+                return title;
+
+            return $"{qualityTag} {title}";
+        }
+
+        private static string DetectQualityTag(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            if (Quality4kRegex.IsMatch(value))
+                return "[4K]";
+
+            if (QualityFhdRegex.IsMatch(value))
+                return "[FHD]";
+
+            return null;
+        }
+
+        private static string StripMoviePrefix(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return title;
+
+            string normalized = Regex.Replace(title, @"\s+", " ").Trim();
+            int sepIndex = normalized.LastIndexOf(" - ", StringComparison.Ordinal);
+            if (sepIndex <= 0 || sepIndex >= normalized.Length - 3)
+                return normalized;
+
+            string prefix = normalized.Substring(0, sepIndex).Trim();
+            string suffix = normalized.Substring(sepIndex + 3).Trim();
+            if (string.IsNullOrWhiteSpace(suffix))
+                return normalized;
+
+            if (Regex.IsMatch(prefix, @"(19|20)\d{2}"))
+                return suffix;
+
+            return normalized;
         }
 
         public string ExtractAshdiPath(string value)

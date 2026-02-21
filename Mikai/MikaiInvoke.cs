@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Web;
+using System.Net;
+using System.Text.RegularExpressions;
 using Mikai.Models;
 using Shared;
 using Shared.Engine;
@@ -14,6 +16,9 @@ namespace Mikai
 {
     public class MikaiInvoke
     {
+        private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase);
+        private static readonly Regex QualityFhdRegex = new Regex(@"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b", RegexOptions.IgnoreCase);
+
         private readonly OnlinesSettings _init;
         private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
@@ -168,6 +173,13 @@ namespace Mikai
 
         public async Task<string> ParseAshdiPage(string url)
         {
+            var streams = await ParseAshdiPageStreams(url);
+            return streams?.FirstOrDefault().link;
+        }
+
+        public async Task<List<(string title, string link)>> ParseAshdiPageStreams(string url)
+        {
+            var streams = new List<(string title, string link)>();
             try
             {
                 var headers = new List<HeadersModel>()
@@ -176,22 +188,56 @@ namespace Mikai
                     new HeadersModel("Referer", "https://ashdi.vip/")
                 };
 
-                string requestUrl = AshdiRequestUrl(url);
+                string requestUrl = AshdiRequestUrl(WithAshdiMultivoice(url));
                 _onLog($"Mikai: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
                 string html = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
-                    return null;
+                    return streams;
 
-                var match = System.Text.RegularExpressions.Regex.Match(html, @"file\s*:\s*['""]([^'""]+)['""]");
+                string rawArray = ExtractPlayerFileArray(html);
+                if (!string.IsNullOrWhiteSpace(rawArray))
+                {
+                    string json = WebUtility.HtmlDecode(rawArray)
+                        .Replace("\\/", "/")
+                        .Replace("\\'", "'")
+                        .Replace("\\\"", "\"");
+
+                    using var jsonDoc = JsonDocument.Parse(json);
+                    if (jsonDoc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        int index = 1;
+                        foreach (var item in jsonDoc.RootElement.EnumerateArray())
+                        {
+                            if (!item.TryGetProperty("file", out var fileProp))
+                                continue;
+
+                            string file = fileProp.GetString();
+                            if (string.IsNullOrWhiteSpace(file))
+                                continue;
+
+                            string rawTitle = item.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : null;
+                            streams.Add((BuildDisplayTitle(rawTitle, file, index), file));
+                            index++;
+                        }
+
+                        if (streams.Count > 0)
+                            return streams;
+                    }
+                }
+
+                var match = Regex.Match(html, @"file\s*:\s*['""]([^'""]+)['""]");
                 if (match.Success)
-                    return match.Groups[1].Value;
+                {
+                    string file = match.Groups[1].Value;
+                    streams.Add((BuildDisplayTitle("Основне джерело", file, 1), file));
+                }
             }
             catch (Exception ex)
             {
                 _onLog($"Mikai ParseAshdiPage error: {ex.Message}");
             }
 
-            return null;
+            return streams;
         }
 
         private List<HeadersModel> DefaultHeaders()
@@ -202,6 +248,168 @@ namespace Mikai
                 new HeadersModel("Referer", _init.host),
                 new HeadersModel("Accept", "application/json")
             };
+        }
+
+        private static string WithAshdiMultivoice(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return url;
+
+            if (url.IndexOf("ashdi.vip/vod/", StringComparison.OrdinalIgnoreCase) < 0)
+                return url;
+
+            if (url.IndexOf("multivoice", StringComparison.OrdinalIgnoreCase) >= 0)
+                return url;
+
+            return url.Contains("?") ? $"{url}&multivoice" : $"{url}?multivoice";
+        }
+
+        private static string BuildDisplayTitle(string rawTitle, string link, int index)
+        {
+            string normalized = string.IsNullOrWhiteSpace(rawTitle) ? $"Варіант {index}" : StripMoviePrefix(WebUtility.HtmlDecode(rawTitle).Trim());
+            string qualityTag = DetectQualityTag($"{normalized} {link}");
+            if (string.IsNullOrWhiteSpace(qualityTag))
+                return normalized;
+
+            if (normalized.StartsWith("[4K]", StringComparison.OrdinalIgnoreCase) || normalized.StartsWith("[FHD]", StringComparison.OrdinalIgnoreCase))
+                return normalized;
+
+            return $"{qualityTag} {normalized}";
+        }
+
+        private static string DetectQualityTag(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            if (Quality4kRegex.IsMatch(value))
+                return "[4K]";
+
+            if (QualityFhdRegex.IsMatch(value))
+                return "[FHD]";
+
+            return null;
+        }
+
+        private static string StripMoviePrefix(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return title;
+
+            string normalized = Regex.Replace(title, @"\s+", " ").Trim();
+            int sepIndex = normalized.LastIndexOf(" - ", StringComparison.Ordinal);
+            if (sepIndex <= 0 || sepIndex >= normalized.Length - 3)
+                return normalized;
+
+            string prefix = normalized.Substring(0, sepIndex).Trim();
+            string suffix = normalized.Substring(sepIndex + 3).Trim();
+            if (string.IsNullOrWhiteSpace(suffix))
+                return normalized;
+
+            if (Regex.IsMatch(prefix, @"(19|20)\d{2}"))
+                return suffix;
+
+            return normalized;
+        }
+
+        private static string ExtractPlayerFileArray(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+                return null;
+
+            int searchIndex = 0;
+            while (searchIndex >= 0 && searchIndex < html.Length)
+            {
+                int fileIndex = html.IndexOf("file", searchIndex, StringComparison.OrdinalIgnoreCase);
+                if (fileIndex < 0)
+                    return null;
+
+                int colonIndex = html.IndexOf(':', fileIndex);
+                if (colonIndex < 0)
+                    return null;
+
+                int startIndex = colonIndex + 1;
+                while (startIndex < html.Length && char.IsWhiteSpace(html[startIndex]))
+                    startIndex++;
+
+                if (startIndex < html.Length && (html[startIndex] == '\'' || html[startIndex] == '"'))
+                {
+                    startIndex++;
+                    while (startIndex < html.Length && char.IsWhiteSpace(html[startIndex]))
+                        startIndex++;
+                }
+
+                if (startIndex >= html.Length || html[startIndex] != '[')
+                {
+                    searchIndex = fileIndex + 4;
+                    continue;
+                }
+
+                return ExtractBracketArray(html, startIndex);
+            }
+
+            return null;
+        }
+
+        private static string ExtractBracketArray(string text, int startIndex)
+        {
+            if (startIndex < 0 || startIndex >= text.Length || text[startIndex] != '[')
+                return null;
+
+            int depth = 0;
+            bool inString = false;
+            bool escaped = false;
+            char quoteChar = '\0';
+
+            for (int i = startIndex; i < text.Length; i++)
+            {
+                char ch = text[i];
+
+                if (inString)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                        continue;
+                    }
+
+                    if (ch == '\\')
+                    {
+                        escaped = true;
+                        continue;
+                    }
+
+                    if (ch == quoteChar)
+                    {
+                        inString = false;
+                        quoteChar = '\0';
+                    }
+
+                    continue;
+                }
+
+                if (ch == '"' || ch == '\'')
+                {
+                    inString = true;
+                    quoteChar = ch;
+                    continue;
+                }
+
+                if (ch == '[')
+                {
+                    depth++;
+                    continue;
+                }
+
+                if (ch == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                        return text.Substring(startIndex, i - startIndex + 1);
+                }
+            }
+
+            return null;
         }
 
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)

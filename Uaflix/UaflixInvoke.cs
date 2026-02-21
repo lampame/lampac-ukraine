@@ -20,6 +20,9 @@ namespace Uaflix
 {
     public class UaflixInvoke
     {
+        private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase);
+        private static readonly Regex QualityFhdRegex = new Regex(@"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b", RegexOptions.IgnoreCase);
+
         private OnlinesSettings _init;
         private IHybridCache _hybridCache;
         private Action<string> _onLog;
@@ -426,40 +429,77 @@ namespace Uaflix
         /// <summary>
         /// Парсинг одного епізоду з ashdi-vod (новий метод для обробки окремих епізодів з ashdi.vip/vod/)
         /// </summary>
-        private async Task<(string file, string voiceName)> ParseAshdiVodEpisode(string iframeUrl)
+        private async Task<List<PlayStream>> ParseAshdiVodEpisode(string iframeUrl)
         {
             var headers = new List<HeadersModel>()
             {
                 new HeadersModel("User-Agent", "Mozilla/5.0"),
                 new HeadersModel("Referer", "https://uafix.net/")
             };
-            
+
+            var result = new List<PlayStream>();
             try
             {
-                string html = await Http.Get(_init.cors(iframeUrl), headers: headers, proxy: _proxyManager.Get());
-                
-                // Шукаємо Playerjs конфігурацію з file параметром
+                string requestUrl = WithAshdiMultivoice(iframeUrl);
+                string html = await Http.Get(_init.cors(AshdiRequestUrl(requestUrl)), headers: headers, proxy: _proxyManager.Get());
+                if (string.IsNullOrEmpty(html))
+                    return result;
+
+                string rawArray = ExtractPlayerFileArray(html);
+                if (!string.IsNullOrWhiteSpace(rawArray))
+                {
+                    string json = WebUtility.HtmlDecode(rawArray)
+                        .Replace("\\/", "/")
+                        .Replace("\\'", "'")
+                        .Replace("\\\"", "\"");
+
+                    var items = JsonConvert.DeserializeObject<List<JObject>>(json);
+                    if (items != null && items.Count > 0)
+                    {
+                        int index = 1;
+                        foreach (var item in items)
+                        {
+                            string fileUrl = item?["file"]?.ToString();
+                            if (string.IsNullOrWhiteSpace(fileUrl))
+                                continue;
+
+                            string rawTitle = item["title"]?.ToString();
+                            result.Add(new PlayStream
+                            {
+                                link = fileUrl,
+                                quality = DetectQualityTag($"{rawTitle} {fileUrl}") ?? "auto",
+                                title = BuildDisplayTitle(rawTitle, fileUrl, index)
+                            });
+                            index++;
+                        }
+
+                        if (result.Count > 0)
+                            return result;
+                    }
+                }
+
+                // Fallback для старого формату, де є лише один file
                 var match = Regex.Match(html, @"file:\s*'?([^'""\s,}]+\.m3u8)'?");
                 if (!match.Success)
-                {
-                    // Якщо не знайдено, шукаємо в іншому форматі
                     match = Regex.Match(html, @"file['""]?\s*:\s*['""]([^'""}]+\.m3u8)['""]");
-                }
-                
+
                 if (!match.Success)
-                    return (null, null);
-                
-                string fileUrl = match.Groups[1].Value;
-                
-                // Визначити озвучку з URL
-                string voiceName = ExtractVoiceFromUrl(fileUrl);
-                
-                return (fileUrl, voiceName);
+                    return result;
+
+                string fallbackFile = match.Groups[1].Value;
+                result.Add(new PlayStream
+                {
+                    link = fallbackFile,
+                    quality = DetectQualityTag(fallbackFile) ?? "auto",
+                    title = BuildDisplayTitle(ExtractVoiceFromUrl(fallbackFile), fallbackFile, 1)
+                });
+
+                return result;
             }
             catch (Exception ex)
             {
                 _onLog($"ParseAshdiVodEpisode error: {ex.Message}");
-                return (null, null);
+                return result;
             }
         }
         
@@ -1283,7 +1323,7 @@ namespace Uaflix
         
         public async Task<Uaflix.Models.PlayResult> ParseEpisode(string url)
         {
-            var result = new Uaflix.Models.PlayResult() { streams = new List<(string, string)>() };
+            var result = new Uaflix.Models.PlayResult() { streams = new List<PlayStream>() };
             try
             {
                 string html = await Http.Get(_init.cors(url), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
@@ -1296,7 +1336,12 @@ namespace Uaflix
                     string videoUrl = videoNode.GetAttributeValue("src", "");
                     if (!string.IsNullOrEmpty(videoUrl))
                     {
-                        result.streams.Add((videoUrl, "1080p"));
+                        result.streams.Add(new PlayStream
+                        {
+                            link = videoUrl,
+                            quality = "1080p",
+                            title = BuildDisplayTitle("Основне джерело", videoUrl, 1)
+                        });
                         return result;
                     }
                 }
@@ -1325,11 +1370,7 @@ namespace Uaflix
                         if (iframeUrl.Contains("/vod/"))
                         {
                             // Це окремий епізод на ashdi.vip/vod/, обробляємо як ashdi-vod
-                            var (file, voiceName) = await ParseAshdiVodEpisode(iframeUrl);
-                            if (!string.IsNullOrEmpty(file))
-                            {
-                                result.streams.Add((file, "1080p"));
-                            }
+                            result.streams = await ParseAshdiVodEpisode(iframeUrl);
                         }
                         else
                         {
@@ -1385,9 +1426,9 @@ namespace Uaflix
             }
         }
 
-        async Task<List<(string link, string quality)>> ParseAllZetvideoSources(string iframeUrl)
+        async Task<List<PlayStream>> ParseAllZetvideoSources(string iframeUrl)
         {
-            var result = new List<(string link, string quality)>();
+            var result = new List<PlayStream>();
             var html = await Http.Get(_init.cors(iframeUrl), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://zetvideo.net/") }, proxy: _proxyManager.Get());
             if (string.IsNullOrEmpty(html)) return result;
 
@@ -1400,7 +1441,13 @@ namespace Uaflix
                 var match = Regex.Match(script.InnerText, @"file:\s*""([^""]+\.m3u8)");
                 if (match.Success)
                 {
-                    result.Add((match.Groups[1].Value, "1080p"));
+                    string link = match.Groups[1].Value;
+                    result.Add(new PlayStream
+                    {
+                        link = link,
+                        quality = "1080p",
+                        title = BuildDisplayTitle("Основне джерело", link, 1)
+                    });
                     return result;
                 }
             }
@@ -1410,15 +1457,22 @@ namespace Uaflix
             {
                 foreach (var node in sourceNodes)
                 {
-                    result.Add((node.GetAttributeValue("src", null), node.GetAttributeValue("label", null) ?? node.GetAttributeValue("res", null) ?? "1080p"));
+                    string link = node.GetAttributeValue("src", null);
+                    string quality = node.GetAttributeValue("label", null) ?? node.GetAttributeValue("res", null) ?? "1080p";
+                    result.Add(new PlayStream
+                    {
+                        link = link,
+                        quality = quality,
+                        title = BuildDisplayTitle(quality, link, result.Count + 1)
+                    });
                 }
             }
             return result;
         }
 
-        async Task<List<(string link, string quality)>> ParseAllAshdiSources(string iframeUrl)
+        async Task<List<PlayStream>> ParseAllAshdiSources(string iframeUrl)
         {
-            var result = new List<(string link, string quality)>();
+            var result = new List<PlayStream>();
             var html = await Http.Get(_init.cors(AshdiRequestUrl(iframeUrl)), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") }, proxy: _proxyManager.Get());
              if (string.IsNullOrEmpty(html)) return result;
              
@@ -1430,7 +1484,14 @@ namespace Uaflix
             {
                 foreach (var node in sourceNodes)
                 {
-                    result.Add((node.GetAttributeValue("src", null), node.GetAttributeValue("label", null) ?? node.GetAttributeValue("res", null) ?? "1080p"));
+                    string link = node.GetAttributeValue("src", null);
+                    string quality = node.GetAttributeValue("label", null) ?? node.GetAttributeValue("res", null) ?? "1080p";
+                    result.Add(new PlayStream
+                    {
+                        link = link,
+                        quality = quality,
+                        title = BuildDisplayTitle(quality, link, result.Count + 1)
+                    });
                 }
             }
             return result;
@@ -1453,6 +1514,168 @@ namespace Uaflix
                 if (st.data != null && st.data.Count > 0)
                     return st;
             }
+            return null;
+        }
+
+        private static string WithAshdiMultivoice(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return url;
+
+            if (url.IndexOf("ashdi.vip/vod/", StringComparison.OrdinalIgnoreCase) < 0)
+                return url;
+
+            if (url.IndexOf("multivoice", StringComparison.OrdinalIgnoreCase) >= 0)
+                return url;
+
+            return url.Contains("?") ? $"{url}&multivoice" : $"{url}?multivoice";
+        }
+
+        private static string BuildDisplayTitle(string rawTitle, string link, int index)
+        {
+            string normalized = string.IsNullOrWhiteSpace(rawTitle) ? $"Варіант {index}" : StripMoviePrefix(WebUtility.HtmlDecode(rawTitle).Trim());
+            string qualityTag = DetectQualityTag($"{normalized} {link}");
+            if (string.IsNullOrWhiteSpace(qualityTag))
+                return normalized;
+
+            if (normalized.StartsWith("[4K]", StringComparison.OrdinalIgnoreCase) || normalized.StartsWith("[FHD]", StringComparison.OrdinalIgnoreCase))
+                return normalized;
+
+            return $"{qualityTag} {normalized}";
+        }
+
+        private static string DetectQualityTag(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            if (Quality4kRegex.IsMatch(value))
+                return "[4K]";
+
+            if (QualityFhdRegex.IsMatch(value))
+                return "[FHD]";
+
+            return null;
+        }
+
+        private static string StripMoviePrefix(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return title;
+
+            string normalized = Regex.Replace(title, @"\s+", " ").Trim();
+            int sepIndex = normalized.LastIndexOf(" - ", StringComparison.Ordinal);
+            if (sepIndex <= 0 || sepIndex >= normalized.Length - 3)
+                return normalized;
+
+            string prefix = normalized.Substring(0, sepIndex).Trim();
+            string suffix = normalized.Substring(sepIndex + 3).Trim();
+            if (string.IsNullOrWhiteSpace(suffix))
+                return normalized;
+
+            if (Regex.IsMatch(prefix, @"(19|20)\d{2}"))
+                return suffix;
+
+            return normalized;
+        }
+
+        private static string ExtractPlayerFileArray(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+                return null;
+
+            int searchIndex = 0;
+            while (searchIndex >= 0 && searchIndex < html.Length)
+            {
+                int fileIndex = html.IndexOf("file", searchIndex, StringComparison.OrdinalIgnoreCase);
+                if (fileIndex < 0)
+                    return null;
+
+                int colonIndex = html.IndexOf(':', fileIndex);
+                if (colonIndex < 0)
+                    return null;
+
+                int startIndex = colonIndex + 1;
+                while (startIndex < html.Length && char.IsWhiteSpace(html[startIndex]))
+                    startIndex++;
+
+                if (startIndex < html.Length && (html[startIndex] == '\'' || html[startIndex] == '"'))
+                {
+                    startIndex++;
+                    while (startIndex < html.Length && char.IsWhiteSpace(html[startIndex]))
+                        startIndex++;
+                }
+
+                if (startIndex >= html.Length || html[startIndex] != '[')
+                {
+                    searchIndex = fileIndex + 4;
+                    continue;
+                }
+
+                return ExtractBracketArray(html, startIndex);
+            }
+
+            return null;
+        }
+
+        private static string ExtractBracketArray(string text, int startIndex)
+        {
+            if (startIndex < 0 || startIndex >= text.Length || text[startIndex] != '[')
+                return null;
+
+            int depth = 0;
+            bool inString = false;
+            bool escaped = false;
+            char quoteChar = '\0';
+
+            for (int i = startIndex; i < text.Length; i++)
+            {
+                char ch = text[i];
+
+                if (inString)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                        continue;
+                    }
+
+                    if (ch == '\\')
+                    {
+                        escaped = true;
+                        continue;
+                    }
+
+                    if (ch == quoteChar)
+                    {
+                        inString = false;
+                        quoteChar = '\0';
+                    }
+
+                    continue;
+                }
+
+                if (ch == '"' || ch == '\'')
+                {
+                    inString = true;
+                    quoteChar = ch;
+                    continue;
+                }
+
+                if (ch == '[')
+                {
+                    depth++;
+                    continue;
+                }
+
+                if (ch == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                        return text.Substring(startIndex, i - startIndex + 1);
+                }
+            }
+
             return null;
         }
 

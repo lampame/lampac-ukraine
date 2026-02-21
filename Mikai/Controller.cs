@@ -169,6 +169,21 @@ namespace Mikai.Controllers
 
                 if (NeedsResolve(voice.ProviderName, episode.Url))
                 {
+                    if (episode.Url.Contains("ashdi.vip/vod", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var ashdiStreams = await invoke.ParseAshdiPageStreams(episode.Url);
+                        if (ashdiStreams != null && ashdiStreams.Count > 0)
+                        {
+                            foreach (var ashdiStream in ashdiStreams)
+                            {
+                                string optionName = $"{voice.DisplayName} {ashdiStream.title}";
+                                string ashdiCallUrl = $"{host}/mikai/play?url={HttpUtility.UrlEncode(ashdiStream.link)}&title={HttpUtility.UrlEncode(displayTitle)}";
+                                movieTpl.Append(optionName, accsArgs(ashdiCallUrl), "call");
+                            }
+                            continue;
+                        }
+                    }
+
                     string callUrl = $"{host}/mikai/play?url={HttpUtility.UrlEncode(episode.Url)}&title={HttpUtility.UrlEncode(displayTitle)}";
                     movieTpl.Append(voice.DisplayName, accsArgs(callUrl), "call");
                 }

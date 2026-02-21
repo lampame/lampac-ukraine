@@ -173,15 +173,37 @@ namespace Makhno
                 return await invoke.GetPlayerData(playUrl);
             });
 
-            if (playerData?.File == null)
+            var movieStreams = playerData?.Movies?
+                .Where(m => m != null && !string.IsNullOrEmpty(m.File))
+                .ToList() ?? new List<MovieVariant>();
+
+            if (movieStreams.Count == 0 && !string.IsNullOrEmpty(playerData?.File))
+            {
+                movieStreams.Add(new MovieVariant
+                {
+                    File = playerData.File,
+                    Title = "Основне джерело",
+                    Quality = "auto"
+                });
+            }
+
+            if (movieStreams.Count == 0)
             {
                 OnLog("Makhno HandleMovie: no file parsed");
                 return OnError();
             }
 
-            string movieLink = $"{host}/makhno/play/movie?imdb_id={HttpUtility.UrlEncode(imdb_id)}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&play=true";
-            var tpl = new MovieTpl(title ?? original_title, original_title, 1);
-            tpl.Append(title ?? original_title, accsArgs(movieLink), method: "play");
+            var tpl = new MovieTpl(title ?? original_title, original_title, movieStreams.Count);
+            int index = 1;
+            foreach (var stream in movieStreams)
+            {
+                string label = !string.IsNullOrWhiteSpace(stream.Title)
+                    ? stream.Title
+                    : $"Варіант {index}";
+
+                tpl.Append(label, BuildStreamUrl(init, stream.File));
+                index++;
+            }
 
             return rjson ? Content(tpl.ToJson(), "application/json; charset=utf-8") : Content(tpl.ToHtml(), "text/html; charset=utf-8");
         }
