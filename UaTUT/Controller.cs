@@ -298,14 +298,12 @@ namespace UaTUT
                 if (movieStreams.Count == 0)
                     continue;
 
-                string movieName = $"{movie.Title} ({movie.Year})";
                 foreach (var variant in movieStreams)
                 {
-                    string variantName = !string.IsNullOrWhiteSpace(variant.Title)
+                    string label = !string.IsNullOrWhiteSpace(variant.Title)
                         ? variant.Title
                         : "Варіант";
 
-                    string label = $"{movieName} - {variantName}";
                     movie_tpl.Append(label, BuildStreamUrl(init, variant.File));
                 }
             }

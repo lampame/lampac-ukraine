@@ -266,7 +266,7 @@ namespace Mikai
 
         private static string BuildDisplayTitle(string rawTitle, string link, int index)
         {
-            string normalized = string.IsNullOrWhiteSpace(rawTitle) ? $"Варіант {index}" : WebUtility.HtmlDecode(rawTitle).Trim();
+            string normalized = string.IsNullOrWhiteSpace(rawTitle) ? $"Варіант {index}" : StripMoviePrefix(WebUtility.HtmlDecode(rawTitle).Trim());
             string qualityTag = DetectQualityTag($"{normalized} {link}");
             if (string.IsNullOrWhiteSpace(qualityTag))
                 return normalized;
@@ -289,6 +289,27 @@ namespace Mikai
                 return "[FHD]";
 
             return null;
+        }
+
+        private static string StripMoviePrefix(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return title;
+
+            string normalized = Regex.Replace(title, @"\s+", " ").Trim();
+            int sepIndex = normalized.LastIndexOf(" - ", StringComparison.Ordinal);
+            if (sepIndex <= 0 || sepIndex >= normalized.Length - 3)
+                return normalized;
+
+            string prefix = normalized.Substring(0, sepIndex).Trim();
+            string suffix = normalized.Substring(sepIndex + 3).Trim();
+            if (string.IsNullOrWhiteSpace(suffix))
+                return normalized;
+
+            if (Regex.IsMatch(prefix, @"(19|20)\d{2}"))
+                return suffix;
+
+            return normalized;
         }
 
         private static string ExtractPlayerFileArray(string html)

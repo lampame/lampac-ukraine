@@ -329,7 +329,7 @@ namespace UaTUT
 
         private static string BuildMovieTitle(string rawTitle, string file, int index)
         {
-            string title = string.IsNullOrWhiteSpace(rawTitle) ? $"Варіант {index}" : WebUtility.HtmlDecode(rawTitle).Trim();
+            string title = string.IsNullOrWhiteSpace(rawTitle) ? $"Варіант {index}" : StripMoviePrefix(WebUtility.HtmlDecode(rawTitle).Trim());
             string qualityTag = DetectQualityTag($"{title} {file}");
             if (string.IsNullOrWhiteSpace(qualityTag))
                 return title;
@@ -352,6 +352,27 @@ namespace UaTUT
                 return "[FHD]";
 
             return null;
+        }
+
+        private static string StripMoviePrefix(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return title;
+
+            string normalized = Regex.Replace(title, @"\s+", " ").Trim();
+            int sepIndex = normalized.LastIndexOf(" - ", StringComparison.Ordinal);
+            if (sepIndex <= 0 || sepIndex >= normalized.Length - 3)
+                return normalized;
+
+            string prefix = normalized.Substring(0, sepIndex).Trim();
+            string suffix = normalized.Substring(sepIndex + 3).Trim();
+            if (string.IsNullOrWhiteSpace(suffix))
+                return normalized;
+
+            if (Regex.IsMatch(prefix, @"(19|20)\d{2}"))
+                return suffix;
+
+            return normalized;
         }
 
         private static string ExtractPlayerFileArray(string html)
