@@ -177,8 +177,8 @@ namespace Mikai.Controllers
                             foreach (var ashdiStream in ashdiStreams)
                             {
                                 string optionName = $"{voice.DisplayName} {ashdiStream.title}";
-                                string callUrl = $"{host}/mikai/play?url={HttpUtility.UrlEncode(ashdiStream.link)}&title={HttpUtility.UrlEncode(displayTitle)}";
-                                movieTpl.Append(optionName, accsArgs(callUrl), "call");
+                                string ashdiCallUrl = $"{host}/mikai/play?url={HttpUtility.UrlEncode(ashdiStream.link)}&title={HttpUtility.UrlEncode(displayTitle)}";
+                                movieTpl.Append(optionName, accsArgs(ashdiCallUrl), "call");
                             }
                             continue;
                         }
