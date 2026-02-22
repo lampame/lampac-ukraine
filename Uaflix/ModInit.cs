@@ -18,7 +18,7 @@ namespace Uaflix
 {
     public class ModInit
     {
-        public static double Version => 3.9;
+        public static double Version => 4.0;
 
         public static UaflixSettings UaFlix;
 
