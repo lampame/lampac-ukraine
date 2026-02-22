@@ -1,72 +1,67 @@
-﻿using Newtonsoft.Json;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Shared;
 using Shared.Engine;
-using Newtonsoft.Json.Linq;
-using Shared.Models.Online.Settings;
 using Shared.Models.Module;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.CodeAnalysis.Scripting;
-using Microsoft.Extensions.Caching.Memory;
-using Newtonsoft.Json;
-using Shared.Models;
-using Shared.Models.Events;
 using System;
 using System.Net.Http;
 using System.Net.Mime;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-
+using Uaflix.Models;
 
 namespace Uaflix
 {
     public class ModInit
     {
-        public static double Version => 3.8;
+        public static double Version => 3.9;
 
-        public static OnlinesSettings UaFlix;
+        public static UaflixSettings UaFlix;
+
         public static bool ApnHostProvided;
 
-        public static OnlinesSettings Settings
+        public static UaflixSettings Settings
         {
             get => UaFlix;
             set => UaFlix = value;
         }
 
         /// <summary>
-        /// модуль загружен
+        /// Модуль завантажено.
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            
-
-            UaFlix = new OnlinesSettings("Uaflix", "https://uafix.net", streamproxy: false, useproxy: false)
+            UaFlix = new UaflixSettings("Uaflix", "https://uafix.net", streamproxy: false, useproxy: false)
             {
                 displayname = "UaFlix",
                 group = 0,
                 group_hide = false,
                 globalnameproxy = null,
                 displayindex = 0,
+                login = null,
+                passwd = null,
                 proxy = new Shared.Models.Base.ProxySettings()
                 {
                     useAuth = true,
                     username = "a",
                     password = "a",
                     list = new string[] { "socks5://IP:PORT" }
-                },
-                // Note: OnlinesSettings не має властивості additional, використовуємо інший підхід
+                }
             };
-            
-            var conf = ModuleInvoke.Conf("Uaflix", UaFlix);
+
+            var conf = ModuleInvoke.Conf("Uaflix", UaFlix) ?? JObject.FromObject(UaFlix);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");
-            UaFlix = conf.ToObject<OnlinesSettings>();
+            UaFlix = conf.ToObject<UaflixSettings>();
+
             if (hasApn)
                 ApnHelper.ApplyInitConf(apnEnabled, apnHost, UaFlix);
+
             ApnHostProvided = hasApn && apnEnabled && !string.IsNullOrWhiteSpace(apnHost);
             if (hasApn && apnEnabled)
             {
@@ -77,8 +72,8 @@ namespace Uaflix
                 UaFlix.apnstream = false;
                 UaFlix.apn = null;
             }
-            
-            // Виводити "уточнити пошук"
+
+            // Показувати «уточнити пошук».
             AppInit.conf.online.with_search.Add("uaflix");
         }
     }
@@ -186,6 +181,7 @@ namespace Uaflix
                 _resetTimer = null;
             }
         }
+
         public static bool IsDisconnected()
         {
             return _disconnectTime is not null

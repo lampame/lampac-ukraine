@@ -18,7 +18,7 @@ using Uaflix.Models;
 namespace Uaflix.Controllers
 {
 
-    public class Controller : BaseOnlineController
+    public class Controller : BaseOnlineController<UaflixSettings>
     {
         ProxyManager proxyManager;
 
@@ -42,7 +42,8 @@ namespace Uaflix.Controllers
             OnLog($"Uaflix Index: kinopoisk_id={kinopoisk_id}, imdb_id={imdb_id}, id={id}");
             OnLog($"Uaflix Index: year={year}, source={source}, t={t}, e={e}, rjson={rjson}");
 
-            var invoke = new UaflixInvoke(init, hybridCache, OnLog, proxyManager);
+            var auth = new UaflixAuth(init, memoryCache, OnLog, proxyManager);
+            var invoke = new UaflixInvoke(init, hybridCache, OnLog, proxyManager, auth);
 
             // Обробка параметра checksearch - повертаємо спеціальну відповідь для валідації
             if (checksearch)
@@ -52,32 +53,21 @@ namespace Uaflix.Controllers
 
                 try
                 {
-                    string filmTitle = !string.IsNullOrEmpty(title) ? title : original_title;
-                    string searchUrl = $"{init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(filmTitle)}";
-                    var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) };
-
-                    var searchHtml = await Http.Get(init.cors(searchUrl), headers: headers, proxy: proxyManager.Get(), timeoutSeconds: 10);
-
-                    // Швидка перевірка наявності результатів без повного парсингу
-                    if (!string.IsNullOrEmpty(searchHtml) &&
-                        (searchHtml.Contains("sres-wrap") || searchHtml.Contains("sres-item") || searchHtml.Contains("search-results")))
+                    bool hasContent = await invoke.CheckSearchAvailability(title, original_title);
+                    if (hasContent)
                     {
-                        // Якщо знайдено контент, повертаємо "data-json=" для валідації
-                        OnLog("checksearch: Content found, returning validation response");
+                        OnLog("checksearch: Контент знайдено, повертаю валідаційний маркер");
                         OnLog("=== RETURN: checksearch validation (data-json=) ===");
                         return Content("data-json=", "text/plain; charset=utf-8");
                     }
-                    else
-                    {
-                        // Якщо нічого не знайдено, повертаємо OnError
-                        OnLog("checksearch: No content found");
-                        OnLog("=== RETURN: checksearch OnError ===");
-                        return OnError("uaflix", proxyManager);
-                    }
+
+                    OnLog("checksearch: Контент не знайдено");
+                    OnLog("=== RETURN: checksearch OnError ===");
+                    return OnError("uaflix", proxyManager);
                 }
                 catch (Exception ex)
                 {
-                    OnLog($"checksearch error: {ex.Message}");
+                    OnLog($"checksearch: помилка - {ex.Message}");
                     OnLog("=== RETURN: checksearch exception OnError ===");
                     return OnError("uaflix", proxyManager);
                 }

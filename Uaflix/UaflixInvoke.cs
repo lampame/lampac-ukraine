@@ -23,17 +23,19 @@ namespace Uaflix
         private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase);
         private static readonly Regex QualityFhdRegex = new Regex(@"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b", RegexOptions.IgnoreCase);
 
-        private OnlinesSettings _init;
-        private IHybridCache _hybridCache;
-        private Action<string> _onLog;
-        private ProxyManager _proxyManager;
+        private readonly UaflixSettings _init;
+        private readonly IHybridCache _hybridCache;
+        private readonly Action<string> _onLog;
+        private readonly ProxyManager _proxyManager;
+        private readonly UaflixAuth _auth;
 
-        public UaflixInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public UaflixInvoke(UaflixSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, UaflixAuth auth)
         {
             _init = init;
             _hybridCache = hybridCache;
             _onLog = onLog;
             _proxyManager = proxyManager;
+            _auth = auth;
         }
 
         string AshdiRequestUrl(string url)
@@ -45,6 +47,97 @@ namespace Uaflix
                 return url;
 
             return ApnHelper.WrapUrl(_init, url);
+        }
+
+        public async Task<bool> CheckSearchAvailability(string title, string originalTitle)
+        {
+            string filmTitle = !string.IsNullOrWhiteSpace(title) ? title : originalTitle;
+            if (string.IsNullOrWhiteSpace(filmTitle))
+                return false;
+
+            string searchUrl = $"{_init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(filmTitle)}";
+            var headers = new List<HeadersModel>()
+            {
+                new HeadersModel("User-Agent", "Mozilla/5.0"),
+                new HeadersModel("Referer", _init.host)
+            };
+
+            string searchHtml = await GetHtml(searchUrl, headers, timeoutSeconds: 10);
+            if (string.IsNullOrWhiteSpace(searchHtml))
+                return false;
+
+            return searchHtml.Contains("sres-wrap")
+                || searchHtml.Contains("sres-item")
+                || searchHtml.Contains("search-results");
+        }
+
+        async Task<string> GetHtml(string url, List<HeadersModel> headers, int timeoutSeconds = 15, bool retryOnUnauthorized = true)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return null;
+
+            string requestUrl = _init.cors(url);
+            bool withAuth = ShouldUseAuth(url);
+            var requestHeaders = headers != null ? new List<HeadersModel>(headers) : new List<HeadersModel>();
+
+            if (withAuth && _auth != null)
+            {
+                string cookie = await _auth.GetCookieHeaderAsync();
+                _auth.ApplyCookieHeader(requestHeaders, cookie);
+            }
+
+            var response = await Http.BaseGet(requestUrl,
+                headers: requestHeaders,
+                timeoutSeconds: timeoutSeconds,
+                proxy: _proxyManager.Get(),
+                statusCodeOK: false);
+
+            if (response.response?.StatusCode == HttpStatusCode.Forbidden
+                && retryOnUnauthorized
+                && withAuth
+                && _auth != null
+                && _auth.CanUseCredentials)
+            {
+                _onLog($"UaflixAuth: отримано 403 для {url}, виконую повторну авторизацію");
+                string refreshedCookie = await _auth.GetCookieHeaderAsync(forceRefresh: true);
+                _auth.ApplyCookieHeader(requestHeaders, refreshedCookie);
+
+                response = await Http.BaseGet(requestUrl,
+                    headers: requestHeaders,
+                    timeoutSeconds: timeoutSeconds,
+                    proxy: _proxyManager.Get(),
+                    statusCodeOK: false);
+            }
+
+            if (response.response?.StatusCode != HttpStatusCode.OK)
+            {
+                if (response.response != null)
+                    _onLog($"Uaflix HTTP {(int)response.response.StatusCode} для {url}");
+
+                return null;
+            }
+
+            return response.content;
+        }
+
+        bool ShouldUseAuth(string url)
+        {
+            if (_auth == null || string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(_init?.host))
+                return false;
+
+            try
+            {
+                Uri siteUri = new Uri(_init.host);
+                Uri requestUri;
+                if (!Uri.TryCreate(url, UriKind.Absolute, out requestUri))
+                    requestUri = new Uri(siteUri, url.TrimStart('/'));
+
+                return string.Equals(requestUri.Host, siteUri.Host, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
         }
         
         #region Методи для визначення та парсингу різних типів плеєрів
@@ -144,7 +237,7 @@ namespace Uaflix
                     new HeadersModel("Referer", _init.host)
                 };
 
-                string html = await Http.Get(_init.cors(pageUrl), headers: headers, proxy: _proxyManager.Get());
+                string html = await GetHtml(pageUrl, headers);
                 if (string.IsNullOrWhiteSpace(html))
                     return (null, null);
 
@@ -294,7 +387,7 @@ namespace Uaflix
                     }
                 }
 
-                string html = await Http.Get(_init.cors(AshdiRequestUrl(requestUrl)), headers: headers, proxy: _proxyManager.Get());
+                string html = await GetHtml(AshdiRequestUrl(requestUrl), headers);
                 
                 // Знайти JSON у new Playerjs({file:'...'})
                 var match = Regex.Match(html, @"file:'(\[.+?\])'", RegexOptions.Singleline);
@@ -405,7 +498,7 @@ namespace Uaflix
             
             try
             {
-                string html = await Http.Get(_init.cors(iframeUrl), headers: headers, proxy: _proxyManager.Get());
+                string html = await GetHtml(iframeUrl, headers);
                 
                 // Знайти file:"url"
                 var match = Regex.Match(html, @"file:\s*""([^""]+\.m3u8)""");
@@ -441,7 +534,7 @@ namespace Uaflix
             try
             {
                 string requestUrl = WithAshdiMultivoice(iframeUrl);
-                string html = await Http.Get(_init.cors(AshdiRequestUrl(requestUrl)), headers: headers, proxy: _proxyManager.Get());
+                string html = await GetHtml(AshdiRequestUrl(requestUrl), headers);
                 if (string.IsNullOrEmpty(html))
                     return result;
 
@@ -740,7 +833,7 @@ namespace Uaflix
                 foreach (string query in queries)
                 {
                     string searchUrl = $"{_init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(query)}";
-                    string searchHtml = await Http.Get(_init.cors(searchUrl), headers: headers, proxy: _proxyManager.Get());
+                    string searchHtml = await GetHtml(searchUrl, headers);
                     if (string.IsNullOrWhiteSpace(searchHtml))
                         continue;
 
@@ -926,7 +1019,7 @@ namespace Uaflix
                     new HeadersModel("Referer", _init.host)
                 };
 
-                string html = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+                string html = await GetHtml(url, headers);
                 if (!string.IsNullOrWhiteSpace(html))
                 {
                     var doc = new HtmlDocument();
@@ -1152,7 +1245,7 @@ namespace Uaflix
             try
             {
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
-                var filmHtml = await Http.Get(_init.cors(filmUrl), headers: headers, proxy: _proxyManager.Get());
+                var filmHtml = await GetHtml(filmUrl, headers);
                 var doc = new HtmlDocument();
                 doc.LoadHtml(filmHtml);
                 
@@ -1227,7 +1320,7 @@ namespace Uaflix
             try
             {
                 var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
-                var filmHtml = await Http.Get(_init.cors(filmUrl), headers: headers, proxy: _proxyManager.Get());
+                var filmHtml = await GetHtml(filmUrl, headers);
                 var filmDoc = new HtmlDocument();
                 filmDoc.LoadHtml(filmHtml);
                 
@@ -1265,7 +1358,7 @@ namespace Uaflix
                 if (safeSeasonUrls.Count == 0)
                     return null;
 
-                var seasonTasks = safeSeasonUrls.Select(url => Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get()));
+                var seasonTasks = safeSeasonUrls.Select(url => GetHtml(url, headers));
                 var seasonPagesHtml = await Task.WhenAll(seasonTasks);
 
                 foreach (var html in seasonPagesHtml)
@@ -1326,7 +1419,7 @@ namespace Uaflix
             var result = new Uaflix.Models.PlayResult() { streams = new List<PlayStream>() };
             try
             {
-                string html = await Http.Get(_init.cors(url), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) }, proxy: _proxyManager.Get());
+                string html = await GetHtml(url, new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) });
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
 
@@ -1429,7 +1522,7 @@ namespace Uaflix
         async Task<List<PlayStream>> ParseAllZetvideoSources(string iframeUrl)
         {
             var result = new List<PlayStream>();
-            var html = await Http.Get(_init.cors(iframeUrl), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://zetvideo.net/") }, proxy: _proxyManager.Get());
+            var html = await GetHtml(iframeUrl, new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://zetvideo.net/") });
             if (string.IsNullOrEmpty(html)) return result;
 
             var doc = new HtmlDocument();
@@ -1473,7 +1566,7 @@ namespace Uaflix
         async Task<List<PlayStream>> ParseAllAshdiSources(string iframeUrl)
         {
             var result = new List<PlayStream>();
-            var html = await Http.Get(_init.cors(AshdiRequestUrl(iframeUrl)), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") }, proxy: _proxyManager.Get());
+            var html = await GetHtml(AshdiRequestUrl(iframeUrl), new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") });
              if (string.IsNullOrEmpty(html)) return result;
              
             var doc = new HtmlDocument();
@@ -1500,7 +1593,7 @@ namespace Uaflix
         async Task<SubtitleTpl?> GetAshdiSubtitles(string id)
         {
             string url = $"https://ashdi.vip/vod/{id}";
-            var html = await Http.Get(_init.cors(AshdiRequestUrl(url)), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") }, proxy: _proxyManager.Get());
+            var html = await GetHtml(AshdiRequestUrl(url), new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") });
             string subtitle = new Regex("subtitle(\")?:\"([^\"]+)\"").Match(html).Groups[2].Value;
             if (!string.IsNullOrEmpty(subtitle))
             {
