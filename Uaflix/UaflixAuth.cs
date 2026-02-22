@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace Uaflix
 {
@@ -141,7 +142,7 @@ namespace Uaflix
                 if (response.response == null)
                 {
                     _onLog("UaflixAuth: логін не вдався, немає HTTP-відповіді");
-                    return default;
+                    return (false, null, null);
                 }
 
                 string body = response.content ?? string.Empty;
@@ -176,7 +177,7 @@ namespace Uaflix
                 if (hasAuthError || !hasSession || !hasDleAuthCookie)
                 {
                     _onLog($"UaflixAuth: авторизація неуспішна, status={(int)response.response.StatusCode}");
-                    return default;
+                    return (false, null, null);
                 }
 
                 _onLog("UaflixAuth: авторизація успішна");
@@ -185,7 +186,7 @@ namespace Uaflix
             catch (Exception ex)
             {
                 _onLog($"UaflixAuth: помилка авторизації - {ex.Message}");
-                return default;
+                return (false, null, null);
             }
         }
 
@@ -257,7 +258,7 @@ namespace Uaflix
                 {
                     HttpOnly = true,
                     Expires = name.Equals("PHPSESSID", StringComparison.OrdinalIgnoreCase)
-                        ? default
+                        ? default(DateTime)
                         : DateTime.UtcNow.AddMonths(6)
                 };
 

@@ -1,3 +1,4 @@
+using System;
 using Shared.Models.Online.Settings;
 
 namespace Uaflix.Models
