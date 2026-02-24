@@ -143,7 +143,7 @@ namespace Mikai.Controllers
 
                     if (NeedsResolve(voices[t].ProviderName, streamLink))
                     {
-                        string callUrl = $"{host}/mikai/play?url={HttpUtility.UrlEncode(streamLink)}&title={HttpUtility.UrlEncode(displayTitle)}";
+                        string callUrl = $"{host}/mikai/play?url={HttpUtility.UrlEncode(streamLink)}&title={HttpUtility.UrlEncode(displayTitle)}&serial=1";
                         episodeTpl.Append(episodeName, displayTitle, s.ToString(), ep.Number.ToString(), accsArgs(callUrl), "call");
                     }
                     else
@@ -203,7 +203,7 @@ namespace Mikai.Controllers
         }
 
         [HttpGet("mikai/play")]
-        public async Task<ActionResult> Play(string url, string title = null)
+        public async Task<ActionResult> Play(string url, string title = null, int serial = 0)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -215,9 +215,9 @@ namespace Mikai.Controllers
                 return OnError("mikai", _proxyManager);
 
             var invoke = new MikaiInvoke(init, hybridCache, OnLog, _proxyManager);
-            OnLog($"Mikai Play: url={url}");
+            OnLog($"Mikai Play: url={url}, serial={serial}");
 
-            string streamLink = await invoke.ResolveVideoUrl(url);
+            string streamLink = await invoke.ResolveVideoUrl(url, serial == 1);
             if (string.IsNullOrEmpty(streamLink))
                 return OnError("mikai", _proxyManager);
 

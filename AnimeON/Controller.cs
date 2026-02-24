@@ -154,12 +154,32 @@ namespace AnimeON.Controllers
                         string seasonStr = selectedSeasonNumber.ToString();
                         string episodeStr = ep.Number.ToString();
 
-                        string streamLink = !string.IsNullOrEmpty(ep.Hls) ? ep.Hls : ep.VideoUrl;
+                        // Для серіалів пріоритет — готовий fileUrl з API episodes (без додаткового резолву).
+                        if (!string.IsNullOrEmpty(ep.Hls))
+                        {
+                            List<HeadersModel> streamHeaders = null;
+                            bool forceProxy = false;
+                            if (ep.Hls.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase))
+                            {
+                                streamHeaders = new List<HeadersModel>()
+                                {
+                                    new HeadersModel("User-Agent", "Mozilla/5.0"),
+                                    new HeadersModel("Referer", "https://ashdi.vip/")
+                                };
+                                forceProxy = true;
+                            }
+
+                            string readyStreamUrl = BuildStreamUrl(init, ep.Hls, streamHeaders, forceProxy);
+                            episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, readyStreamUrl);
+                            continue;
+                        }
+
+                        string streamLink = ep.VideoUrl;
                         bool needsResolve = selectedVoiceInfo.PlayerType == "moon" || selectedVoiceInfo.PlayerType == "ashdi";
 
                         if (string.IsNullOrEmpty(streamLink) && ep.EpisodeId > 0)
                         {
-                            string callUrl = $"{host}/animeon/play?episode_id={ep.EpisodeId}";
+                            string callUrl = $"{host}/animeon/play?episode_id={ep.EpisodeId}&serial=1";
                             episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, accsArgs(callUrl), "call");
                             continue;
                         }
@@ -169,7 +189,7 @@ namespace AnimeON.Controllers
 
                         if (needsResolve || streamLink.Contains("moonanime.art") || streamLink.Contains("ashdi.vip/vod"))
                         {
-                            string callUrl = $"{host}/animeon/play?url={HttpUtility.UrlEncode(streamLink)}";
+                            string callUrl = $"{host}/animeon/play?url={HttpUtility.UrlEncode(streamLink)}&serial=1";
                             episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, accsArgs(callUrl), "call");
                         }
                         else
@@ -354,7 +374,7 @@ namespace AnimeON.Controllers
         }
 
         [HttpGet("animeon/play")]
-        public async Task<ActionResult> Play(string url, int episode_id = 0, string title = null)
+        public async Task<ActionResult> Play(string url, int episode_id = 0, string title = null, int serial = 0)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -363,16 +383,17 @@ namespace AnimeON.Controllers
                 return Forbid();
 
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
-            OnLog($"AnimeON Play: url={url}, episode_id={episode_id}");
+            bool disableAshdiMultivoiceForVod = serial == 1;
+            OnLog($"AnimeON Play: url={url}, episode_id={episode_id}, serial={serial}");
 
             string streamLink = null;
             if (episode_id > 0)
             {
-                streamLink = await invoke.ResolveEpisodeStream(episode_id);
+                streamLink = await invoke.ResolveEpisodeStream(episode_id, disableAshdiMultivoiceForVod);
             }
             else if (!string.IsNullOrEmpty(url))
             {
-                streamLink = await invoke.ResolveVideoUrl(url);
+                streamLink = await invoke.ResolveVideoUrl(url, disableAshdiMultivoiceForVod);
             }
             else
             {

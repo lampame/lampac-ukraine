@@ -187,13 +187,13 @@ namespace AnimeON
             return null;
         }
 
-        public async Task<string> ParseAshdiPage(string url)
+        public async Task<string> ParseAshdiPage(string url, bool disableAshdiMultivoiceForVod = false)
         {
-            var streams = await ParseAshdiPageStreams(url);
+            var streams = await ParseAshdiPageStreams(url, disableAshdiMultivoiceForVod);
             return streams?.FirstOrDefault().link;
         }
 
-        public async Task<List<(string title, string link)>> ParseAshdiPageStreams(string url)
+        public async Task<List<(string title, string link)>> ParseAshdiPageStreams(string url, bool disableAshdiMultivoiceForVod = false)
         {
             var streams = new List<(string title, string link)>();
             try
@@ -204,7 +204,7 @@ namespace AnimeON
                     new HeadersModel("Referer", "https://ashdi.vip/")
                 };
 
-                string requestUrl = AshdiRequestUrl(WithAshdiMultivoice(url));
+                string requestUrl = AshdiRequestUrl(WithAshdiMultivoice(url, enable: !disableAshdiMultivoiceForVod));
                 _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
                 string html = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
@@ -256,7 +256,7 @@ namespace AnimeON
             return streams;
         }
 
-        public async Task<string> ResolveEpisodeStream(int episodeId)
+        public async Task<string> ResolveEpisodeStream(int episodeId, bool disableAshdiMultivoiceForVod = false)
         {
             try
             {
@@ -279,7 +279,7 @@ namespace AnimeON
                 if (root.TryGetProperty("videoUrl", out var videoProp))
                 {
                     string videoUrl = videoProp.GetString();
-                    return await ResolveVideoUrl(videoUrl);
+                    return await ResolveVideoUrl(videoUrl, disableAshdiMultivoiceForVod);
                 }
             }
             catch (Exception ex)
@@ -290,7 +290,7 @@ namespace AnimeON
             return null;
         }
 
-        public async Task<string> ResolveVideoUrl(string url)
+        public async Task<string> ResolveVideoUrl(string url, bool disableAshdiMultivoiceForVod = false)
         {
             if (string.IsNullOrEmpty(url))
                 return null;
@@ -299,14 +299,17 @@ namespace AnimeON
                 return await ParseMoonAnimePage(url);
 
             if (url.Contains("ashdi.vip/vod"))
-                return await ParseAshdiPage(url);
+                return await ParseAshdiPage(url, disableAshdiMultivoiceForVod);
 
             return url;
         }
 
-        private static string WithAshdiMultivoice(string url)
+        private static string WithAshdiMultivoice(string url, bool enable = true)
         {
             if (string.IsNullOrWhiteSpace(url))
+                return url;
+
+            if (!enable)
                 return url;
 
             if (url.IndexOf("ashdi.vip/vod/", StringComparison.OrdinalIgnoreCase) < 0)

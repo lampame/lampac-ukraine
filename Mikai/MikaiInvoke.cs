@@ -111,7 +111,7 @@ namespace Mikai
             }
         }
 
-        public async Task<string> ResolveVideoUrl(string url)
+        public async Task<string> ResolveVideoUrl(string url, bool disableAshdiMultivoiceForVod = false)
         {
             if (string.IsNullOrWhiteSpace(url))
                 return null;
@@ -120,7 +120,7 @@ namespace Mikai
                 return await ParseMoonAnimePage(url);
 
             if (url.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase))
-                return await ParseAshdiPage(url);
+                return await ParseAshdiPage(url, disableAshdiMultivoiceForVod);
 
             return url;
         }
@@ -171,13 +171,13 @@ namespace Mikai
             return ApnHelper.WrapUrl(_init, url);
         }
 
-        public async Task<string> ParseAshdiPage(string url)
+        public async Task<string> ParseAshdiPage(string url, bool disableAshdiMultivoiceForVod = false)
         {
-            var streams = await ParseAshdiPageStreams(url);
+            var streams = await ParseAshdiPageStreams(url, disableAshdiMultivoiceForVod);
             return streams?.FirstOrDefault().link;
         }
 
-        public async Task<List<(string title, string link)>> ParseAshdiPageStreams(string url)
+        public async Task<List<(string title, string link)>> ParseAshdiPageStreams(string url, bool disableAshdiMultivoiceForVod = false)
         {
             var streams = new List<(string title, string link)>();
             try
@@ -188,7 +188,7 @@ namespace Mikai
                     new HeadersModel("Referer", "https://ashdi.vip/")
                 };
 
-                string requestUrl = AshdiRequestUrl(WithAshdiMultivoice(url));
+                string requestUrl = AshdiRequestUrl(WithAshdiMultivoice(url, enable: !disableAshdiMultivoiceForVod));
                 _onLog($"Mikai: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
                 string html = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(html))
@@ -250,9 +250,12 @@ namespace Mikai
             };
         }
 
-        private static string WithAshdiMultivoice(string url)
+        private static string WithAshdiMultivoice(string url, bool enable = true)
         {
             if (string.IsNullOrWhiteSpace(url))
+                return url;
+
+            if (!enable)
                 return url;
 
             if (url.IndexOf("ashdi.vip/vod/", StringComparison.OrdinalIgnoreCase) < 0)
