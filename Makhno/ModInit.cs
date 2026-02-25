@@ -23,7 +23,7 @@ namespace Makhno
 {
     public class ModInit
     {
-        public static double Version => 2.0;
+        public static double Version => 2.1;
 
         public static OnlinesSettings Makhno;
         public static bool ApnHostProvided;

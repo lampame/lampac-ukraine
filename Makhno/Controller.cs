@@ -55,7 +55,7 @@ namespace Makhno
                 {
                     try
                     {
-                        await EnrichWormhole(imdb_id, title, original_title, year, resolved, invoke);
+                        await EnrichWormhole(imdb_id, year, resolved, invoke);
                     }
                     catch (Exception ex)
                     {
@@ -479,6 +479,47 @@ namespace Makhno
             }
 
             string searchQuery = originalTitle ?? title;
+
+            string klonSearchCacheKey = $"makhno:klonfun:search:{imdbId ?? searchQuery}";
+            var klonSearchResults = await InvokeCache<List<KlonSearchResult>>(klonSearchCacheKey, TimeSpan.FromMinutes(10), async () =>
+            {
+                return await invoke.SearchKlonFUN(imdbId, title, originalTitle);
+            });
+
+            if (klonSearchResults != null && klonSearchResults.Count > 0)
+            {
+                var klonSelected = invoke.SelectKlonFUNItem(klonSearchResults, year > 0 ? year : null, title, originalTitle);
+                if (klonSelected != null && !string.IsNullOrWhiteSpace(klonSelected.Url))
+                {
+                    string klonPlayerCacheKey = $"makhno:klonfun:player:{klonSelected.Url}";
+                    string klonPlayerUrl = await InvokeCache<string>(klonPlayerCacheKey, TimeSpan.FromMinutes(10), async () =>
+                    {
+                        return await invoke.GetKlonFUNPlayerUrl(klonSelected.Url);
+                    });
+
+                    if (!string.IsNullOrWhiteSpace(klonPlayerUrl))
+                    {
+                        string klonAshdiPath = invoke.ExtractAshdiPath(klonPlayerUrl);
+
+                        return new ResolveResult
+                        {
+                            PlayUrl = klonPlayerUrl,
+                            AshdiPath = klonAshdiPath,
+                            Selected = new SearchResult
+                            {
+                                ImdbId = imdbId,
+                                Title = klonSelected.Title,
+                                TitleEn = originalTitle,
+                                Year = klonSelected.Year > 0 ? klonSelected.Year.ToString() : null,
+                                Category = invoke.IsSerialPlayerUrl(klonPlayerUrl) ? "Серіал" : "Фільм"
+                            },
+                            IsSerial = serial == 1 || invoke.IsSerialPlayerUrl(klonPlayerUrl) || IsSerialByUrl(klonPlayerUrl, serial),
+                            ShouldEnrich = !string.IsNullOrWhiteSpace(klonAshdiPath)
+                        };
+                    }
+                }
+            }
+
             string searchCacheKey = $"makhno:uatut:search:{imdbId ?? searchQuery}";
 
             var searchResults = await InvokeCache<List<SearchResult>>(searchCacheKey, TimeSpan.FromMinutes(10), async () =>
@@ -546,43 +587,33 @@ namespace Makhno
             return url.Contains("/serial/", StringComparison.OrdinalIgnoreCase);
         }
 
-        private async Task EnrichWormhole(string imdbId, string title, string originalTitle, int year, ResolveResult resolved, MakhnoInvoke invoke)
+        private async Task EnrichWormhole(string imdbId, int year, ResolveResult resolved, MakhnoInvoke invoke)
         {
-            if (string.IsNullOrWhiteSpace(imdbId) || resolved?.Selected == null || string.IsNullOrWhiteSpace(resolved.AshdiPath))
+            if (string.IsNullOrWhiteSpace(imdbId) || resolved == null || string.IsNullOrWhiteSpace(resolved.AshdiPath))
                 return;
 
             int? yearValue = year > 0 ? year : null;
-            if (!yearValue.HasValue && int.TryParse(resolved.Selected.Year, out int parsedYear))
+            if (!yearValue.HasValue && int.TryParse(resolved.Selected?.Year, out int parsedYear))
                 yearValue = parsedYear;
 
-            var tmdbResult = await invoke.FetchTmdbByImdb(imdbId, yearValue);
+            var tmdbResult = await invoke.FetchTmdbByImdb(imdbId, yearValue, resolved.IsSerial);
             if (tmdbResult == null)
                 return;
 
-            var (item, mediaType) = tmdbResult.Value;
+            var (item, _) = tmdbResult.Value;
             var tmdbId = item.Value<long?>("id");
             if (!tmdbId.HasValue)
                 return;
 
-            string original = item.Value<string>("original_title")
-                ?? item.Value<string>("original_name")
-                ?? resolved.Selected.TitleEn
-                ?? originalTitle
-                ?? title;
-
-            string resultTitle = resolved.Selected.Title
-                ?? item.Value<string>("title")
-                ?? item.Value<string>("name");
+            string mediaType = resolved.IsSerial ? "tv" : "movie";
+            int serialValue = resolved.IsSerial ? 1 : 0;
 
             var payload = new
             {
                 imdb_id = imdbId,
                 _id = $"{mediaType}:{tmdbId.Value}",
-                original_title = original,
-                title = resultTitle,
-                serial = mediaType == "tv" ? 1 : 0,
-                ashdi = resolved.AshdiPath,
-                year = (resolved.Selected.Year ?? yearValue?.ToString())
+                serial = serialValue,
+                ashdi = resolved.AshdiPath
             };
 
             await invoke.PostWormholeAsync(payload);

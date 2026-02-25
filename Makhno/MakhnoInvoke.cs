@@ -5,6 +5,7 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using HtmlAgilityPack;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Shared;
@@ -17,10 +18,12 @@ namespace Makhno
 {
     public class MakhnoInvoke
     {
-        private const string WormholeHost = "http://wormhole.lampame.v6.rocks/";
+        private const string WormholeHost = "https://wh.lme.isroot.in/";
         private const string AshdiHost = "https://ashdi.vip";
+        private const string KlonHost = "https://klon.fun";
         private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase);
         private static readonly Regex QualityFhdRegex = new Regex(@"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b", RegexOptions.IgnoreCase);
+        private static readonly Regex YearRegex = new Regex(@"(19|20)\d{2}", RegexOptions.IgnoreCase);
 
         private readonly OnlinesSettings _init;
         private readonly IHybridCache _hybridCache;
@@ -58,6 +61,257 @@ namespace Makhno
             catch (Exception ex)
             {
                 _onLog($"Makhno wormhole error: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<List<KlonSearchResult>> SearchKlonFUN(string imdbId, string title, string originalTitle)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(imdbId))
+                {
+                    var byImdb = await SearchKlonFUNByQuery(imdbId);
+                    if (byImdb?.Count > 0)
+                    {
+                        _onLog($"Makhno KlonFUN: знайдено {byImdb.Count} результат(ів) за imdb_id={imdbId}");
+                        return byImdb;
+                    }
+                }
+
+                var queries = new[] { originalTitle, title }
+                    .Where(q => !string.IsNullOrWhiteSpace(q))
+                    .Select(q => q.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var results = new List<KlonSearchResult>();
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (string query in queries)
+                {
+                    var partial = await SearchKlonFUNByQuery(query);
+                    if (partial == null || partial.Count == 0)
+                        continue;
+
+                    foreach (var item in partial)
+                    {
+                        if (!string.IsNullOrWhiteSpace(item?.Url) && seen.Add(item.Url))
+                            results.Add(item);
+                    }
+
+                    if (results.Count > 0)
+                        break;
+                }
+
+                if (results.Count > 0)
+                {
+                    _onLog($"Makhno KlonFUN: знайдено {results.Count} результат(ів) за назвою");
+                    return results;
+                }
+            }
+            catch (Exception ex)
+            {
+                _onLog($"Makhno KlonFUN: помилка пошуку - {ex.Message}");
+            }
+
+            return new List<KlonSearchResult>();
+        }
+
+        public KlonSearchResult SelectKlonFUNItem(List<KlonSearchResult> items, int? year, string title, string titleEn)
+        {
+            if (items == null || items.Count == 0)
+                return null;
+
+            if (items.Count == 1)
+                return items[0];
+
+            var byYearAndTitle = items
+                .Where(item => YearMatch(item, year) && TitleMatch(item?.Title, title, titleEn))
+                .ToList();
+
+            if (byYearAndTitle.Count == 1)
+                return byYearAndTitle[0];
+            if (byYearAndTitle.Count > 1)
+                return null;
+
+            var byTitle = items
+                .Where(item => TitleMatch(item?.Title, title, titleEn))
+                .ToList();
+
+            if (byTitle.Count == 1)
+                return byTitle[0];
+            if (byTitle.Count > 1)
+                return null;
+
+            var byYear = items
+                .Where(item => YearMatch(item, year))
+                .ToList();
+
+            if (byYear.Count == 1)
+                return byYear[0];
+
+            return null;
+        }
+
+        public async Task<string> GetKlonFUNPlayerUrl(string itemUrl)
+        {
+            if (string.IsNullOrWhiteSpace(itemUrl))
+                return null;
+
+            try
+            {
+                var headers = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", Http.UserAgent),
+                    new HeadersModel("Referer", KlonHost)
+                };
+
+                string html = await Http.Get(_init.cors(itemUrl), headers: headers, proxy: _proxyManager.Get());
+                if (string.IsNullOrWhiteSpace(html))
+                    return null;
+
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+
+                string playerUrl = doc.DocumentNode
+                    .SelectSingleNode("//div[contains(@class,'film-player')]//iframe")
+                    ?.GetAttributeValue("data-src", null);
+
+                if (string.IsNullOrWhiteSpace(playerUrl))
+                {
+                    playerUrl = doc.DocumentNode
+                        .SelectSingleNode("//div[contains(@class,'film-player')]//iframe")
+                        ?.GetAttributeValue("src", null);
+                }
+
+                if (string.IsNullOrWhiteSpace(playerUrl))
+                {
+                    playerUrl = doc.DocumentNode
+                        .SelectSingleNode("//iframe[contains(@src,'ashdi.vip') or contains(@src,'zetvideo.net') or contains(@src,'/vod/') or contains(@src,'/serial/')]")
+                        ?.GetAttributeValue("src", null);
+                }
+
+                return NormalizeUrl(KlonHost, playerUrl);
+            }
+            catch (Exception ex)
+            {
+                _onLog($"Makhno KlonFUN: помилка отримання плеєра - {ex.Message}");
+                return null;
+            }
+        }
+
+        public bool IsSerialPlayerUrl(string playerUrl)
+        {
+            return !string.IsNullOrWhiteSpace(playerUrl)
+                && playerUrl.IndexOf("/serial/", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private async Task<List<KlonSearchResult>> SearchKlonFUNByQuery(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return null;
+
+            try
+            {
+                var headers = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", Http.UserAgent),
+                    new HeadersModel("Referer", KlonHost)
+                };
+
+                string form = $"do=search&subaction=search&story={WebUtility.UrlEncode(query)}";
+                string html = await Http.Post(_init.cors(KlonHost), form, headers: headers, proxy: _proxyManager.Get());
+                if (string.IsNullOrWhiteSpace(html))
+                    return null;
+
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+
+                var results = new List<KlonSearchResult>();
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                var nodes = doc.DocumentNode.SelectNodes("//div[contains(@class,'short-news__slide-item')]");
+                if (nodes != null)
+                {
+                    foreach (var node in nodes)
+                    {
+                        string href = node.SelectSingleNode(".//a[contains(@class,'short-news__small-card__link')]")
+                            ?.GetAttributeValue("href", null)
+                            ?? node.SelectSingleNode(".//a[contains(@class,'card-link__style')]")
+                                ?.GetAttributeValue("href", null);
+
+                        href = NormalizeUrl(KlonHost, href);
+                        if (string.IsNullOrWhiteSpace(href) || !seen.Add(href))
+                            continue;
+
+                        string itemTitle = CleanText(node.SelectSingleNode(".//div[contains(@class,'card-link__text')]")?.InnerText);
+                        if (string.IsNullOrWhiteSpace(itemTitle))
+                        {
+                            itemTitle = CleanText(node.SelectSingleNode(".//a[contains(@class,'card-link__style')]")?.InnerText);
+                        }
+
+                        string poster = node.SelectSingleNode(".//img[contains(@class,'card-poster__img')]")
+                            ?.GetAttributeValue("data-src", null);
+                        if (string.IsNullOrWhiteSpace(poster))
+                        {
+                            poster = node.SelectSingleNode(".//img[contains(@class,'card-poster__img')]")
+                                ?.GetAttributeValue("src", null);
+                        }
+
+                        string meta = CleanText(node.SelectSingleNode(".//div[contains(@class,'subscribe-label-module')]")?.InnerText);
+                        int itemYear = 0;
+                        if (!string.IsNullOrWhiteSpace(meta))
+                        {
+                            var yearMatch = YearRegex.Match(meta);
+                            if (yearMatch.Success)
+                                int.TryParse(yearMatch.Value, out itemYear);
+                        }
+
+                        if (string.IsNullOrWhiteSpace(itemTitle))
+                            continue;
+
+                        results.Add(new KlonSearchResult
+                        {
+                            Title = itemTitle,
+                            Url = href,
+                            Poster = NormalizeUrl(KlonHost, poster),
+                            Year = itemYear
+                        });
+                    }
+                }
+
+                if (results.Count == 0)
+                {
+                    var anchors = doc.DocumentNode.SelectNodes("//a[.//span[contains(@class,'searchheading')]]");
+                    if (anchors != null)
+                    {
+                        foreach (var anchor in anchors)
+                        {
+                            string href = NormalizeUrl(KlonHost, anchor.GetAttributeValue("href", null));
+                            if (string.IsNullOrWhiteSpace(href) || !seen.Add(href))
+                                continue;
+
+                            string itemTitle = CleanText(anchor.SelectSingleNode(".//span[contains(@class,'searchheading')]")?.InnerText);
+                            if (string.IsNullOrWhiteSpace(itemTitle))
+                                continue;
+
+                            results.Add(new KlonSearchResult
+                            {
+                                Title = itemTitle,
+                                Url = href,
+                                Poster = string.Empty,
+                                Year = 0
+                            });
+                        }
+                    }
+                }
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _onLog($"Makhno KlonFUN: помилка запиту '{query}' - {ex.Message}");
                 return null;
             }
         }
@@ -194,6 +448,33 @@ namespace Makhno
                 return $"https:{src}";
 
             return src;
+        }
+
+        private static string NormalizeUrl(string host, string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return string.Empty;
+
+            string value = WebUtility.HtmlDecode(url.Trim());
+
+            if (value.StartsWith("//"))
+                return $"https:{value}";
+
+            if (value.StartsWith("/"))
+                return host.TrimEnd('/') + value;
+
+            if (!value.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                return host.TrimEnd('/') + "/" + value.TrimStart('/');
+
+            return value;
+        }
+
+        private static string CleanText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            return HtmlEntity.DeEntitize(value).Trim();
         }
 
         public async Task<PlayerData> GetPlayerData(string playerUrl)
@@ -747,13 +1028,31 @@ namespace Makhno
             return itemYear.HasValue && itemYear.Value == year.Value;
         }
 
+        private bool YearMatch(KlonSearchResult item, int? year)
+        {
+            if (year == null || item == null || item.Year <= 0)
+                return false;
+
+            return item.Year == year.Value;
+        }
+
         private bool TitleMatch(SearchResult item, string title, string titleEn)
         {
             if (item == null)
                 return false;
 
-            string itemTitle = NormalizeTitle(item.Title);
-            string itemTitleEn = NormalizeTitle(item.TitleEn);
+            return TitleMatch(item.Title, item.TitleEn, title, titleEn);
+        }
+
+        private bool TitleMatch(string itemTitle, string title, string titleEn)
+        {
+            return TitleMatch(itemTitle, null, title, titleEn);
+        }
+
+        private bool TitleMatch(string itemTitleRaw, string itemTitleEnRaw, string title, string titleEn)
+        {
+            string itemTitle = NormalizeTitle(itemTitleRaw);
+            string itemTitleEn = NormalizeTitle(itemTitleEnRaw);
             string targetTitle = NormalizeTitle(title);
             string targetTitleEn = NormalizeTitle(titleEn);
 
@@ -788,7 +1087,7 @@ namespace Makhno
             return null;
         }
 
-        public async Task<(JObject item, string mediaType)?> FetchTmdbByImdb(string imdbId, int? year)
+        public async Task<(JObject item, string mediaType)?> FetchTmdbByImdb(string imdbId, int? year, bool isSerial)
         {
             if (string.IsNullOrWhiteSpace(imdbId))
                 return null;
@@ -822,10 +1121,16 @@ namespace Makhno
                 if (candidates.Count == 0)
                     return null;
 
+                string preferredMediaType = isSerial ? "tv" : "movie";
+                var orderedCandidates = candidates
+                    .Where(c => c.mediaType == preferredMediaType)
+                    .Concat(candidates.Where(c => c.mediaType != preferredMediaType))
+                    .ToList();
+
                 if (year.HasValue)
                 {
                     string yearText = year.Value.ToString();
-                    foreach (var candidate in candidates)
+                    foreach (var candidate in orderedCandidates)
                     {
                         string dateValue = candidate.mediaType == "movie"
                             ? candidate.item.Value<string>("release_date")
@@ -836,7 +1141,7 @@ namespace Makhno
                     }
                 }
 
-                return candidates[0];
+                return orderedCandidates[0];
             }
             catch (Exception ex)
             {

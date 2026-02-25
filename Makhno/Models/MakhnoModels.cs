@@ -30,6 +30,14 @@ namespace Makhno.Models
         public string Category { get; set; }
     }
 
+    public class KlonSearchResult
+    {
+        public string Title { get; set; }
+        public string Url { get; set; }
+        public string Poster { get; set; }
+        public int Year { get; set; }
+    }
+
     public class PlayerData
     {
         public string File { get; set; }
