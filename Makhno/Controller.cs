@@ -479,7 +479,6 @@ namespace Makhno
             }
 
             string searchQuery = originalTitle ?? title;
-
             string klonSearchCacheKey = $"makhno:klonfun:search:{imdbId ?? searchQuery}";
             var klonSearchResults = await InvokeCache<List<KlonSearchResult>>(klonSearchCacheKey, TimeSpan.FromMinutes(10), async () =>
             {
@@ -520,60 +519,7 @@ namespace Makhno
                 }
             }
 
-            string searchCacheKey = $"makhno:uatut:search:{imdbId ?? searchQuery}";
-
-            var searchResults = await InvokeCache<List<SearchResult>>(searchCacheKey, TimeSpan.FromMinutes(10), async () =>
-            {
-                return await invoke.SearchUaTUT(searchQuery, imdbId);
-            });
-
-            if (searchResults == null || searchResults.Count == 0)
-                return null;
-
-            var selected = invoke.SelectUaTUTItem(searchResults, imdbId, year > 0 ? year : null, title, originalTitle);
-            if (selected == null)
-                return null;
-
-            var ashdiPath = await InvokeCache<string>($"makhno:ashdi:{selected.Id}", TimeSpan.FromMinutes(10), async () =>
-            {
-                return await invoke.GetAshdiPath(selected.Id);
-            });
-
-            if (string.IsNullOrEmpty(ashdiPath))
-                return null;
-
-            playUrl = invoke.BuildAshdiUrl(ashdiPath);
-
-            bool isSerial = serial == 1 || IsSerialByCategory(selected.Category, serial) || IsSerialByUrl(playUrl, serial);
-
-            return new ResolveResult
-            {
-                PlayUrl = playUrl,
-                AshdiPath = ashdiPath,
-                Selected = selected,
-                IsSerial = isSerial,
-                ShouldEnrich = true
-            };
-        }
-
-        private bool IsSerialByCategory(string category, int serial)
-        {
-            if (string.IsNullOrWhiteSpace(category))
-                return false;
-
-            if (category.Equals("Аніме", StringComparison.OrdinalIgnoreCase)
-                || category.Equals("Аниме", StringComparison.OrdinalIgnoreCase))
-            {
-                return serial == 1;
-            }
-
-            return category.Equals("Серіал", StringComparison.OrdinalIgnoreCase)
-                || category.Equals("Сериал", StringComparison.OrdinalIgnoreCase)
-                || category.Equals("Аніме", StringComparison.OrdinalIgnoreCase)
-                || category.Equals("Аниме", StringComparison.OrdinalIgnoreCase)
-                || category.Equals("Мультсеріал", StringComparison.OrdinalIgnoreCase)
-                || category.Equals("Мультсериал", StringComparison.OrdinalIgnoreCase)
-                || category.Equals("TV", StringComparison.OrdinalIgnoreCase);
+            return null;
         }
 
         private bool IsSerialByUrl(string url, int serial)

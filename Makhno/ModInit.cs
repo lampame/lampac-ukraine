@@ -43,7 +43,6 @@ namespace Makhno
             {
                 displayname = "Махно",
                 displayindex = 0,
-                apihost = "https://uk.uatut.fun/watch",
                 proxy = new Shared.Models.Base.ProxySettings()
                 {
                     useAuth = true,

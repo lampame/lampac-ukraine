@@ -316,140 +316,6 @@ namespace Makhno
             }
         }
 
-        public async Task<List<SearchResult>> SearchUaTUT(string query, string imdbId = null)
-        {
-            try
-            {
-                string searchUrl = $"{_init.apihost}/search.php";
-
-                if (!string.IsNullOrEmpty(imdbId))
-                {
-                    var imdbResults = await PerformSearch(searchUrl, imdbId);
-                    if (imdbResults?.Any() == true)
-                        return imdbResults;
-                }
-
-                if (!string.IsNullOrEmpty(query))
-                {
-                    var titleResults = await PerformSearch(searchUrl, query);
-                    return titleResults ?? new List<SearchResult>();
-                }
-
-                return new List<SearchResult>();
-            }
-            catch (Exception ex)
-            {
-                _onLog($"Makhno UaTUT search error: {ex.Message}");
-                return new List<SearchResult>();
-            }
-        }
-
-        private async Task<List<SearchResult>> PerformSearch(string searchUrl, string query)
-        {
-            string url = $"{searchUrl}?q={WebUtility.UrlEncode(query)}";
-            _onLog($"Makhno UaTUT searching: {url}");
-
-            var headers = new List<HeadersModel>()
-            {
-                new HeadersModel("User-Agent", Http.UserAgent)
-            };
-
-            var response = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
-
-            if (string.IsNullOrEmpty(response))
-                return null;
-
-            try
-            {
-                var results = JsonConvert.DeserializeObject<List<SearchResult>>(response);
-                _onLog($"Makhno UaTUT found {results?.Count ?? 0} results for query: {query}");
-                return results;
-            }
-            catch (Exception ex)
-            {
-                _onLog($"Makhno UaTUT parse error: {ex.Message}");
-                return null;
-            }
-        }
-
-        public async Task<string> GetMoviePageContent(string movieId)
-        {
-            try
-            {
-                string url = $"{_init.apihost}/{movieId}";
-                _onLog($"Makhno UaTUT getting movie page: {url}");
-
-                var headers = new List<HeadersModel>()
-                {
-                    new HeadersModel("User-Agent", Http.UserAgent)
-                };
-                var response = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
-
-                return response;
-            }
-            catch (Exception ex)
-            {
-                _onLog($"Makhno UaTUT GetMoviePageContent error: {ex.Message}");
-                return null;
-            }
-        }
-
-        public string GetPlayerUrl(string moviePageContent)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(moviePageContent))
-                    return null;
-
-                var match = Regex.Match(moviePageContent, @"<iframe[^>]*id=[""']vip-player[""'][^>]*src=[""']([^""']+)", RegexOptions.IgnoreCase);
-                if (match.Success)
-                    return NormalizePlayerUrl(match.Groups[1].Value);
-
-                match = Regex.Match(moviePageContent, @"<iframe[^>]*id=[""']alt-player[""'][^>]*src=[""']([^""']+)", RegexOptions.IgnoreCase);
-                if (match.Success)
-                    return NormalizePlayerUrl(match.Groups[1].Value);
-
-                var iframeMatches = Regex.Matches(moviePageContent, @"<iframe[^>]*(?:id=[""']([^""']+)[""'])?[^>]*src=[""']([^""']+)[""']", RegexOptions.IgnoreCase);
-                foreach (Match iframe in iframeMatches)
-                {
-                    string iframeId = iframe.Groups[1].Value?.ToLowerInvariant();
-                    string src = iframe.Groups[2].Value;
-                    if (string.IsNullOrEmpty(src))
-                        continue;
-
-                    if (!string.IsNullOrEmpty(iframeId) && iframeId.Contains("player"))
-                        return NormalizePlayerUrl(src);
-
-                    if (src.Contains("ashdi.vip", StringComparison.OrdinalIgnoreCase) ||
-                        src.Contains("zetvideo.net", StringComparison.OrdinalIgnoreCase) ||
-                        src.Contains("player", StringComparison.OrdinalIgnoreCase))
-                        return NormalizePlayerUrl(src);
-                }
-
-                var urlMatch = Regex.Match(moviePageContent, @"(https?://[^""'\s>]+/(?:vod|serial)/\d+[^""'\s>]*)", RegexOptions.IgnoreCase);
-                if (urlMatch.Success)
-                    return NormalizePlayerUrl(urlMatch.Groups[1].Value);
-
-                return null;
-            }
-            catch (Exception ex)
-            {
-                _onLog($"Makhno UaTUT GetPlayerUrl error: {ex.Message}");
-                return null;
-            }
-        }
-
-        private string NormalizePlayerUrl(string src)
-        {
-            if (string.IsNullOrEmpty(src))
-                return null;
-
-            if (src.StartsWith("//"))
-                return $"https:{src}";
-
-            return src;
-        }
-
         private static string NormalizeUrl(string host, string url)
         {
             if (string.IsNullOrWhiteSpace(url))
@@ -970,78 +836,12 @@ namespace Makhno
             return $"{AshdiHost}/{path.TrimStart('/')}";
         }
 
-        public async Task<string> GetAshdiPath(string movieId)
-        {
-            if (string.IsNullOrWhiteSpace(movieId))
-                return null;
-
-            var page = await GetMoviePageContent(movieId);
-            if (string.IsNullOrWhiteSpace(page))
-                return null;
-
-            var playerUrl = GetPlayerUrl(page);
-            var path = ExtractAshdiPath(playerUrl);
-            if (!string.IsNullOrWhiteSpace(path))
-                return path;
-
-            return ExtractAshdiPath(page);
-        }
-
-        public SearchResult SelectUaTUTItem(List<SearchResult> items, string imdbId, int? year, string title, string titleEn)
-        {
-            if (items == null || items.Count == 0)
-                return null;
-
-            var candidates = items.Where(item => ImdbMatch(item, imdbId) && YearMatch(item, year)).ToList();
-            if (candidates.Count == 1)
-                return candidates[0];
-            if (candidates.Count > 1)
-                return null;
-
-            candidates = items.Where(item => ImdbMatch(item, imdbId) && TitleMatch(item, title, titleEn)).ToList();
-            if (candidates.Count == 1)
-                return candidates[0];
-            if (candidates.Count > 1)
-                return null;
-
-            candidates = items.Where(item => YearMatch(item, year) && TitleMatch(item, title, titleEn)).ToList();
-            if (candidates.Count == 1)
-                return candidates[0];
-
-            return null;
-        }
-
-        private bool ImdbMatch(SearchResult item, string imdbId)
-        {
-            if (string.IsNullOrWhiteSpace(imdbId) || item == null)
-                return false;
-
-            return string.Equals(item.ImdbId?.Trim(), imdbId.Trim(), StringComparison.OrdinalIgnoreCase);
-        }
-
-        private bool YearMatch(SearchResult item, int? year)
-        {
-            if (year == null || item == null)
-                return false;
-
-            var itemYear = YearInt(item.Year);
-            return itemYear.HasValue && itemYear.Value == year.Value;
-        }
-
         private bool YearMatch(KlonSearchResult item, int? year)
         {
             if (year == null || item == null || item.Year <= 0)
                 return false;
 
             return item.Year == year.Value;
-        }
-
-        private bool TitleMatch(SearchResult item, string title, string titleEn)
-        {
-            if (item == null)
-                return false;
-
-            return TitleMatch(item.Title, item.TitleEn, title, titleEn);
         }
 
         private bool TitleMatch(string itemTitle, string title, string titleEn)
@@ -1074,17 +874,6 @@ namespace Makhno
             text = Regex.Replace(text, @"\b\d+\b", " ");
             text = Regex.Replace(text, @"\s+", " ");
             return text.Trim();
-        }
-
-        private int? YearInt(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
-
-            if (int.TryParse(value.Trim(), out int result))
-                return result;
-
-            return null;
         }
 
         public async Task<(JObject item, string mediaType)?> FetchTmdbByImdb(string imdbId, int? year, bool isSerial)
