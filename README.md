@@ -8,3 +8,4 @@ Dead modules archive for lampac-ukraine.
 - AshdiBase
 - CikavaIdeya
 - UAKino
+- UaTUT

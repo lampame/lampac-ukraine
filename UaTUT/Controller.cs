@@ -1,0 +1,550 @@
+using Shared.Engine;
+using System;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using System.Collections.Generic;
+using System.Web;
+using System.Linq;
+using Shared;
+using Shared.Models.Templates;
+using UaTUT.Models;
+using System.Text.RegularExpressions;
+using Shared.Models.Online.Settings;
+using Shared.Models;
+
+namespace UaTUT
+{
+    [Route("uatut")]
+    public class UaTUTController : BaseOnlineController
+    {
+        ProxyManager proxyManager;
+
+        public UaTUTController() : base(ModInit.Settings)
+        {
+            proxyManager = new ProxyManager(ModInit.UaTUT);
+        }
+
+        [HttpGet]
+        async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, int season = -1, bool rjson = false, bool checksearch = false)
+        {
+            await UpdateService.ConnectAsync(host);
+
+            var init = await loadKit(ModInit.UaTUT);
+            if (!init.enable)
+                return OnError();
+            Initialization(init);
+
+            OnLog($"UaTUT: {title} (serial={serial}, s={s}, season={season}, t={t})");
+
+            var invoke = new UaTUTInvoke(init, hybridCache, OnLog, proxyManager);
+
+            // Використовуємо кеш для пошуку, щоб уникнути дублювання запитів
+            string searchCacheKey = $"uatut:search:{imdb_id ?? original_title ?? title}";
+            var searchResults = await InvokeCache<List<SearchResult>>(searchCacheKey, TimeSpan.FromMinutes(10), async () =>
+            {
+                return await invoke.Search(original_title ?? title, imdb_id);
+            });
+
+            if (checksearch)
+            {
+                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                    return OnError();
+
+                if (searchResults != null && searchResults.Any())
+                    return Content("data-json=", "text/plain; charset=utf-8");
+
+                return OnError();
+            }
+
+            if (searchResults == null || !searchResults.Any())
+            {
+                OnLog("UaTUT: No search results found");
+                return OnError();
+            }
+
+            if (serial == 1)
+            {
+                return await HandleSeries(searchResults, imdb_id, kinopoisk_id, title, original_title, year, s, season, t, rjson, invoke, preferSeries: true);
+            }
+            else
+            {
+                return await HandleMovie(searchResults, rjson, invoke, preferSeries: false);
+            }
+        }
+
+        private async Task<ActionResult> HandleSeries(List<SearchResult> searchResults, string imdb_id, long kinopoisk_id, string title, string original_title, int year, int s, int season, string t, bool rjson, UaTUTInvoke invoke, bool preferSeries)
+        {
+            var init = ModInit.UaTUT;
+
+            // Фільтруємо тільки серіали та аніме
+            var seriesResults = searchResults.Where(r => IsSeriesCategory(r.Category, preferSeries)).ToList();
+
+            if (!seriesResults.Any())
+            {
+                OnLog("UaTUT: No series found in search results");
+                return OnError();
+            }
+
+            if (s == -1) // Крок 1: Відображення списку серіалів
+            {
+                var season_tpl = new SeasonTpl();
+                for (int i = 0; i < seriesResults.Count; i++)
+                {
+                    var series = seriesResults[i];
+                    string seasonName = $"{series.Title} ({series.Year})";
+                    string link = $"{host}/uatut?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={i}";
+                    season_tpl.Append(seasonName, link, i.ToString());
+                }
+
+                OnLog($"UaTUT: generated {seriesResults.Count} series options");
+                return rjson ? Content(season_tpl.ToJson(), "application/json; charset=utf-8") : Content(season_tpl.ToHtml(), "text/html; charset=utf-8");
+            }
+            else if (season == -1) // Крок 2: Відображення сезонів для вибраного серіалу
+            {
+                if (s >= seriesResults.Count)
+                    return OnError();
+
+                var selectedSeries = seriesResults[s];
+
+                // Використовуємо кеш для уникнення повторних запитів
+                string cacheKey = $"uatut:player_data:{selectedSeries.Id}";
+                var playerData = await InvokeCache<PlayerData>(cacheKey, TimeSpan.FromMinutes(10), async () =>
+                {
+                    return await GetPlayerDataCached(selectedSeries, invoke);
+                });
+
+                if (playerData?.Voices == null || !playerData.Voices.Any())
+                    return OnError();
+
+                // Використовуємо першу озвучку для отримання списку сезонів
+                var firstVoice = playerData.Voices.First();
+
+                var season_tpl = new SeasonTpl();
+                for (int i = 0; i < firstVoice.Seasons.Count; i++)
+                {
+                    var seasonItem = firstVoice.Seasons[i];
+                    string seasonName = seasonItem.Title ?? $"Сезон {i + 1}";
+                    int seasonNumber = i + 1;
+                    string link = $"{host}/uatut?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&season={seasonNumber}";
+                    season_tpl.Append(seasonName, link, seasonNumber.ToString());
+                }
+
+                OnLog($"UaTUT: found {firstVoice.Seasons.Count} seasons");
+                return rjson ? Content(season_tpl.ToJson(), "application/json; charset=utf-8") : Content(season_tpl.ToHtml(), "text/html; charset=utf-8");
+            }
+            else // Крок 3: Відображення озвучок та епізодів для вибраного сезону
+            {
+                if (s >= seriesResults.Count)
+                    return OnError();
+
+                var selectedSeries = seriesResults[s];
+
+                // Використовуємо той самий кеш
+                string cacheKey = $"uatut:player_data:{selectedSeries.Id}";
+                var playerData = await InvokeCache<PlayerData>(cacheKey, TimeSpan.FromMinutes(10), async () =>
+                {
+                    return await GetPlayerDataCached(selectedSeries, invoke);
+                });
+
+                if (playerData?.Voices == null || !playerData.Voices.Any())
+                    return OnError();
+
+                int seasonIndex = season > 0 ? season - 1 : season;
+
+                // Перевіряємо чи існує вибраний сезон
+                if (seasonIndex >= playerData.Voices.First().Seasons.Count || seasonIndex < 0)
+                    return OnError();
+
+                var voice_tpl = new VoiceTpl();
+                var episode_tpl = new EpisodeTpl();
+
+                // Автоматично вибираємо першу озвучку якщо не вибрана
+                string selectedVoice = t;
+                if (string.IsNullOrEmpty(selectedVoice) && playerData.Voices.Any())
+                {
+                    selectedVoice = "0"; // Перша озвучка
+                }
+
+                // Додаємо всі озвучки
+                for (int i = 0; i < playerData.Voices.Count; i++)
+                {
+                    var voice = playerData.Voices[i];
+                    string voiceName = voice.Name ?? $"Озвучка {i + 1}";
+                    int seasonNumber = seasonIndex + 1;
+                    string voiceLink = $"{host}/uatut?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&season={seasonNumber}&t={i}";
+                    bool isActive = selectedVoice == i.ToString();
+                    voice_tpl.Append(voiceName, isActive, voiceLink);
+                }
+
+                // Додаємо епізоди тільки для вибраного сезону та озвучки
+                if (!string.IsNullOrEmpty(selectedVoice) && int.TryParse(selectedVoice, out int voiceIndex) && voiceIndex < playerData.Voices.Count)
+                {
+                    var selectedVoiceData = playerData.Voices[voiceIndex];
+
+                    if (seasonIndex < selectedVoiceData.Seasons.Count)
+                    {
+                        var selectedSeason = selectedVoiceData.Seasons[seasonIndex];
+
+                        // Сортуємо епізоди та додаємо правильну нумерацію
+                        var sortedEpisodes = selectedSeason.Episodes.OrderBy(e => ExtractEpisodeNumber(e.Title)).ToList();
+
+                        for (int i = 0; i < sortedEpisodes.Count; i++)
+                        {
+                            var episode = sortedEpisodes[i];
+                            string episodeName = episode.Title;
+                            string episodeFile = episode.File;
+
+                            if (!string.IsNullOrEmpty(episodeFile))
+                            {
+                                string streamUrl = BuildStreamUrl(init, episodeFile);
+                                int seasonNumber = seasonIndex + 1;
+                                episode_tpl.Append(
+                                    episodeName,
+                                    title ?? original_title,
+                                    seasonNumber.ToString(),
+                                    (i + 1).ToString("D2"),
+                                    streamUrl
+                                );
+                            }
+                        }
+                    }
+                }
+
+                int voiceCount = playerData.Voices.Count;
+                int episodeCount = 0;
+                if (!string.IsNullOrEmpty(selectedVoice) && int.TryParse(selectedVoice, out int vIndex) && vIndex < playerData.Voices.Count)
+                {
+                    var selectedVoiceData = playerData.Voices[vIndex];
+                    if (season < selectedVoiceData.Seasons.Count)
+                    {
+                        episodeCount = selectedVoiceData.Seasons[season].Episodes.Count;
+                    }
+                }
+
+                OnLog($"UaTUT: generated {voiceCount} voices, {episodeCount} episodes");
+
+                episode_tpl.Append(voice_tpl);
+                if (rjson)
+                    return Content(episode_tpl.ToJson(), "application/json; charset=utf-8");
+
+                return Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
+            }
+        }
+
+        // Допоміжний метод для кешованого отримання даних плеєра
+        private async Task<PlayerData> GetPlayerDataCached(SearchResult selectedSeries, UaTUTInvoke invoke)
+        {
+            var pageContent = await invoke.GetMoviePageContent(selectedSeries.Id);
+            if (string.IsNullOrEmpty(pageContent))
+                return null;
+
+            var playerUrl = await invoke.GetPlayerUrl(pageContent);
+            if (string.IsNullOrEmpty(playerUrl))
+                return null;
+
+            return await invoke.GetPlayerData(playerUrl);
+        }
+
+        // Допоміжний метод для витягування номера епізоду з назви
+        private int ExtractEpisodeNumber(string title)
+        {
+            if (string.IsNullOrEmpty(title))
+                return 0;
+
+            var match = Regex.Match(title, @"(\d+)");
+            return match.Success ? int.Parse(match.Groups[1].Value) : 0;
+        }
+
+        private async Task<ActionResult> HandleMovie(List<SearchResult> searchResults, bool rjson, UaTUTInvoke invoke, bool preferSeries)
+        {
+            var init = ModInit.UaTUT;
+
+            // Фільтруємо тільки фільми
+            var movieResults = searchResults.Where(r => IsMovieCategory(r.Category, preferSeries)).ToList();
+
+            if (!movieResults.Any())
+            {
+                OnLog("UaTUT: No movies found in search results");
+                return OnError();
+            }
+
+            var movie_tpl = new MovieTpl(title: "UaTUT Movies", original_title: "UaTUT Movies");
+
+            foreach (var movie in movieResults)
+            {
+                var pageContent = await invoke.GetMoviePageContent(movie.Id);
+                if (string.IsNullOrEmpty(pageContent))
+                    continue;
+
+                var playerUrl = await invoke.GetPlayerUrl(pageContent);
+                if (string.IsNullOrEmpty(playerUrl))
+                    continue;
+
+                var playerData = await invoke.GetPlayerData(playerUrl);
+                var movieStreams = playerData?.Movies?
+                    .Where(m => m != null && !string.IsNullOrEmpty(m.File))
+                    .ToList() ?? new List<MovieVariant>();
+
+                if (movieStreams.Count == 0 && !string.IsNullOrEmpty(playerData?.File))
+                {
+                    movieStreams.Add(new MovieVariant
+                    {
+                        File = playerData.File,
+                        Title = "Основне джерело",
+                        Quality = "auto"
+                    });
+                }
+
+                if (movieStreams.Count == 0)
+                    continue;
+
+                foreach (var variant in movieStreams)
+                {
+                    string label = !string.IsNullOrWhiteSpace(variant.Title)
+                        ? variant.Title
+                        : "Варіант";
+
+                    movie_tpl.Append(label, BuildStreamUrl(init, variant.File));
+                }
+            }
+
+            if (movie_tpl.data == null || movie_tpl.data.Count == 0)
+            {
+                OnLog("UaTUT: No playable movies found");
+                return OnError();
+            }
+
+            OnLog($"UaTUT: found {movieResults.Count} movies");
+            return rjson ? Content(movie_tpl.ToJson(), "application/json; charset=utf-8") : Content(movie_tpl.ToHtml(), "text/html; charset=utf-8");
+        }
+
+        [HttpGet]
+        [Route("play/movie")]
+        async public Task<ActionResult> PlayMovie(long imdb_id, string title, int year, string stream = null, bool play = false, bool rjson = false)
+        {
+            await UpdateService.ConnectAsync(host);
+
+            var init = await loadKit(ModInit.UaTUT);
+            if (!init.enable)
+                return OnError();
+            Initialization(init);
+
+            OnLog($"UaTUT PlayMovie: {title} ({year}) play={play}");
+
+            var invoke = new UaTUTInvoke(init, hybridCache, OnLog, proxyManager);
+
+            // Використовуємо кеш для пошуку
+            string searchCacheKey = $"uatut:search:{title}";
+            var searchResults = await InvokeCache<List<SearchResult>>(searchCacheKey, TimeSpan.FromMinutes(10), async () =>
+            {
+                return await invoke.Search(title, null);
+            });
+
+            if (searchResults == null || !searchResults.Any())
+            {
+                OnLog("UaTUT PlayMovie: No search results found");
+                return OnError();
+            }
+
+            // Шукаємо фільм за ID
+            var movie = searchResults.FirstOrDefault(r => r.Id == imdb_id.ToString() && r.Category == "Фільм");
+            if (movie == null)
+            {
+                OnLog("UaTUT PlayMovie: Movie not found");
+                return OnError();
+            }
+
+            var pageContent = await invoke.GetMoviePageContent(movie.Id);
+            if (string.IsNullOrEmpty(pageContent))
+                return OnError();
+
+            var playerUrl = await invoke.GetPlayerUrl(pageContent);
+            if (string.IsNullOrEmpty(playerUrl))
+                return OnError();
+
+            var playerData = await invoke.GetPlayerData(playerUrl);
+            string selectedFile = HttpUtility.UrlDecode(stream);
+            if (string.IsNullOrWhiteSpace(selectedFile))
+                selectedFile = playerData?.Movies?.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m.File))?.File ?? playerData?.File;
+
+            if (string.IsNullOrWhiteSpace(selectedFile))
+                return OnError();
+
+            OnLog($"UaTUT PlayMovie: обрано потік {selectedFile}");
+
+            string streamUrl = BuildStreamUrl(init, selectedFile);
+
+            // Якщо play=true, робимо Redirect, інакше повертаємо JSON
+            if (play)
+                return UpdateService.Validate(Redirect(streamUrl));
+            else
+                return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, title), "application/json; charset=utf-8"));
+        }
+
+        [HttpGet]
+        [Route("play")]
+        async public Task<ActionResult> Play(long id, string imdb_id, long kinopoisk_id, string title, string original_title, int year, int s, int season, string t, string episodeId, bool play = false, bool rjson = false)
+        {
+            await UpdateService.ConnectAsync(host);
+
+            var init = await loadKit(ModInit.UaTUT);
+            if (!init.enable)
+                return OnError();
+            Initialization(init);
+
+            OnLog($"UaTUT Play: {title} (s={s}, season={season}, t={t}, episodeId={episodeId}) play={play}");
+
+            var invoke = new UaTUTInvoke(init, hybridCache, OnLog, proxyManager);
+
+            // Використовуємо кеш для пошуку
+            string searchCacheKey = $"uatut:search:{imdb_id ?? original_title ?? title}";
+            var searchResults = await InvokeCache<List<SearchResult>>(searchCacheKey, TimeSpan.FromMinutes(10), async () =>
+            {
+                return await invoke.Search(original_title ?? title, imdb_id);
+            });
+
+            if (searchResults == null || !searchResults.Any())
+            {
+                OnLog("UaTUT Play: No search results found");
+                return OnError();
+            }
+
+            // Фільтруємо тільки серіали та аніме
+            var seriesResults = searchResults.Where(r => r.Category == "Серіал" || r.Category == "Аніме").ToList();
+
+            if (!seriesResults.Any() || s >= seriesResults.Count)
+            {
+                OnLog("UaTUT Play: No series found or invalid series index");
+                return OnError();
+            }
+
+            var selectedSeries = seriesResults[s];
+
+            // Використовуємо той самий кеш як і в HandleSeries
+            string cacheKey = $"uatut:player_data:{selectedSeries.Id}";
+            var playerData = await InvokeCache<PlayerData>(cacheKey, TimeSpan.FromMinutes(10), async () =>
+            {
+                return await GetPlayerDataCached(selectedSeries, invoke);
+            });
+
+            if (playerData?.Voices == null || !playerData.Voices.Any())
+            {
+                OnLog("UaTUT Play: No player data or voices found");
+                return OnError();
+            }
+
+            // Знаходимо потрібний епізод в конкретному сезоні та озвучці
+            if (int.TryParse(t, out int voiceIndex) && voiceIndex < playerData.Voices.Count)
+            {
+                var selectedVoice = playerData.Voices[voiceIndex];
+
+                int seasonIndex = season > 0 ? season - 1 : season;
+                if (seasonIndex >= 0 && seasonIndex < selectedVoice.Seasons.Count)
+                {
+                    var selectedSeasonData = selectedVoice.Seasons[seasonIndex];
+
+                    foreach (var episode in selectedSeasonData.Episodes)
+                    {
+                        if (episode.Id == episodeId && !string.IsNullOrEmpty(episode.File))
+                        {
+                            OnLog($"UaTUT Play: Found episode {episode.Title}, stream: {episode.File}");
+
+                            string streamUrl = BuildStreamUrl(init, episode.File);
+                            string episodeTitle = $"{title ?? original_title} - {episode.Title}";
+
+                            // Якщо play=true, робимо Redirect, інакше повертаємо JSON
+                            if (play)
+                                return UpdateService.Validate(Redirect(streamUrl));
+                            else
+                                return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, episodeTitle), "application/json; charset=utf-8"));
+                        }
+                    }
+                }
+                else
+                {
+                    OnLog($"UaTUT Play: Invalid season {season}, available seasons: {selectedVoice.Seasons.Count}");
+                }
+            }
+            else
+            {
+                OnLog($"UaTUT Play: Invalid voice index {t}, available voices: {playerData.Voices.Count}");
+            }
+
+            OnLog("UaTUT Play: Episode not found");
+            return OnError();
+        }
+
+        private static string StripLampacArgs(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(
+                url,
+                @"([?&])(account_email|uid|nws_id)=[^&]*",
+                "$1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
+        }
+
+        private static bool IsMovieCategory(string category, bool preferSeries)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+                return false;
+
+            var value = category.Trim().ToLowerInvariant();
+            if (IsAnimeCategory(value))
+                return !preferSeries;
+
+            return value == "фільм" || value == "фильм" || value == "мультфільм" || value == "мультфильм" || value == "movie";
+        }
+
+        private static bool IsSeriesCategory(string category, bool preferSeries)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+                return false;
+
+            var value = category.Trim().ToLowerInvariant();
+            if (IsAnimeCategory(value))
+                return preferSeries;
+
+            return value == "серіал" || value == "сериал"
+                || value == "аніме" || value == "аниме"
+                || value == "мультсеріал" || value == "мультсериал"
+                || value == "tv";
+        }
+
+        private static bool IsAnimeCategory(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            return value == "аніме" || value == "аниме";
+        }
+
+        string BuildStreamUrl(OnlinesSettings init, string streamLink)
+        {
+            string link = streamLink?.Trim();
+            if (string.IsNullOrEmpty(link))
+                return link;
+
+            link = StripLampacArgs(link);
+
+            if (ApnHelper.IsEnabled(init))
+            {
+                if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))
+                    return ApnHelper.WrapUrl(init, link);
+
+                var noApn = (OnlinesSettings)init.Clone();
+                noApn.apnstream = false;
+                noApn.apn = null;
+                return HostStreamProxy(noApn, link);
+            }
+
+            return HostStreamProxy(init, link);
+        }
+    }
+}
