@@ -4,7 +4,6 @@
 ### TVShows and Movies
 
 - [x] UAFlix
-- [x] UATuTFun
 - [x] Makhno 
 - [x] StarLight
 - [x] KlonFUN
@@ -42,9 +41,7 @@ Create or update the module/repository.yaml file
     - AnimeON
     - Unimay
     - Mikai
-    - UATuT
     - Uaflix
-    - UaTUT
     - Bamboo
     - Makhno
     - StarLight
@@ -92,7 +89,6 @@ Parameter compatibility:
 Sources with APN support:
 - AnimeON
 - Uaflix
-- UaTUT
 - Mikai
 - Makhno
 - KlonFUN

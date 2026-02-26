@@ -14,7 +14,6 @@ fi
 # Формат: SourceName|PageURL|ProbeURL
 SOURCES=$(cat <<'SRC'
 Uaflix|https://uafix.net/films/nozhi-nagolo-3/|
-UaTUT|https://uk.uatut.fun/watch/2851|
 AnimeON|https://animeon.club/anime/924-provodzhalnicya-friren|https://animeon.club/api/player/47960/episode
 Bamboo|https://bambooua.com/dorama/938-18_again.html|
 Mikai|https://mikai.me/anime/1272-friren-shcho-provodzhaie-v-ostanniu-put|https://api.mikai.me/v1/anime/1272
