@@ -1,43 +1,7 @@
-using Newtonsoft.Json;
 using System.Collections.Generic;
 
 namespace Makhno.Models
 {
-    public class SearchResult
-    {
-        [JsonProperty("id")]
-        public string Id { get; set; }
-
-        [JsonProperty("imdb_id")]
-        public string ImdbId { get; set; }
-
-        [JsonProperty("title")]
-        public string Title { get; set; }
-
-        [JsonProperty("title_alt")]
-        public string TitleAlt { get; set; }
-
-        [JsonProperty("title_en")]
-        public string TitleEn { get; set; }
-
-        [JsonProperty("title_ru")]
-        public string TitleRu { get; set; }
-
-        [JsonProperty("year")]
-        public string Year { get; set; }
-
-        [JsonProperty("category")]
-        public string Category { get; set; }
-    }
-
-    public class KlonSearchResult
-    {
-        public string Title { get; set; }
-        public string Url { get; set; }
-        public string Poster { get; set; }
-        public int Year { get; set; }
-    }
-
     public class PlayerData
     {
         public string File { get; set; }

@@ -45,24 +45,9 @@ namespace Makhno
 
             var invoke = new MakhnoInvoke(init, hybridCache, OnLog, proxyManager);
 
-            var resolved = await ResolvePlaySource(imdb_id, title, original_title, year, serial, invoke);
+            var resolved = await ResolvePlaySource(imdb_id, serial, invoke);
             if (resolved == null || string.IsNullOrEmpty(resolved.PlayUrl))
                 return OnError();
-
-            if (resolved.ShouldEnrich)
-            {
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await EnrichWormhole(imdb_id, year, resolved, invoke);
-                    }
-                    catch (Exception ex)
-                    {
-                        OnLog($"Makhno wormhole enrich failed: {ex.Message}");
-                    }
-                });
-            }
 
             if (resolved.IsSerial)
                 return await HandleSerial(resolved.PlayUrl, imdb_id, title, original_title, year, t, season, rjson, invoke);
@@ -84,7 +69,7 @@ namespace Makhno
             OnLog($"Makhno Play: {title} (s={s}, season={season}, t={t}, episodeId={episodeId}) play={play}");
 
             var invoke = new MakhnoInvoke(init, hybridCache, OnLog, proxyManager);
-            var resolved = await ResolvePlaySource(imdb_id, title, original_title, year, serial: 1, invoke);
+            var resolved = await ResolvePlaySource(imdb_id, serial: 1, invoke);
             if (resolved == null || string.IsNullOrEmpty(resolved.PlayUrl))
                 return OnError();
 
@@ -142,7 +127,7 @@ namespace Makhno
             OnLog($"Makhno PlayMovie: {title} ({year}) play={play}");
 
             var invoke = new MakhnoInvoke(init, hybridCache, OnLog, proxyManager);
-            var resolved = await ResolvePlaySource(imdb_id, title, original_title, year, serial: 0, invoke);
+            var resolved = await ResolvePlaySource(imdb_id, serial: 0, invoke);
             if (resolved == null || string.IsNullOrEmpty(resolved.PlayUrl))
                 return OnError();
 
@@ -455,68 +440,24 @@ namespace Makhno
             return result;
         }
 
-        private async Task<ResolveResult> ResolvePlaySource(string imdbId, string title, string originalTitle, int year, int serial, MakhnoInvoke invoke)
+        private async Task<ResolveResult> ResolvePlaySource(string imdbId, int serial, MakhnoInvoke invoke)
         {
-            string playUrl = null;
+            if (string.IsNullOrWhiteSpace(imdbId))
+                return null;
 
-            if (!string.IsNullOrEmpty(imdbId))
+            string cacheKey = $"makhno:wormhole:{imdbId}";
+            string playUrl = await InvokeCache<string>(cacheKey, TimeSpan.FromMinutes(5), async () =>
             {
-                string cacheKey = $"makhno:wormhole:{imdbId}";
-                playUrl = await InvokeCache<string>(cacheKey, TimeSpan.FromMinutes(5), async () =>
-                {
-                    return await invoke.GetWormholePlay(imdbId);
-                });
-
-                if (!string.IsNullOrEmpty(playUrl))
-                {
-                    return new ResolveResult
-                    {
-                        PlayUrl = playUrl,
-                        IsSerial = IsSerialByUrl(playUrl, serial),
-                        ShouldEnrich = false
-                    };
-                }
-            }
-
-            string searchQuery = originalTitle ?? title;
-            string klonSearchCacheKey = $"makhno:klonfun:search:{imdbId ?? searchQuery}";
-            var klonSearchResults = await InvokeCache<List<KlonSearchResult>>(klonSearchCacheKey, TimeSpan.FromMinutes(10), async () =>
-            {
-                return await invoke.SearchKlonFUN(imdbId, title, originalTitle);
+                return await invoke.GetWormholePlay(imdbId);
             });
 
-            if (klonSearchResults != null && klonSearchResults.Count > 0)
+            if (!string.IsNullOrEmpty(playUrl))
             {
-                var klonSelected = invoke.SelectKlonFUNItem(klonSearchResults, year > 0 ? year : null, title, originalTitle);
-                if (klonSelected != null && !string.IsNullOrWhiteSpace(klonSelected.Url))
+                return new ResolveResult
                 {
-                    string klonPlayerCacheKey = $"makhno:klonfun:player:{klonSelected.Url}";
-                    string klonPlayerUrl = await InvokeCache<string>(klonPlayerCacheKey, TimeSpan.FromMinutes(10), async () =>
-                    {
-                        return await invoke.GetKlonFUNPlayerUrl(klonSelected.Url);
-                    });
-
-                    if (!string.IsNullOrWhiteSpace(klonPlayerUrl))
-                    {
-                        string klonAshdiPath = invoke.ExtractAshdiPath(klonPlayerUrl);
-
-                        return new ResolveResult
-                        {
-                            PlayUrl = klonPlayerUrl,
-                            AshdiPath = klonAshdiPath,
-                            Selected = new SearchResult
-                            {
-                                ImdbId = imdbId,
-                                Title = klonSelected.Title,
-                                TitleEn = originalTitle,
-                                Year = klonSelected.Year > 0 ? klonSelected.Year.ToString() : null,
-                                Category = invoke.IsSerialPlayerUrl(klonPlayerUrl) ? "Серіал" : "Фільм"
-                            },
-                            IsSerial = serial == 1 || invoke.IsSerialPlayerUrl(klonPlayerUrl) || IsSerialByUrl(klonPlayerUrl, serial),
-                            ShouldEnrich = !string.IsNullOrWhiteSpace(klonAshdiPath)
-                        };
-                    }
-                }
+                    PlayUrl = playUrl,
+                    IsSerial = IsSerialByUrl(playUrl, serial)
+                };
             }
 
             return null;
@@ -531,38 +472,6 @@ namespace Makhno
                 return false;
 
             return url.Contains("/serial/", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private async Task EnrichWormhole(string imdbId, int year, ResolveResult resolved, MakhnoInvoke invoke)
-        {
-            if (string.IsNullOrWhiteSpace(imdbId) || resolved == null || string.IsNullOrWhiteSpace(resolved.AshdiPath))
-                return;
-
-            int? yearValue = year > 0 ? year : null;
-            if (!yearValue.HasValue && int.TryParse(resolved.Selected?.Year, out int parsedYear))
-                yearValue = parsedYear;
-
-            var tmdbResult = await invoke.FetchTmdbByImdb(imdbId, yearValue, resolved.IsSerial);
-            if (tmdbResult == null)
-                return;
-
-            var (item, _) = tmdbResult.Value;
-            var tmdbId = item.Value<long?>("id");
-            if (!tmdbId.HasValue)
-                return;
-
-            string mediaType = resolved.IsSerial ? "tv" : "movie";
-            int serialValue = resolved.IsSerial ? 1 : 0;
-
-            var payload = new
-            {
-                imdb_id = imdbId,
-                _id = $"{mediaType}:{tmdbId.Value}",
-                serial = serialValue,
-                ashdi = resolved.AshdiPath
-            };
-
-            await invoke.PostWormholeAsync(payload);
         }
 
         private static string StripLampacArgs(string url)
@@ -606,10 +515,7 @@ namespace Makhno
         private class ResolveResult
         {
             public string PlayUrl { get; set; }
-            public string AshdiPath { get; set; }
-            public SearchResult Selected { get; set; }
             public bool IsSerial { get; set; }
-            public bool ShouldEnrich { get; set; }
         }
     }
 }
