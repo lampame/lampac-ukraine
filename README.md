@@ -84,6 +84,75 @@ Parameter compatibility:
 - `webcorshost` does not conflict with `streamproxy`: CORS is used for parsing, `streamproxy` is used for streaming.
 - `webcorshost` does not conflict with `apn`: APN is used at the streaming stage, not for regular parsing.
 
+## JackTor config example (`init.conf`)
+
+```json
+"JackTor": {
+  "enable": true,
+  "displayname": "JackTor",
+  "displayindex": 0,
+
+  "jackett": "jackett.app",
+  "apikey": "YOUR_JACKETT_API_KEY",
+
+  "min_sid": 5,
+  "min_peers": 0,
+  "max_size": 0,
+  "max_serial_size": 0,
+  "max_age_days": 0,
+
+  "forceAll": false,
+  "emptyVoice": true,
+  "sort": "sid",
+  "query_mode": "both",
+  "year_tolerance": 1,
+
+  "quality_allow": [2160, 1080, 720],
+  "hdr_mode": "any",
+  "codec_allow": "any",
+  "audio_pref": ["ukr", "eng", "rus"],
+
+  "trackers_allow": ["toloka", "rutracker", "noname-club"],
+  "trackers_block": ["selezen"],
+
+  "filter": "",
+  "filter_ignore": "(camrip|ts|telesync)",
+
+  "torrs": [
+    "http://127.0.0.1:8090"
+  ],
+  "auth_torrs": [
+    {
+      "enable": true,
+      "host": "http://ts.example.com:8090",
+      "login": "{account_email}",
+      "passwd": "StrongPassword",
+      "country": "UA",
+      "no_country": null,
+      "headers": {
+        "x-api-key": "your-ts-key"
+      }
+    }
+  ],
+  "base_auth": {
+    "enable": false,
+    "login": "{account_email}",
+    "passwd": "StrongPassword",
+    "headers": {}
+  },
+
+  "group": 0,
+  "group_hide": true
+}
+```
+
+Key parameters at a glance:
+- `jackett` + `apikey`: your Jackett host and API key.
+- `min_sid` / `min_peers` / `max_size` / `max_serial_size`: base torrent filters.
+- `quality_allow`, `hdr_mode`, `codec_allow`, `audio_pref`: quality/codec/language prioritization.
+- `torrs`, `auth_torrs`, `base_auth`: TorrServer nodes used for playback.
+- `filter` / `filter_ignore`: regex filters for release title and voice labels.
+
 ## APN support
 
 Sources with APN support:
