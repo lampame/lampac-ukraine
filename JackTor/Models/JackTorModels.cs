@@ -88,6 +88,8 @@ namespace JackTor.Models
 
     public class JackettResult
     {
+        public string Guid { get; set; }
+
         public string Tracker { get; set; }
 
         public string TrackerId { get; set; }

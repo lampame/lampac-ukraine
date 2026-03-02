@@ -118,11 +118,15 @@ namespace JackTor.Controllers
                 var similarTpl = new SimilarTpl();
                 foreach (var torrent in releases)
                 {
-                    string releaseName = string.IsNullOrWhiteSpace(torrent.Voice)
-                        ? (torrent.Tracker ?? "Без назви")
-                        : torrent.Voice;
+                    string seasonLabel = (torrent.Seasons != null && torrent.Seasons.Length > 0)
+                        ? $"S{string.Join(",", torrent.Seasons.OrderBy(i => i))}"
+                        : $"S{targetSeason}";
 
-                    string qualityInfo = $"{torrent.QualityLabel} / {torrent.MediaInfo} / ↑{torrent.Seeders}";
+                    string releaseName = string.IsNullOrWhiteSpace(torrent.Voice)
+                        ? $"{seasonLabel} • {(torrent.Tracker ?? "Без назви")}"
+                        : $"{seasonLabel} • {torrent.Voice}";
+
+                    string qualityInfo = $"{torrent.Tracker} / {torrent.QualityLabel} / {torrent.MediaInfo} / ↑{torrent.Seeders}";
                     string releaseLink = accsArgs($"{host}/jacktor/serial/{torrent.Rid}?rjson={rjson}&title={enTitle}&original_title={enOriginal}&s={targetSeason}");
 
                     similarTpl.Append(releaseName, null, qualityInfo, releaseLink);

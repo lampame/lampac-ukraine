@@ -365,7 +365,7 @@ namespace JackTor
                 if (!string.IsNullOrWhiteSpace(_init.filter_ignore) && IsRegexMatch(regexSource, _init.filter_ignore))
                     continue;
 
-                string rid = BuildRid(raw.InfoHash, source);
+                string rid = BuildRid(raw.InfoHash, raw.Guid, raw.Details, source);
 
                 var parsed = new JackTorParsedResult()
                 {
@@ -403,7 +403,7 @@ namespace JackTor
                 }
             }
 
-            var result = byRid.Values;
+            var result = CollapseNearDuplicates(byRid.Values);
 
             IOrderedEnumerable<JackTorParsedResult> ordered = result
                 .OrderByDescending(i => i.AudioRank)
@@ -637,6 +637,54 @@ namespace JackTor
             return $"{mb:0.##} MB";
         }
 
+        private IEnumerable<JackTorParsedResult> CollapseNearDuplicates(IEnumerable<JackTorParsedResult> items)
+        {
+            var dedup = new Dictionary<string, JackTorParsedResult>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in items)
+            {
+                string seasonKey = (item.Seasons == null || item.Seasons.Length == 0)
+                    ? "-"
+                    : string.Join(",", item.Seasons.OrderBy(i => i));
+
+                string key = $"{item.Quality}|{item.Size}|{item.Seeders}|{item.Peers}|{seasonKey}|{NormalizeVoice(item.Voice)}|{NormalizeTitle(item.Title)}";
+                if (dedup.TryGetValue(key, out JackTorParsedResult exists))
+                {
+                    if (Score(item) > Score(exists))
+                        dedup[key] = item;
+                }
+                else
+                {
+                    dedup[key] = item;
+                }
+            }
+
+            return dedup.Values;
+        }
+
+        private string NormalizeVoice(string voice)
+        {
+            if (string.IsNullOrWhiteSpace(voice))
+                return string.Empty;
+
+            return string.Join(",",
+                voice.ToLowerInvariant()
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(i => i.Trim())
+                    .Distinct()
+                    .OrderBy(i => i));
+        }
+
+        private string NormalizeTitle(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return string.Empty;
+
+            string lower = title.ToLowerInvariant();
+            lower = Regex.Replace(lower, "\\s+", " ").Trim();
+            return lower;
+        }
+
         private int Score(JackTorParsedResult item)
         {
             int qualityScore = item.Quality * 100;
@@ -648,13 +696,19 @@ namespace JackTor
             return qualityScore + seedScore + audioScore + gainScore + dateScore;
         }
 
-        private string BuildRid(string infoHash, string source)
+        private string BuildRid(string infoHash, string guid, string details, string source)
         {
             string hash = (infoHash ?? string.Empty).Trim().ToLowerInvariant();
             if (!string.IsNullOrWhiteSpace(hash))
                 return hash;
 
-            byte[] sourceBytes = Encoding.UTF8.GetBytes(source ?? string.Empty);
+            string stableId = !string.IsNullOrWhiteSpace(guid)
+                ? guid.Trim()
+                : !string.IsNullOrWhiteSpace(details)
+                    ? details.Trim()
+                    : source ?? string.Empty;
+
+            byte[] sourceBytes = Encoding.UTF8.GetBytes(stableId);
             byte[] digest = SHA1.HashData(sourceBytes);
             return Convert.ToHexString(digest).ToLowerInvariant();
         }
