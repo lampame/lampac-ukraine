@@ -95,9 +95,13 @@ namespace JackTor
             try
             {
                 _onLog?.Invoke($"JackTor: запит до Jackett -> {query}");
+                int timeoutSeconds = Convert.ToInt32(_init.httptimeout);
+                if (timeoutSeconds <= 0)
+                    timeoutSeconds = 12;
+
                 var root = await Http.Get<JackettSearchRoot>(
                     _init.cors(url),
-                    timeoutSeconds: _init.httptimeout > 0 ? _init.httptimeout : 12,
+                    timeoutSeconds: timeoutSeconds,
                     headers: headers,
                     proxy: _proxyManager.Get()
                 );
