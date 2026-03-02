@@ -4,6 +4,7 @@ using Shared.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -63,6 +64,16 @@ namespace JackTor
                     rawResults.AddRange(chunk);
             }
 
+            if (rawResults.Count == 0 && categoryId > 0)
+            {
+                foreach (string query in queries)
+                {
+                    var chunk = await SearchRaw(query, 0);
+                    if (chunk != null && chunk.Count > 0)
+                        rawResults.AddRange(chunk);
+                }
+            }
+
             var normalized = NormalizeAndFilter(rawResults, year, serial);
             CacheSources(normalized);
             _hybridCache.Set(memKey, normalized, DateTime.Now.AddMinutes(5));
@@ -78,33 +89,43 @@ namespace JackTor
 
         private async Task<List<JackettResult>> SearchRaw(string query, int categoryId)
         {
-            string jackettHost = (_init.jackett ?? _init.host ?? string.Empty).Trim().TrimEnd('/');
-            if (string.IsNullOrWhiteSpace(jackettHost))
+            string rawJackett = (_init.jackett ?? _init.host ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(rawJackett))
                 return null;
 
-            string apikeyArg = string.IsNullOrWhiteSpace(_init.apikey) ? string.Empty : $"apikey={HttpUtility.UrlEncode(_init.apikey)}&";
-            string categoryArg = categoryId > 0 ? $"&Category[]={categoryId}" : string.Empty;
+            string endpoint = BuildJackettEndpoint(rawJackett);
+            if (string.IsNullOrWhiteSpace(endpoint))
+                return null;
 
-            string url = $"{jackettHost}/api/v2.0/indexers/all/results?{apikeyArg}Query={HttpUtility.UrlEncode(query)}{categoryArg}";
+            string url = BuildJackettUrl(endpoint, query, categoryId);
+            string referer = BuildReferer(rawJackett);
             var headers = new List<HeadersModel>()
             {
                 new HeadersModel("User-Agent", "Mozilla/5.0"),
-                new HeadersModel("Referer", $"{jackettHost}/")
+                new HeadersModel("Referer", referer)
             };
 
             try
             {
-                _onLog?.Invoke($"JackTor: запит до Jackett -> {query}");
+                _onLog?.Invoke($"JackTor: запит до Jackett -> {query} (cat={categoryId})");
                 int timeoutSeconds = Convert.ToInt32(_init.httptimeout);
                 if (timeoutSeconds <= 0)
                     timeoutSeconds = 12;
 
-                var root = await Http.Get<JackettSearchRoot>(
+                var (root, response) = await Http.BaseGetAsync<JackettSearchRoot>(
                     _init.cors(url),
                     timeoutSeconds: timeoutSeconds,
                     headers: headers,
-                    proxy: _proxyManager.Get()
+                    proxy: _proxyManager.Get(),
+                    statusCodeOK: false,
+                    IgnoreDeserializeObject: true
                 );
+
+                if (response == null || response.StatusCode != HttpStatusCode.OK)
+                {
+                    _onLog?.Invoke($"JackTor: Jackett відповів статусом {(int?)response?.StatusCode} для {query}");
+                    return null;
+                }
 
                 if (root?.Results == null || root.Results.Length == 0)
                     return null;
@@ -116,6 +137,49 @@ namespace JackTor
                 _onLog?.Invoke($"JackTor: помилка запиту до Jackett ({query}) -> {ex.Message}");
                 return null;
             }
+        }
+
+        private string BuildJackettEndpoint(string jackett)
+        {
+            string source = jackett.Trim().TrimEnd('/');
+            if (source.Contains("/api/v2.0/indexers/all/results", StringComparison.OrdinalIgnoreCase))
+                return source;
+
+            return $"{source}/api/v2.0/indexers/all/results";
+        }
+
+        private string BuildJackettUrl(string endpoint, string query, int categoryId)
+        {
+            var args = new List<string>(8);
+
+            if (!string.IsNullOrWhiteSpace(_init.apikey) && !HasParam(endpoint, "apikey"))
+                args.Add($"apikey={HttpUtility.UrlEncode(_init.apikey)}");
+
+            string encQuery = HttpUtility.UrlEncode(query ?? string.Empty);
+            args.Add($"Query={encQuery}");
+            args.Add($"query={encQuery}");
+
+            if (categoryId > 0)
+            {
+                args.Add($"Category[]={categoryId}");
+                args.Add($"cat={categoryId}");
+            }
+
+            string separator = endpoint.Contains("?") ? "&" : "?";
+            return endpoint + separator + string.Join("&", args);
+        }
+
+        private bool HasParam(string url, string name)
+        {
+            return Regex.IsMatch(url ?? string.Empty, $"[\\?&]{Regex.Escape(name)}=", RegexOptions.IgnoreCase);
+        }
+
+        private string BuildReferer(string jackett)
+        {
+            if (Uri.TryCreate(jackett, UriKind.Absolute, out Uri uri))
+                return $"{uri.Scheme}://{uri.Authority}/";
+
+            return jackett.Trim().TrimEnd('/') + "/";
         }
 
         private List<string> BuildQueries(string title, string originalTitle, int year)
@@ -208,6 +272,11 @@ namespace JackTor
                 string tracker = (raw.Tracker ?? string.Empty).Trim();
                 string trackerId = (raw.TrackerId ?? string.Empty).Trim();
                 string trackerKey = !string.IsNullOrWhiteSpace(trackerId) ? trackerId.ToLowerInvariant() : tracker.ToLowerInvariant();
+                int seeders = raw.Seeders ?? 0;
+                int peers = raw.Peers ?? 0;
+                long size = raw.Size ?? 0;
+                DateTime publishDate = raw.PublishDate ?? DateTime.MinValue;
+                double gain = raw.Gain ?? 0;
 
                 if (allowTrackers.Count > 0 && !allowTrackers.Contains(trackerKey) && !allowTrackers.Contains(tracker.ToLowerInvariant()))
                     continue;
@@ -215,34 +284,34 @@ namespace JackTor
                 if (blockTrackers.Contains(trackerKey) || blockTrackers.Contains(tracker.ToLowerInvariant()))
                     continue;
 
-                if (raw.Seeders < _init.min_sid)
+                if (seeders < _init.min_sid)
                     continue;
 
-                if (raw.Peers < _init.min_peers)
+                if (peers < _init.min_peers)
                     continue;
 
                 if (_init.max_serial_size > 0 && _init.max_size > 0)
                 {
                     if (serial == 1)
                     {
-                        if (raw.Size > _init.max_serial_size)
+                        if (size > _init.max_serial_size)
                             continue;
                     }
-                    else if (raw.Size > _init.max_size)
+                    else if (size > _init.max_size)
                     {
                         continue;
                     }
                 }
-                else if (_init.max_size > 0 && raw.Size > _init.max_size)
+                else if (_init.max_size > 0 && size > _init.max_size)
                 {
                     continue;
                 }
 
-                if (_init.max_age_days > 0 && raw.PublishDate > DateTime.MinValue)
+                if (_init.max_age_days > 0 && publishDate > DateTime.MinValue)
                 {
-                    DateTime pubUtc = raw.PublishDate.Kind == DateTimeKind.Unspecified
-                        ? DateTime.SpecifyKind(raw.PublishDate, DateTimeKind.Utc)
-                        : raw.PublishDate.ToUniversalTime();
+                    DateTime pubUtc = publishDate.Kind == DateTimeKind.Unspecified
+                        ? DateTime.SpecifyKind(publishDate, DateTimeKind.Utc)
+                        : publishDate.ToUniversalTime();
 
                     if ((now - pubUtc).TotalDays > _init.max_age_days)
                         continue;
@@ -309,18 +378,18 @@ namespace JackTor
                     AudioRank = CalculateAudioRank(voice),
                     Quality = quality,
                     QualityLabel = quality > 0 ? $"{quality}p" : "невідома",
-                    MediaInfo = BuildMediaInfo(raw.Size, codec, isHdr, isDolbyVision),
+                    MediaInfo = BuildMediaInfo(size, codec, isHdr, isDolbyVision),
                     CategoryDesc = raw.CategoryDesc,
                     Codec = codec,
                     IsHdr = isHdr,
                     IsDolbyVision = isDolbyVision,
-                    Seeders = raw.Seeders,
-                    Peers = raw.Peers,
-                    Size = raw.Size,
-                    PublishDate = raw.PublishDate,
+                    Seeders = seeders,
+                    Peers = peers,
+                    Size = size,
+                    PublishDate = publishDate,
                     Seasons = seasons,
                     ExtractedYear = extractedYear,
-                    Gain = raw.Gain
+                    Gain = gain
                 };
 
                 if (byRid.TryGetValue(rid, out JackTorParsedResult exists))

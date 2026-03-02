@@ -102,23 +102,23 @@ namespace JackTor.Models
 
         public string Details { get; set; }
 
-        public DateTime PublishDate { get; set; }
+        public DateTime? PublishDate { get; set; }
 
         public int[] Category { get; set; }
 
-        public long Size { get; set; }
+        public long? Size { get; set; }
 
         public string Description { get; set; }
 
-        public int Seeders { get; set; }
+        public int? Seeders { get; set; }
 
-        public int Peers { get; set; }
+        public int? Peers { get; set; }
 
         public string InfoHash { get; set; }
 
         public string MagnetUri { get; set; }
 
-        public double Gain { get; set; }
+        public double? Gain { get; set; }
     }
 
     public class JackettIndexer

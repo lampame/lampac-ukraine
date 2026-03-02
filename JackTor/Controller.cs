@@ -69,7 +69,10 @@ namespace JackTor.Controllers
 
             var torrents = await invoke.Search(title, original_title, year, serial, original_language);
             if (torrents == null || torrents.Count == 0)
-                return OnError("jacktor", proxyManager);
+            {
+                string debugInfo = $"title={title}\noriginal_title={original_title}\nyear={year}\nserial={serial}\njackett={MaskSensitiveUrl(init.jackett)}\nmin_sid={init.min_sid}\nmin_peers={init.min_peers}";
+                return OnError("jacktor", refresh_proxy: true, weblog: debugInfo);
+            }
 
             if (serial == 1)
             {
@@ -458,6 +461,14 @@ namespace JackTor.Controllers
                 ".nfo" => false,
                 _ => true,
             };
+        }
+
+        private static string MaskSensitiveUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return string.Empty;
+
+            return Regex.Replace(url, "(apikey=)[^&]+", "$1***", RegexOptions.IgnoreCase);
         }
     }
 }
