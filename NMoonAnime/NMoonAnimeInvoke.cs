@@ -1,4 +1,4 @@
-using MoonAnime.Models;
+using NMoonAnime.Models;
 using Shared;
 using Shared.Engine;
 using Shared.Models;
@@ -12,9 +12,9 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 
-namespace MoonAnime
+namespace NMoonAnime
 {
-    public class MoonAnimeInvoke
+    public class NMoonAnimeInvoke
     {
         private readonly OnlinesSettings _init;
         private readonly IHybridCache _hybridCache;
@@ -25,7 +25,7 @@ namespace MoonAnime
             PropertyNameCaseInsensitive = true
         };
 
-        public MoonAnimeInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public NMoonAnimeInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
         {
             _init = init;
             _hybridCache = hybridCache;
@@ -33,10 +33,10 @@ namespace MoonAnime
             _proxyManager = proxyManager;
         }
 
-        public async Task<List<MoonAnimeSeasonRef>> Search(string imdbId, string malId, string title, string originalTitle, int year)
+        public async Task<List<NMoonAnimeSeasonRef>> Search(string imdbId, string malId, string title, string originalTitle, int year)
         {
-            string memKey = $"MoonAnime:search:{imdbId}:{malId}:{title}:{originalTitle}:{year}";
-            if (_hybridCache.TryGetValue(memKey, out List<MoonAnimeSeasonRef> cached))
+            string memKey = $"NMoonAnime:search:{imdbId}:{malId}:{title}:{originalTitle}:{year}";
+            if (_hybridCache.TryGetValue(memKey, out List<NMoonAnimeSeasonRef> cached))
                 return cached;
 
             try
@@ -53,15 +53,15 @@ namespace MoonAnime
                     if (string.IsNullOrWhiteSpace(searchUrl))
                         continue;
 
-                    _onLog($"MoonAnime: пошук через {searchUrl}");
+                    _onLog($"NMoonAnime: пошук через {searchUrl}");
                     string json = await Http.Get(_init.cors(searchUrl), headers: DefaultHeaders(), proxy: _proxyManager.Get());
                     if (string.IsNullOrWhiteSpace(json))
                         continue;
 
-                    var response = JsonSerializer.Deserialize<MoonAnimeSearchResponse>(json, _jsonOptions);
+                    var response = JsonSerializer.Deserialize<NMoonAnimeSearchResponse>(json, _jsonOptions);
                     var seasons = response?.Seasons?
                         .Where(s => s != null && !string.IsNullOrWhiteSpace(s.Url))
-                        .Select(s => new MoonAnimeSeasonRef
+                        .Select(s => new NMoonAnimeSeasonRef
                         {
                             SeasonNumber = s.SeasonNumber <= 0 ? 1 : s.SeasonNumber,
                             Url = s.Url.Trim()
@@ -80,24 +80,24 @@ namespace MoonAnime
             }
             catch (Exception ex)
             {
-                _onLog($"MoonAnime: помилка пошуку - {ex.Message}");
+                _onLog($"NMoonAnime: помилка пошуку - {ex.Message}");
             }
 
-            return new List<MoonAnimeSeasonRef>();
+            return new List<NMoonAnimeSeasonRef>();
         }
 
-        public async Task<MoonAnimeSeasonContent> GetSeasonContent(MoonAnimeSeasonRef season)
+        public async Task<NMoonAnimeSeasonContent> GetSeasonContent(NMoonAnimeSeasonRef season)
         {
             if (season == null || string.IsNullOrWhiteSpace(season.Url))
                 return null;
 
-            string memKey = $"MoonAnime:season:{season.Url}";
-            if (_hybridCache.TryGetValue(memKey, out MoonAnimeSeasonContent cached))
+            string memKey = $"NMoonAnime:season:{season.Url}";
+            if (_hybridCache.TryGetValue(memKey, out NMoonAnimeSeasonContent cached))
                 return cached;
 
             try
             {
-                _onLog($"MoonAnime: завантаження сезону {season.Url}");
+                _onLog($"NMoonAnime: завантаження сезону {season.Url}");
                 string html = await Http.Get(_init.cors(season.Url), headers: DefaultHeaders(), proxy: _proxyManager.Get());
                 if (string.IsNullOrWhiteSpace(html))
                     return null;
@@ -110,14 +110,14 @@ namespace MoonAnime
             }
             catch (Exception ex)
             {
-                _onLog($"MoonAnime: помилка читання сезону - {ex.Message}");
+                _onLog($"NMoonAnime: помилка читання сезону - {ex.Message}");
                 return null;
             }
         }
 
-        public List<MoonAnimeStreamVariant> ParseStreams(string rawFile)
+        public List<NMoonAnimeStreamVariant> ParseStreams(string rawFile)
         {
-            var streams = new List<MoonAnimeStreamVariant>();
+            var streams = new List<NMoonAnimeStreamVariant>();
             if (string.IsNullOrWhiteSpace(rawFile))
                 return streams;
 
@@ -131,7 +131,7 @@ namespace MoonAnime
                 if (string.IsNullOrWhiteSpace(url))
                     continue;
 
-                streams.Add(new MoonAnimeStreamVariant
+                streams.Add(new NMoonAnimeStreamVariant
                 {
                     Url = url,
                     Quality = quality
@@ -148,7 +148,7 @@ namespace MoonAnime
                     if (string.IsNullOrWhiteSpace(url))
                         continue;
 
-                    streams.Add(new MoonAnimeStreamVariant
+                    streams.Add(new NMoonAnimeStreamVariant
                     {
                         Url = url,
                         Quality = quality
@@ -167,7 +167,7 @@ namespace MoonAnime
                 {
                     for (int i = 0; i < plainLinks.Count; i++)
                     {
-                        streams.Add(new MoonAnimeStreamVariant
+                        streams.Add(new NMoonAnimeStreamVariant
                         {
                             Url = plainLinks[i],
                             Quality = $"auto-{i + 1}"
@@ -178,7 +178,7 @@ namespace MoonAnime
 
             if (streams.Count == 0 && value.StartsWith("http", StringComparison.OrdinalIgnoreCase))
             {
-                streams.Add(new MoonAnimeStreamVariant
+                streams.Add(new NMoonAnimeStreamVariant
                 {
                     Url = value,
                     Quality = "auto"
@@ -187,7 +187,7 @@ namespace MoonAnime
 
             return streams
                 .Where(s => s != null && !string.IsNullOrWhiteSpace(s.Url))
-                .Select(s => new MoonAnimeStreamVariant
+                .Select(s => new NMoonAnimeStreamVariant
                 {
                     Url = s.Url.Trim(),
                     Quality = NormalizeQuality(s.Quality)
@@ -223,9 +223,9 @@ namespace MoonAnime
             return $"{_init.apihost.TrimEnd('/')}{endpoint}?{query}";
         }
 
-        private MoonAnimeSeasonContent ParseSeasonPage(string html, int seasonNumber, string seasonUrl)
+        private NMoonAnimeSeasonContent ParseSeasonPage(string html, int seasonNumber, string seasonUrl)
         {
-            var content = new MoonAnimeSeasonContent
+            var content = new NMoonAnimeSeasonContent
             {
                 SeasonNumber = seasonNumber <= 0 ? 1 : seasonNumber,
                 Url = seasonUrl,
@@ -246,7 +246,7 @@ namespace MoonAnime
                 if (entry.ValueKind != JsonValueKind.Object)
                     continue;
 
-                var voice = new MoonAnimeVoiceContent
+                var voice = new NMoonAnimeVoiceContent
                 {
                     Name = NormalizeVoiceName(GetStringProperty(entry, "title"), voiceIndex)
                 };
@@ -266,7 +266,7 @@ namespace MoonAnime
                         string episodeTitle = GetStringProperty(episodeEntry, "title");
                         int episodeNumber = ParseEpisodeNumber(episodeTitle, episodeIndex);
 
-                        voice.Episodes.Add(new MoonAnimeEpisodeContent
+                        voice.Episodes.Add(new NMoonAnimeEpisodeContent
                         {
                             Name = string.IsNullOrWhiteSpace(episodeTitle) ? $"Епізод {episodeNumber}" : WebUtility.HtmlDecode(episodeTitle),
                             Number = episodeNumber,

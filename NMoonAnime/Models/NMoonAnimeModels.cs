@@ -1,15 +1,15 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace MoonAnime.Models
+namespace NMoonAnime.Models
 {
-    public class MoonAnimeSearchResponse
+    public class NMoonAnimeSearchResponse
     {
         [JsonPropertyName("seasons")]
-        public List<MoonAnimeSeasonRef> Seasons { get; set; } = new();
+        public List<NMoonAnimeSeasonRef> Seasons { get; set; } = new();
     }
 
-    public class MoonAnimeSeasonRef
+    public class NMoonAnimeSeasonRef
     {
         [JsonPropertyName("season_number")]
         public int SeasonNumber { get; set; }
@@ -18,7 +18,7 @@ namespace MoonAnime.Models
         public string Url { get; set; }
     }
 
-    public class MoonAnimeSeasonContent
+    public class NMoonAnimeSeasonContent
     {
         public int SeasonNumber { get; set; }
 
@@ -26,19 +26,19 @@ namespace MoonAnime.Models
 
         public bool IsSeries { get; set; }
 
-        public List<MoonAnimeVoiceContent> Voices { get; set; } = new();
+        public List<NMoonAnimeVoiceContent> Voices { get; set; } = new();
     }
 
-    public class MoonAnimeVoiceContent
+    public class NMoonAnimeVoiceContent
     {
         public string Name { get; set; }
 
         public string MovieFile { get; set; }
 
-        public List<MoonAnimeEpisodeContent> Episodes { get; set; } = new();
+        public List<NMoonAnimeEpisodeContent> Episodes { get; set; } = new();
     }
 
-    public class MoonAnimeEpisodeContent
+    public class NMoonAnimeEpisodeContent
     {
         public string Name { get; set; }
 
@@ -47,7 +47,7 @@ namespace MoonAnime.Models
         public string File { get; set; }
     }
 
-    public class MoonAnimeStreamVariant
+    public class NMoonAnimeStreamVariant
     {
         public string Url { get; set; }
 

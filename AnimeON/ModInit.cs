@@ -45,7 +45,7 @@ namespace AnimeON
 
             AnimeON = new OnlinesSettings("AnimeON", "https://animeon.club", streamproxy: false, useproxy: false)
             {
-                displayname = "🇯🇵 AnimeON",
+                displayname = "AnimeON",
                 displayindex = 0,
                 proxy = new Shared.Models.Base.ProxySettings()
                 {

@@ -5,7 +5,7 @@ using Shared.Models.Base;
 using Shared.Models.Module;
 using System.Collections.Generic;
 
-namespace MoonAnime
+namespace NMoonAnime
 {
     public class OnlineApi
     {
@@ -24,7 +24,7 @@ namespace MoonAnime
         {
             var online = new List<(string name, string url, string plugin, int index)>();
 
-            var init = ModInit.MoonAnime;
+            var init = ModInit.NMoonAnime;
 
             bool hasLang = !string.IsNullOrEmpty(original_language);
             bool isAnime = hasLang && (original_language == "ja" || original_language == "zh");
@@ -33,9 +33,9 @@ namespace MoonAnime
             {
                 string url = init.overridehost;
                 if (string.IsNullOrEmpty(url) || UpdateService.IsDisconnected())
-                    url = $"{host}/moonanime";
+                    url = $"{host}/nmoonanime";
 
-                online.Add((init.displayname, url, "moonanime", init.displayindex));
+                online.Add((init.displayname, url, "nmoonanime", init.displayindex));
             }
 
             return online;

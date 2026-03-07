@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using MoonAnime.Models;
+using NMoonAnime.Models;
 using Shared;
 using Shared.Engine;
 using Shared.Models;
@@ -13,7 +13,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 
-namespace MoonAnime.Controllers
+namespace NMoonAnime.Controllers
 {
     public class Controller : BaseOnlineController
     {
@@ -21,47 +21,47 @@ namespace MoonAnime.Controllers
 
         public Controller() : base(ModInit.Settings)
         {
-            proxyManager = new ProxyManager(ModInit.MoonAnime);
+            proxyManager = new ProxyManager(ModInit.NMoonAnime);
         }
 
         [HttpGet]
-        [Route("moonanime")]
+        [Route("nmoonanime")]
         public async Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string mal_id, string t, int s = -1, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.MoonAnime);
+            var init = await loadKit(ModInit.NMoonAnime);
             if (!init.enable)
                 return Forbid();
 
-            var invoke = new MoonAnimeInvoke(init, hybridCache, OnLog, proxyManager);
+            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager);
 
             if (checksearch)
             {
                 if (AppInit.conf?.online?.checkOnlineSearch != true)
-                    return OnError("moonanime", proxyManager);
+                    return OnError("nmoonanime", proxyManager);
 
                 var checkResults = await invoke.Search(imdb_id, mal_id, title, original_title, year);
                 if (checkResults != null && checkResults.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
             }
 
-            OnLog($"MoonAnime: title={title}, original_title={original_title}, imdb={imdb_id}, mal_id={mal_id}, serial={serial}, s={s}, t={t}");
+            OnLog($"NMoonAnime: назва={title}, оригінальна_назва={original_title}, imdb={imdb_id}, mal_id={mal_id}, серіал={serial}, сезон={s}, озвучка={t}");
 
             var seasons = await invoke.Search(imdb_id, mal_id, title, original_title, year);
             if (seasons == null || seasons.Count == 0)
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
 
             bool isSeries = serial == 1;
-            MoonAnimeSeasonContent firstSeasonData = null;
+            NMoonAnimeSeasonContent firstSeasonData = null;
 
             if (serial == -1)
             {
                 firstSeasonData = await invoke.GetSeasonContent(seasons[0]);
                 if (firstSeasonData == null || firstSeasonData.Voices.Count == 0)
-                    return OnError("moonanime", proxyManager);
+                    return OnError("nmoonanime", proxyManager);
 
                 isSeries = firstSeasonData.IsSeries;
             }
@@ -74,22 +74,22 @@ namespace MoonAnime.Controllers
             return await RenderMovie(invoke, seasons, title, original_title, firstSeasonData, rjson);
         }
 
-        [HttpGet("moonanime/play")]
+        [HttpGet("nmoonanime/play")]
         public async Task<ActionResult> Play(string file, string title = null)
         {
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.MoonAnime);
+            var init = await loadKit(ModInit.NMoonAnime);
             if (!init.enable)
                 return Forbid();
 
             if (string.IsNullOrWhiteSpace(file))
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
 
-            var invoke = new MoonAnimeInvoke(init, hybridCache, OnLog, proxyManager);
+            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager);
             var streams = invoke.ParseStreams(file);
             if (streams == null || streams.Count == 0)
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
 
             if (streams.Count == 1)
             {
@@ -106,7 +106,7 @@ namespace MoonAnime.Controllers
             }
 
             if (!streamQuality.Any())
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
 
             var first = streamQuality.Firts();
             string json = VideoTpl.ToJson("play", first.link, title ?? string.Empty, streamquality: streamQuality);
@@ -114,8 +114,8 @@ namespace MoonAnime.Controllers
         }
 
         private async Task<ActionResult> RenderSerial(
-            MoonAnimeInvoke invoke,
-            List<MoonAnimeSeasonRef> seasons,
+            NMoonAnimeInvoke invoke,
+            List<NMoonAnimeSeasonRef> seasons,
             string imdbId,
             long kinopoiskId,
             string title,
@@ -132,7 +132,7 @@ namespace MoonAnime.Controllers
                 .ToList();
 
             if (orderedSeasons.Count == 0)
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
 
             if (selectedSeason == -1)
             {
@@ -153,14 +153,14 @@ namespace MoonAnime.Controllers
             var currentSeason = orderedSeasons.FirstOrDefault(s => s.SeasonNumber == selectedSeason) ?? orderedSeasons[0];
             var seasonData = await invoke.GetSeasonContent(currentSeason);
             if (seasonData == null)
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
 
             var voices = seasonData.Voices
                 .Where(v => v != null && v.Episodes != null && v.Episodes.Count > 0)
                 .ToList();
 
             if (voices.Count == 0)
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
 
             int activeVoiceIndex = ParseVoiceIndex(selectedVoice, voices.Count);
             var voiceTpl = new VoiceTpl(voices.Count);
@@ -179,20 +179,20 @@ namespace MoonAnime.Controllers
                 .ToList();
 
             if (episodes.Count == 0)
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
 
             string displayTitle = !string.IsNullOrWhiteSpace(title)
                 ? title
                 : !string.IsNullOrWhiteSpace(originalTitle)
                     ? originalTitle
-                    : "MoonAnime";
+                    : "NMoonAnime";
 
             var episodeTpl = new EpisodeTpl(episodes.Count);
             foreach (var episode in episodes)
             {
                 int episodeNumber = episode.Number <= 0 ? 1 : episode.Number;
                 string episodeName = string.IsNullOrWhiteSpace(episode.Name) ? $"Епізод {episodeNumber}" : episode.Name;
-                string callUrl = $"{host}/moonanime/play?file={HttpUtility.UrlEncode(episode.File)}&title={HttpUtility.UrlEncode(displayTitle)}";
+                string callUrl = $"{host}/nmoonanime/play?file={HttpUtility.UrlEncode(episode.File)}&title={HttpUtility.UrlEncode(displayTitle)}";
                 episodeTpl.Append(episodeName, displayTitle, currentSeason.SeasonNumber.ToString(), episodeNumber.ToString(), accsArgs(callUrl), "call");
             }
 
@@ -204,11 +204,11 @@ namespace MoonAnime.Controllers
         }
 
         private async Task<ActionResult> RenderMovie(
-            MoonAnimeInvoke invoke,
-            List<MoonAnimeSeasonRef> seasons,
+            NMoonAnimeInvoke invoke,
+            List<NMoonAnimeSeasonRef> seasons,
             string title,
             string originalTitle,
-            MoonAnimeSeasonContent firstSeasonData,
+            NMoonAnimeSeasonContent firstSeasonData,
             bool rjson)
         {
             var currentSeason = seasons
@@ -217,20 +217,20 @@ namespace MoonAnime.Controllers
                 .FirstOrDefault();
 
             if (currentSeason == null)
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
 
-            MoonAnimeSeasonContent seasonData = firstSeasonData;
+            NMoonAnimeSeasonContent seasonData = firstSeasonData;
             if (seasonData == null || !string.Equals(seasonData.Url, currentSeason.Url, StringComparison.OrdinalIgnoreCase))
                 seasonData = await invoke.GetSeasonContent(currentSeason);
 
             if (seasonData == null || seasonData.Voices.Count == 0)
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
 
             string displayTitle = !string.IsNullOrWhiteSpace(title)
                 ? title
                 : !string.IsNullOrWhiteSpace(originalTitle)
                     ? originalTitle
-                    : "MoonAnime";
+                    : "NMoonAnime";
 
             var movieTpl = new MovieTpl(displayTitle, originalTitle);
             int fallbackIndex = 1;
@@ -248,13 +248,13 @@ namespace MoonAnime.Controllers
                     continue;
 
                 string voiceName = string.IsNullOrWhiteSpace(voice.Name) ? $"Озвучка {fallbackIndex}" : voice.Name;
-                string callUrl = $"{host}/moonanime/play?file={HttpUtility.UrlEncode(file)}&title={HttpUtility.UrlEncode(displayTitle)}";
+                string callUrl = $"{host}/nmoonanime/play?file={HttpUtility.UrlEncode(file)}&title={HttpUtility.UrlEncode(displayTitle)}";
                 movieTpl.Append(voiceName, accsArgs(callUrl), "call");
                 fallbackIndex++;
             }
 
             if (movieTpl.IsEmpty)
-                return OnError("moonanime", proxyManager);
+                return OnError("nmoonanime", proxyManager);
 
             return rjson
                 ? Content(movieTpl.ToJson(), "application/json; charset=utf-8")
@@ -264,7 +264,7 @@ namespace MoonAnime.Controllers
         private string BuildIndexUrl(string imdbId, long kinopoiskId, string title, string originalTitle, int year, int serial, string malId, int season, string voice)
         {
             var url = new StringBuilder();
-            url.Append($"{host}/moonanime?imdb_id={HttpUtility.UrlEncode(imdbId)}");
+            url.Append($"{host}/nmoonanime?imdb_id={HttpUtility.UrlEncode(imdbId)}");
             url.Append($"&kinopoisk_id={kinopoiskId}");
             url.Append($"&title={HttpUtility.UrlEncode(title)}");
             url.Append($"&original_title={HttpUtility.UrlEncode(originalTitle)}");

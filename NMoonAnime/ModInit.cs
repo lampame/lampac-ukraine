@@ -14,20 +14,20 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MoonAnime
+namespace NMoonAnime
 {
     public class ModInit
     {
         public static double Version => 1.0;
 
-        public static OnlinesSettings MoonAnime;
+        public static OnlinesSettings NMoonAnime;
 
         public static bool ApnHostProvided;
 
         public static OnlinesSettings Settings
         {
-            get => MoonAnime;
-            set => MoonAnime = value;
+            get => NMoonAnime;
+            set => NMoonAnime = value;
         }
 
         /// <summary>
@@ -35,9 +35,9 @@ namespace MoonAnime
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            MoonAnime = new OnlinesSettings("MoonAnime", "https://moonanime.art", "https://apx.lme.isroot.in", streamproxy: false, useproxy: false)
+            NMoonAnime = new OnlinesSettings("NMoonAnime", "https://moonanime.art", "https://apx.lme.isroot.in", streamproxy: false, useproxy: false)
             {
-                displayname = "MoonAnime",
+                displayname = "🌙 NMoonAnime",
                 displayindex = 0,
                 proxy = new Shared.Models.Base.ProxySettings()
                 {
@@ -48,27 +48,27 @@ namespace MoonAnime
                 }
             };
 
-            var conf = ModuleInvoke.Conf("MoonAnime", MoonAnime) ?? JObject.FromObject(MoonAnime);
+            var conf = ModuleInvoke.Conf("NMoonAnime", NMoonAnime) ?? JObject.FromObject(NMoonAnime);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");
-            MoonAnime = conf.ToObject<OnlinesSettings>();
+            NMoonAnime = conf.ToObject<OnlinesSettings>();
 
             if (hasApn)
-                ApnHelper.ApplyInitConf(apnEnabled, apnHost, MoonAnime);
+                ApnHelper.ApplyInitConf(apnEnabled, apnHost, NMoonAnime);
 
             ApnHostProvided = hasApn && apnEnabled && !string.IsNullOrWhiteSpace(apnHost);
             if (hasApn && apnEnabled)
             {
-                MoonAnime.streamproxy = false;
+                NMoonAnime.streamproxy = false;
             }
-            else if (MoonAnime.streamproxy)
+            else if (NMoonAnime.streamproxy)
             {
-                MoonAnime.apnstream = false;
-                MoonAnime.apn = null;
+                NMoonAnime.apnstream = false;
+                NMoonAnime.apn = null;
             }
 
-            AppInit.conf.online.with_search.Add("moonanime");
+            AppInit.conf.online.with_search.Add("nmoonanime");
         }
     }
 
