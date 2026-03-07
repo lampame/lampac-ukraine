@@ -13,6 +13,7 @@
 - [x] BambooUA
 - [x] Unimay
 - [x] Mikai 
+- [x] MoonAnime
 
 ## Installation
 
@@ -41,6 +42,7 @@ Create or update the module/repository.yaml file
     - AnimeON
     - Unimay
     - Mikai
+    - MoonAnime
     - Uaflix
     - Bamboo
     - Makhno
@@ -161,6 +163,7 @@ Sources with APN support:
 - Mikai
 - Makhno
 - KlonFUN
+- MoonAnime
 
 ## Source/player availability check script
 
