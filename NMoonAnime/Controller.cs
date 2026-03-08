@@ -35,7 +35,7 @@ namespace NMoonAnime.Controllers
                 return Forbid();
 
             var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager);
-            string effectiveMalId = ResolveMalId(mal_id, kinopoisk_id);
+            string effectiveMalId = ResolveMalId(mal_id, kinopoisk_id, source);
 
             if (checksearch)
             {
@@ -49,7 +49,7 @@ namespace NMoonAnime.Controllers
                 return OnError("nmoonanime", proxyManager);
             }
 
-            OnLog($"NMoonAnime: назва={title}, imdb={imdb_id}, kinopoisk_id(як mal_id)={kinopoisk_id}, mal_id_ефективний={effectiveMalId}, рік={year}, серіал={serial}, сезон={s}, озвучка={t}");
+            OnLog($"NMoonAnime: назва={title}, source={source}, imdb={imdb_id}, kinopoisk_id(як mal_id)={kinopoisk_id}, mal_id_ефективний={effectiveMalId}, рік={year}, серіал={serial}, сезон={s}, озвучка={t}");
 
             var seasons = await invoke.Search(imdb_id, effectiveMalId, title, year);
             if (seasons == null || seasons.Count == 0)
@@ -298,12 +298,18 @@ namespace NMoonAnime.Controllers
             return index;
         }
 
-        private static string ResolveMalId(string malId, long kinopoiskId)
+        private static string ResolveMalId(string malId, long kinopoiskId, string source)
         {
+            if (!string.IsNullOrWhiteSpace(source) && source.Equals("tmdb", StringComparison.OrdinalIgnoreCase))
+                return null;
+
             if (!string.IsNullOrWhiteSpace(malId))
                 return malId.Trim();
 
-            return kinopoiskId > 0 ? kinopoiskId.ToString() : null;
+            if (!string.IsNullOrWhiteSpace(source) && source.Equals("hikka", StringComparison.OrdinalIgnoreCase) && kinopoiskId > 0)
+                return kinopoiskId.ToString();
+
+            return null;
         }
 
         private string BuildStreamUrl(OnlinesSettings init, string streamLink)
