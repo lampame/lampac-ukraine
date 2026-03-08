@@ -1,51 +1,43 @@
-﻿using Newtonsoft.Json;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Shared;
 using Shared.Engine;
 using Shared.Models.Module;
 using Shared.Models.Online.Settings;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.CodeAnalysis.Scripting;
-using Microsoft.Extensions.Caching.Memory;
-using Newtonsoft.Json;
-using Shared.Models;
-using Shared.Models.Events;
 using System;
 using System.Net.Http;
 using System.Net.Mime;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-
-namespace AnimeON
+namespace NMoonAnime
 {
     public class ModInit
     {
-        public static double Version => 3.7;
+        public static double Version => 1.0;
 
-        public static OnlinesSettings AnimeON;
+        public static OnlinesSettings NMoonAnime;
+
         public static bool ApnHostProvided;
 
         public static OnlinesSettings Settings
         {
-            get => AnimeON;
-            set => AnimeON = value;
+            get => NMoonAnime;
+            set => NMoonAnime = value;
         }
 
         /// <summary>
-        /// модуль загружен
+        /// Модуль завантажено.
         /// </summary>
         public static void loaded(InitspaceModel initspace)
         {
-            
-
-            AnimeON = new OnlinesSettings("AnimeON", "https://animeon.club", streamproxy: false, useproxy: false)
+            NMoonAnime = new OnlinesSettings("NMoonAnime", "https://moonanime.art", "https://apx.lme.isroot.in", streamproxy: false, useproxy: false)
             {
-                displayname = "AnimeON",
+                displayname = "New MoonAnime",
                 displayindex = 0,
                 proxy = new Shared.Models.Base.ProxySettings()
                 {
@@ -55,26 +47,28 @@ namespace AnimeON
                     list = new string[] { "socks5://ip:port" }
                 }
             };
-            var conf = ModuleInvoke.Conf("AnimeON", AnimeON);
+
+            var conf = ModuleInvoke.Conf("NMoonAnime", NMoonAnime) ?? JObject.FromObject(NMoonAnime);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");
-            AnimeON = conf.ToObject<OnlinesSettings>();
+            NMoonAnime = conf.ToObject<OnlinesSettings>();
+
             if (hasApn)
-                ApnHelper.ApplyInitConf(apnEnabled, apnHost, AnimeON);
+                ApnHelper.ApplyInitConf(apnEnabled, apnHost, NMoonAnime);
+
             ApnHostProvided = hasApn && apnEnabled && !string.IsNullOrWhiteSpace(apnHost);
             if (hasApn && apnEnabled)
             {
-                AnimeON.streamproxy = false;
+                NMoonAnime.streamproxy = false;
             }
-            else if (AnimeON.streamproxy)
+            else if (NMoonAnime.streamproxy)
             {
-                AnimeON.apnstream = false;
-                AnimeON.apn = null;
+                NMoonAnime.apnstream = false;
+                NMoonAnime.apn = null;
             }
 
-            // Виводити "уточнити пошук"
-            AppInit.conf.online.with_search.Add("animeon");
+            AppInit.conf.online.with_search.Add("nmoonanime");
         }
     }
 
@@ -181,6 +175,7 @@ namespace AnimeON
                 _resetTimer = null;
             }
         }
+
         public static bool IsDisconnected()
         {
             return _disconnectTime is not null
