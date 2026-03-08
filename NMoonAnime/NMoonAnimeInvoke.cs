@@ -33,9 +33,9 @@ namespace NMoonAnime
             _proxyManager = proxyManager;
         }
 
-        public async Task<List<NMoonAnimeSeasonRef>> Search(string imdbId, string malId, string title, string originalTitle, int year)
+        public async Task<List<NMoonAnimeSeasonRef>> Search(string imdbId, string malId, string title, int year)
         {
-            string memKey = $"NMoonAnime:search:{imdbId}:{malId}:{title}:{originalTitle}:{year}";
+            string memKey = $"NMoonAnime:search:{imdbId}:{malId}:{title}:{year}";
             if (_hybridCache.TryGetValue(memKey, out List<NMoonAnimeSeasonRef> cached))
                 return cached;
 
@@ -49,7 +49,7 @@ namespace NMoonAnime
 
                 foreach (var endpoint in endpoints)
                 {
-                    string searchUrl = BuildSearchUrl(endpoint, imdbId, malId, title, originalTitle, year);
+                    string searchUrl = BuildSearchUrl(endpoint, imdbId, malId, title, year);
                     if (string.IsNullOrWhiteSpace(searchUrl))
                         continue;
 
@@ -198,21 +198,18 @@ namespace NMoonAnime
                 .ToList();
         }
 
-        private string BuildSearchUrl(string endpoint, string imdbId, string malId, string title, string originalTitle, int year)
+        private string BuildSearchUrl(string endpoint, string imdbId, string malId, string title, int year)
         {
             var query = HttpUtility.ParseQueryString(string.Empty);
 
-            if (!string.IsNullOrWhiteSpace(imdbId))
-                query["imdb_id"] = imdbId;
-
             if (!string.IsNullOrWhiteSpace(malId))
                 query["mal_id"] = malId;
-
-            if (!string.IsNullOrWhiteSpace(title))
+            else if (!string.IsNullOrWhiteSpace(imdbId))
+                query["imdb_id"] = imdbId;
+            else if (!string.IsNullOrWhiteSpace(title))
                 query["title"] = title;
-
-            if (!string.IsNullOrWhiteSpace(originalTitle))
-                query["original_title"] = originalTitle;
+            else
+                return null;
 
             if (year > 0)
                 query["year"] = year.ToString();

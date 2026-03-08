@@ -35,22 +35,23 @@ namespace NMoonAnime.Controllers
                 return Forbid();
 
             var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager);
+            string effectiveMalId = ResolveMalId(mal_id, kinopoisk_id);
 
             if (checksearch)
             {
                 if (AppInit.conf?.online?.checkOnlineSearch != true)
                     return OnError("nmoonanime", proxyManager);
 
-                var checkResults = await invoke.Search(imdb_id, mal_id, title, original_title, year);
+                var checkResults = await invoke.Search(imdb_id, effectiveMalId, title, year);
                 if (checkResults != null && checkResults.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
                 return OnError("nmoonanime", proxyManager);
             }
 
-            OnLog($"NMoonAnime: назва={title}, оригінальна_назва={original_title}, imdb={imdb_id}, mal_id={mal_id}, серіал={serial}, сезон={s}, озвучка={t}");
+            OnLog($"NMoonAnime: назва={title}, imdb={imdb_id}, kinopoisk_id(як mal_id)={kinopoisk_id}, mal_id_ефективний={effectiveMalId}, рік={year}, серіал={serial}, сезон={s}, озвучка={t}");
 
-            var seasons = await invoke.Search(imdb_id, mal_id, title, original_title, year);
+            var seasons = await invoke.Search(imdb_id, effectiveMalId, title, year);
             if (seasons == null || seasons.Count == 0)
                 return OnError("nmoonanime", proxyManager);
 
@@ -68,7 +69,7 @@ namespace NMoonAnime.Controllers
 
             if (isSeries)
             {
-                return await RenderSerial(invoke, seasons, imdb_id, kinopoisk_id, title, original_title, year, mal_id, s, t, rjson);
+                return await RenderSerial(invoke, seasons, imdb_id, kinopoisk_id, title, original_title, year, effectiveMalId, s, t, rjson);
             }
 
             return await RenderMovie(invoke, seasons, title, original_title, firstSeasonData, rjson);
@@ -295,6 +296,14 @@ namespace NMoonAnime.Controllers
                 return 0;
 
             return index;
+        }
+
+        private static string ResolveMalId(string malId, long kinopoiskId)
+        {
+            if (!string.IsNullOrWhiteSpace(malId))
+                return malId.Trim();
+
+            return kinopoiskId > 0 ? kinopoiskId.ToString() : null;
         }
 
         private string BuildStreamUrl(OnlinesSettings init, string streamLink)
