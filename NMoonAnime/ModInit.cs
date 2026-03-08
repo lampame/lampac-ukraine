@@ -37,7 +37,7 @@ namespace NMoonAnime
         {
             NMoonAnime = new OnlinesSettings("NMoonAnime", "https://moonanime.art", "https://apx.lme.isroot.in", streamproxy: false, useproxy: false)
             {
-                displayname = "🌙 NMoonAnime",
+                displayname = "New MoonAnime",
                 displayindex = 0,
                 proxy = new Shared.Models.Base.ProxySettings()
                 {
