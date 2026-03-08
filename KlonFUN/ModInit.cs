@@ -73,7 +73,7 @@ namespace KlonFUN
 
     public static class UpdateService
     {
-        private static readonly string _connectUrl = "https://lmcuk.lampame.v6.rocks/stats";
+        private static readonly string _connectUrl = "https://lmcuk.lme.isroot.in/stats";
 
         private static ConnectResponse? Connect = null;
         private static DateTime? _connectTime = null;
