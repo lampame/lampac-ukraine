@@ -7,7 +7,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
@@ -24,6 +26,14 @@ namespace NMoonAnime
         {
             PropertyNameCaseInsensitive = true
         };
+        private static readonly Regex _reSeason = new Regex(@"(?:season|сезон)\s*(\d+)|(\d+)\s*(?:season|сезон)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex _reEpisode = new Regex(@"(?:episode|серія|серия|епізод|ep)\s*(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex _reTrailingComma = new Regex(@",\s*([}\]])", RegexOptions.Compiled);
+        private static readonly Regex _reAtobLiteral = new Regex(@"atob\(\s*(['""])(?<payload>[A-Za-z0-9+/=]+)\1\s*\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex _reJsonParseHelper = new Regex(@"JSON\.parse\(\s*(?<fn>[A-Za-z_$][\w$]*)\(\s*(?<quote>['""])(?<payload>.*?)(\k<quote>)\s*\)\s*\)", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+        private static readonly Regex _reHelperCall = new Regex(@"^\s*(?<fn>[A-Za-z_$][\w$]*)\(\s*(?<quote>['""])(?<payload>.*?)(\k<quote>)\s*\)\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+        private static readonly UTF8Encoding _utf8Strict = new UTF8Encoding(false, true);
+        private static readonly Encoding _latin1 = Encoding.GetEncoding("ISO-8859-1");
 
         public NMoonAnimeInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
         {
@@ -229,89 +239,826 @@ namespace NMoonAnime
                 IsSeries = false
             };
 
-            string fileArrayJson = ExtractFileArrayJson(html);
-            if (string.IsNullOrWhiteSpace(fileArrayJson))
+            var payload = ExtractPlayerPayload(html);
+            if (payload == null)
                 return content;
 
-            using var doc = JsonDocument.Parse(fileArrayJson);
-            if (doc.RootElement.ValueKind != JsonValueKind.Array)
-                return content;
-
-            int voiceIndex = 1;
-            foreach (var entry in doc.RootElement.EnumerateArray())
+            var voices = ParseSeriesVoices(payload.FilePayload, content.SeasonNumber);
+            if (voices.Count > 0)
             {
-                if (entry.ValueKind != JsonValueKind.Object)
+                content.IsSeries = true;
+                content.Voices = voices;
+                return content;
+            }
+
+            var movieEntries = ParseMovieEntries(payload.FilePayload);
+            int movieIndex = 1;
+            foreach (var entry in movieEntries)
+            {
+                if (string.IsNullOrWhiteSpace(entry.File))
                     continue;
 
-                var voice = new NMoonAnimeVoiceContent
+                content.Voices.Add(new NMoonAnimeVoiceContent
                 {
-                    Name = NormalizeVoiceName(GetStringProperty(entry, "title"), voiceIndex)
-                };
+                    Name = NormalizeVoiceName(entry.Title, movieIndex),
+                    MovieFile = entry.File
+                });
+                movieIndex++;
+            }
 
-                if (entry.TryGetProperty("folder", out var folder) && folder.ValueKind == JsonValueKind.Array)
+            return content;
+        }
+
+        private List<NMoonAnimeVoiceContent> ParseSeriesVoices(object filePayload, int seasonHint)
+        {
+            var voices = new List<NMoonAnimeVoiceContent>();
+            var voiceItems = NormalizeVoiceItems(filePayload);
+            if (voiceItems.Count == 0)
+                return voices;
+
+            var nameCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            int fallbackVoiceIndex = 1;
+
+            foreach (var voiceItem in voiceItems)
+            {
+                if (!TryGetArray(voiceItem, "folder", out JsonArray folder) || folder.Count == 0)
                 {
-                    int episodeIndex = 1;
-                    foreach (var episodeEntry in folder.EnumerateArray())
+                    fallbackVoiceIndex++;
+                    continue;
+                }
+
+                string baseVoiceName = Nullish(GetString(voiceItem, "title")) ?? $"Озвучка {fallbackVoiceIndex}";
+                nameCounts[baseVoiceName] = nameCounts.TryGetValue(baseVoiceName, out int currentCount) ? currentCount + 1 : 1;
+                string displayVoiceName = nameCounts[baseVoiceName] == 1 ? baseVoiceName : $"{baseVoiceName} {nameCounts[baseVoiceName]}";
+
+                var seasons = new Dictionary<int, List<NMoonAnimeEpisodeContent>>();
+                bool hasNestedSeasons = folder.Any(item => item is JsonObject nestedItem && nestedItem["folder"] is JsonArray);
+
+                if (hasNestedSeasons)
+                {
+                    int seasonIndex = 1;
+                    foreach (var seasonItem in folder)
                     {
-                        if (episodeEntry.ValueKind != JsonValueKind.Object)
-                            continue;
-
-                        string file = GetStringProperty(episodeEntry, "file");
-                        if (string.IsNullOrWhiteSpace(file))
-                            continue;
-
-                        string episodeTitle = GetStringProperty(episodeEntry, "title");
-                        int episodeNumber = ParseEpisodeNumber(episodeTitle, episodeIndex);
-
-                        voice.Episodes.Add(new NMoonAnimeEpisodeContent
+                        if (seasonItem is not JsonObject seasonObject)
                         {
-                            Name = string.IsNullOrWhiteSpace(episodeTitle) ? $"Епізод {episodeNumber}" : WebUtility.HtmlDecode(episodeTitle),
-                            Number = episodeNumber,
-                            File = file
-                        });
+                            seasonIndex++;
+                            continue;
+                        }
 
-                        episodeIndex++;
-                    }
+                        if (!TryGetArray(seasonObject, "folder", out JsonArray seasonFolder) || seasonFolder.Count == 0)
+                        {
+                            seasonIndex++;
+                            continue;
+                        }
 
-                    if (voice.Episodes.Count > 0)
-                    {
-                        content.IsSeries = true;
-                        voice.Episodes = voice.Episodes
-                            .OrderBy(e => e.Number <= 0 ? int.MaxValue : e.Number)
-                            .ThenBy(e => e.Name)
-                            .ToList();
+                        var episodes = NormalizeEpisodeList(seasonFolder);
+                        if (episodes.Count == 0)
+                        {
+                            seasonIndex++;
+                            continue;
+                        }
+
+                        int seasonNumber = ExtractSeasonNumber(GetString(seasonObject, "title"))
+                            ?? (seasonHint > 0 ? seasonHint : seasonIndex);
+
+                        seasons[seasonNumber] = episodes;
+                        seasonIndex++;
                     }
                 }
                 else
                 {
-                    voice.MovieFile = GetStringProperty(entry, "file");
+                    var episodes = NormalizeEpisodeList(folder);
+                    if (episodes.Count > 0)
+                    {
+                        int seasonNumber = seasonHint > 0
+                            ? seasonHint
+                            : ExtractSeasonNumber(GetString(voiceItem, "title")) ?? 1;
+
+                        seasons[seasonNumber] = episodes;
+                    }
                 }
 
-                if (!string.IsNullOrWhiteSpace(voice.MovieFile) || voice.Episodes.Count > 0)
-                    content.Voices.Add(voice);
+                if (seasons.Count == 0)
+                {
+                    fallbackVoiceIndex++;
+                    continue;
+                }
 
-                voiceIndex++;
+                int targetSeason = ResolveSeason(seasons.Keys, seasonHint);
+                voices.Add(new NMoonAnimeVoiceContent
+                {
+                    Name = displayVoiceName,
+                    Episodes = seasons[targetSeason]
+                });
+
+                fallbackVoiceIndex++;
             }
 
-            return content;
+            return voices;
+        }
+
+        private List<NMoonAnimeEpisodeContent> NormalizeEpisodeList(JsonArray items)
+        {
+            var episodes = new List<NMoonAnimeEpisodeContent>();
+            int index = 1;
+
+            foreach (var item in items)
+            {
+                if (item is JsonObject episodeObject)
+                {
+                    var episode = NormalizeEpisode(episodeObject, index);
+                    if (episode != null)
+                        episodes.Add(episode);
+                }
+
+                index++;
+            }
+
+            return episodes
+                .OrderBy(e => e.Number <= 0 ? int.MaxValue : e.Number)
+                .ThenBy(e => e.Name)
+                .ToList();
+        }
+
+        private NMoonAnimeEpisodeContent NormalizeEpisode(JsonObject item, int index)
+        {
+            string fileValue = NormalizeFileValue(GetString(item, "file"));
+            if (string.IsNullOrWhiteSpace(fileValue))
+                return null;
+
+            string title = Nullish(GetString(item, "title")) ?? $"Епізод {index}";
+            int number = ExtractEpisodeNumber(title, index);
+
+            return new NMoonAnimeEpisodeContent
+            {
+                Name = WebUtility.HtmlDecode(title),
+                Number = number,
+                File = fileValue
+            };
+        }
+
+        private List<NMoonAnimeMovieEntry> ParseMovieEntries(object filePayload)
+        {
+            var entries = new List<NMoonAnimeMovieEntry>();
+            if (filePayload == null)
+                return entries;
+
+            if (filePayload is string textPayload)
+            {
+                var parsedPayload = LoadJsonLoose(textPayload);
+                if (parsedPayload != null)
+                    return ParseMovieEntries(parsedPayload);
+
+                string fileValue = NormalizeFileValue(textPayload);
+                if (!string.IsNullOrWhiteSpace(fileValue))
+                {
+                    entries.Add(new NMoonAnimeMovieEntry
+                    {
+                        Title = "Основне джерело",
+                        File = fileValue
+                    });
+                }
+
+                return entries;
+            }
+
+            if (filePayload is JsonValue jsonValue && jsonValue.TryGetValue<string>(out string textValue))
+            {
+                var parsedPayload = LoadJsonLoose(textValue);
+                if (parsedPayload != null)
+                    return ParseMovieEntries(parsedPayload);
+
+                string fileValue = NormalizeFileValue(textValue);
+                if (!string.IsNullOrWhiteSpace(fileValue))
+                {
+                    entries.Add(new NMoonAnimeMovieEntry
+                    {
+                        Title = "Основне джерело",
+                        File = fileValue
+                    });
+                }
+
+                return entries;
+            }
+
+            if (filePayload is JsonObject objPayload)
+            {
+                string fileValue = NormalizeFileValue(GetString(objPayload, "file"));
+                if (!string.IsNullOrWhiteSpace(fileValue))
+                {
+                    entries.Add(new NMoonAnimeMovieEntry
+                    {
+                        Title = Nullish(GetString(objPayload, "title")) ?? "Основне джерело",
+                        File = fileValue
+                    });
+                }
+
+                return entries;
+            }
+
+            if (filePayload is not JsonArray arrayPayload)
+                return entries;
+
+            int index = 1;
+            foreach (var item in arrayPayload)
+            {
+                if (item is JsonObject itemObject)
+                {
+                    string fileValue = NormalizeFileValue(GetString(itemObject, "file"));
+                    if (!string.IsNullOrWhiteSpace(fileValue))
+                    {
+                        entries.Add(new NMoonAnimeMovieEntry
+                        {
+                            Title = Nullish(GetString(itemObject, "title")) ?? $"Варіант {index}",
+                            File = fileValue
+                        });
+                    }
+                }
+                else if (item is JsonValue itemValue && itemValue.TryGetValue<string>(out string itemText))
+                {
+                    string fileValue = NormalizeFileValue(itemText);
+                    if (!string.IsNullOrWhiteSpace(fileValue))
+                    {
+                        entries.Add(new NMoonAnimeMovieEntry
+                        {
+                            Title = $"Варіант {index}",
+                            File = fileValue
+                        });
+                    }
+                }
+
+                index++;
+            }
+
+            return entries;
+        }
+
+        private PlayerPayload ExtractPlayerPayload(string htmlText)
+        {
+            string cleanHtml = WebUtility.HtmlDecode(htmlText ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(cleanHtml))
+                return null;
+
+            var candidates = new List<string> { cleanHtml };
+            string decodedScript = DecodeOuterPlayerScript(cleanHtml);
+            if (!string.IsNullOrWhiteSpace(decodedScript))
+                candidates.Insert(0, decodedScript);
+
+            foreach (string sourceText in candidates)
+            {
+                string objectText = ExtractObjectByBraces(sourceText, "new Playerjs");
+                if (string.IsNullOrWhiteSpace(objectText))
+                    objectText = ExtractObjectByBraces(sourceText, "Playerjs({");
+
+                string searchText = string.IsNullOrWhiteSpace(objectText) ? sourceText : objectText;
+
+                string fileValue = ExtractJsValue(searchText, "file");
+                if (fileValue == null && !string.IsNullOrWhiteSpace(objectText))
+                    fileValue = ExtractJsValue(sourceText, "file");
+                if (fileValue == null)
+                    continue;
+
+                string titleValue = ExtractJsValue(searchText, "title");
+                object parsedFile = ParsePlayerFileValue(fileValue, sourceText);
+
+                return new PlayerPayload
+                {
+                    Title = Nullish(titleValue),
+                    FilePayload = parsedFile
+                };
+            }
+
+            return null;
+        }
+
+        private object ParsePlayerFileValue(string rawValue, string contextText)
+        {
+            string text = rawValue?.Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return rawValue;
+
+            if (text.StartsWith("[") || text.StartsWith("{"))
+            {
+                JsonNode loaded = LoadJsonLoose(text);
+                if (loaded != null)
+                    return loaded;
+            }
+
+            var parseMatch = _reJsonParseHelper.Match(text);
+            if (parseMatch.Success)
+            {
+                string decoded = DecodeHelperPayload(parseMatch.Groups["fn"].Value, parseMatch.Groups["payload"].Value, contextText);
+                if (!string.IsNullOrWhiteSpace(decoded))
+                {
+                    JsonNode loaded = LoadJsonLoose(decoded);
+                    if (loaded != null)
+                        return loaded;
+                }
+            }
+
+            var helperMatch = _reHelperCall.Match(text);
+            if (helperMatch.Success)
+            {
+                string decoded = DecodeHelperPayload(helperMatch.Groups["fn"].Value, helperMatch.Groups["payload"].Value, contextText);
+                if (!string.IsNullOrWhiteSpace(decoded))
+                {
+                    JsonNode loaded = LoadJsonLoose(decoded);
+                    if (loaded != null)
+                        return loaded;
+
+                    return decoded;
+                }
+            }
+
+            return rawValue;
+        }
+
+        private string DecodeHelperPayload(string helperName, string payload, string contextText)
+        {
+            if (string.IsNullOrWhiteSpace(helperName))
+                return null;
+
+            if (helperName.Equals("atob", StringComparison.OrdinalIgnoreCase))
+            {
+                byte[] rawBytes = SafeBase64Decode(payload);
+                return rawBytes == null ? null : DecodeBytes(rawBytes);
+            }
+
+            string helperKey = ExtractHelperKey(contextText, helperName);
+            if (string.IsNullOrWhiteSpace(helperKey))
+                return null;
+
+            byte[] keyBytes = Encoding.UTF8.GetBytes(helperKey);
+            if (keyBytes.Length == 0)
+                return null;
+
+            byte[] payloadBytes = SafeBase64Decode(payload);
+            if (payloadBytes == null)
+                return null;
+
+            var decoded = new byte[payloadBytes.Length];
+            for (int index = 0; index < payloadBytes.Length; index++)
+                decoded[index] = (byte)(payloadBytes[index] ^ keyBytes[index % keyBytes.Length]);
+
+            return DecodeBytes(decoded);
+        }
+
+        private static string ExtractHelperKey(string contextText, string helperName)
+        {
+            if (string.IsNullOrWhiteSpace(contextText) || string.IsNullOrWhiteSpace(helperName))
+                return null;
+
+            string pattern = $@"function\s+{Regex.Escape(helperName)}\s*\([^)]*\)\s*\{{[\s\S]*?var\s+k\s*=\s*(['""])(?<key>.*?)\1";
+            var match = Regex.Match(contextText, pattern, RegexOptions.IgnoreCase);
+            if (!match.Success)
+                return null;
+
+            return Nullish(match.Groups["key"].Value);
+        }
+
+        private static string DecodeOuterPlayerScript(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            var match = _reAtobLiteral.Match(text);
+            if (!match.Success)
+                return null;
+
+            byte[] rawData = SafeBase64Decode(match.Groups["payload"].Value);
+            if (rawData == null || rawData.Length <= 32)
+                return null;
+
+            byte[] key = rawData.Take(32).ToArray();
+            byte[] encryptedData = rawData.Skip(32).ToArray();
+            var decoded = new byte[encryptedData.Length];
+
+            for (int index = 0; index < encryptedData.Length; index++)
+                decoded[index] = (byte)(encryptedData[index] ^ key[index % key.Length]);
+
+            return DecodeBytes(decoded);
+        }
+
+        private static byte[] SafeBase64Decode(string value)
+        {
+            string text = value?.Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            int remainder = text.Length % 4;
+            if (remainder != 0)
+                text += new string('=', 4 - remainder);
+
+            try
+            {
+                return Convert.FromBase64String(text);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string DecodeBytes(byte[] data)
+        {
+            if (data == null || data.Length == 0)
+                return null;
+
+            try
+            {
+                return _utf8Strict.GetString(data);
+            }
+            catch
+            {
+                return _latin1.GetString(data);
+            }
+        }
+
+        private static string ExtractObjectByBraces(string text, string anchor)
+        {
+            if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(anchor))
+                return null;
+
+            int anchorIndex = text.IndexOf(anchor, StringComparison.OrdinalIgnoreCase);
+            if (anchorIndex < 0)
+                return null;
+
+            int braceIndex = text.IndexOf('{', anchorIndex);
+            if (braceIndex < 0)
+                return null;
+
+            int depth = 0;
+            bool escaped = false;
+            char? inString = null;
+
+            for (int index = braceIndex; index < text.Length; index++)
+            {
+                char current = text[index];
+
+                if (inString.HasValue)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                        continue;
+                    }
+
+                    if (current == '\\')
+                    {
+                        escaped = true;
+                        continue;
+                    }
+
+                    if (current == inString.Value)
+                        inString = null;
+
+                    continue;
+                }
+
+                if (current == '"' || current == '\'')
+                {
+                    inString = current;
+                    continue;
+                }
+
+                if (current == '{')
+                {
+                    depth++;
+                    continue;
+                }
+
+                if (current == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                        return text.Substring(braceIndex + 1, index - braceIndex - 1);
+                }
+            }
+
+            return null;
+        }
+
+        private static string ExtractJsValue(string text, string key)
+        {
+            if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(key))
+                return null;
+
+            var match = Regex.Match(text, $@"\b{Regex.Escape(key)}\b\s*:\s*", RegexOptions.IgnoreCase);
+            if (!match.Success)
+                return null;
+
+            int index = match.Index + match.Length;
+            while (index < text.Length && char.IsWhiteSpace(text[index]))
+                index++;
+
+            if (index >= text.Length)
+                return null;
+
+            char token = text[index];
+            if (token == '"' || token == '\'')
+            {
+                var (value, _) = ReadJsString(text, index);
+                return value;
+            }
+
+            if (token == '[')
+            {
+                int endIndex = FindMatchingBracket(text, index, '[', ']');
+                return endIndex >= index ? text.Substring(index, endIndex - index + 1) : null;
+            }
+
+            if (token == '{')
+            {
+                int endIndex = FindMatchingBracket(text, index, '{', '}');
+                return endIndex >= index ? text.Substring(index, endIndex - index + 1) : null;
+            }
+
+            int stopIndex = index;
+            while (stopIndex < text.Length && text[stopIndex] != ',' && text[stopIndex] != '}' && text[stopIndex] != '\n' && text[stopIndex] != '\r')
+                stopIndex++;
+
+            return text.Substring(index, stopIndex - index).Trim();
+        }
+
+        private static (string value, int nextIndex) ReadJsString(string text, int startIndex)
+        {
+            if (string.IsNullOrWhiteSpace(text) || startIndex < 0 || startIndex >= text.Length)
+                return (null, -1);
+
+            char quote = text[startIndex];
+            if (quote != '"' && quote != '\'')
+                return (null, -1);
+
+            var buffer = new StringBuilder();
+            bool escaped = false;
+
+            for (int index = startIndex + 1; index < text.Length; index++)
+            {
+                char current = text[index];
+
+                if (escaped)
+                {
+                    buffer.Append(current);
+                    escaped = false;
+                    continue;
+                }
+
+                if (current == '\\')
+                {
+                    escaped = true;
+                    continue;
+                }
+
+                if (current == quote)
+                    return (buffer.ToString(), index + 1);
+
+                buffer.Append(current);
+            }
+
+            return (null, -1);
+        }
+
+        private static int FindMatchingBracket(string text, int startIndex, char openChar, char closeChar)
+        {
+            if (string.IsNullOrWhiteSpace(text) || startIndex < 0 || startIndex >= text.Length || text[startIndex] != openChar)
+                return -1;
+
+            int depth = 0;
+            bool escaped = false;
+            char? inString = null;
+
+            for (int index = startIndex; index < text.Length; index++)
+            {
+                char current = text[index];
+
+                if (inString.HasValue)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                        continue;
+                    }
+
+                    if (current == '\\')
+                    {
+                        escaped = true;
+                        continue;
+                    }
+
+                    if (current == inString.Value)
+                        inString = null;
+
+                    continue;
+                }
+
+                if (current == '"' || current == '\'')
+                {
+                    inString = current;
+                    continue;
+                }
+
+                if (current == openChar)
+                {
+                    depth++;
+                    continue;
+                }
+
+                if (current == closeChar)
+                {
+                    depth--;
+                    if (depth == 0)
+                        return index;
+                }
+            }
+
+            return -1;
+        }
+
+        private static JsonNode LoadJsonLoose(string value)
+        {
+            string text = value?.Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            string normalized = WebUtility.HtmlDecode(text).Replace("\\/", "/");
+            string unescapedQuotes = normalized.Replace("\\'", "'").Replace("\\\"", "\"");
+            var candidates = new[]
+            {
+                normalized,
+                unescapedQuotes,
+                RemoveTrailingCommas(normalized),
+                RemoveTrailingCommas(unescapedQuotes)
+            };
+
+            foreach (string candidate in candidates.Distinct(StringComparer.Ordinal))
+            {
+                if (string.IsNullOrWhiteSpace(candidate))
+                    continue;
+
+                try
+                {
+                    return JsonNode.Parse(candidate);
+                }
+                catch
+                {
+                }
+            }
+
+            return null;
+        }
+
+        private static string RemoveTrailingCommas(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? value : _reTrailingComma.Replace(value, "$1");
+        }
+
+        private static string Nullish(string value)
+        {
+            string text = value?.Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            if (text.Equals("null", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("undefined", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return text;
+        }
+
+        private static bool TryGetArray(JsonObject obj, string key, out JsonArray array)
+        {
+            array = null;
+            if (obj == null || string.IsNullOrWhiteSpace(key))
+                return false;
+
+            if (!obj.TryGetPropertyValue(key, out JsonNode node))
+                return false;
+
+            if (node is not JsonArray jsonArray)
+                return false;
+
+            array = jsonArray;
+            return true;
+        }
+
+        private static List<JsonObject> NormalizeVoiceItems(object filePayload)
+        {
+            if (filePayload == null)
+                return new List<JsonObject>();
+
+            if (filePayload is JsonObject objPayload)
+                return new List<JsonObject> { objPayload };
+
+            if (filePayload is JsonArray arrayPayload)
+                return arrayPayload.OfType<JsonObject>().ToList();
+
+            if (filePayload is JsonNode nodePayload)
+            {
+                if (nodePayload is JsonObject nodeObject)
+                    return new List<JsonObject> { nodeObject };
+
+                if (nodePayload is JsonArray nodeArray)
+                    return nodeArray.OfType<JsonObject>().ToList();
+
+                if (nodePayload is JsonValue nodeValue && nodeValue.TryGetValue<string>(out string rawText))
+                    return NormalizeVoiceItems(rawText);
+            }
+
+            if (filePayload is string textPayload)
+            {
+                var parsedNode = LoadJsonLoose(textPayload);
+                if (parsedNode != null)
+                    return NormalizeVoiceItems(parsedNode);
+            }
+
+            return new List<JsonObject>();
+        }
+
+        private static int ResolveSeason(IEnumerable<int> availableSeasons, int seasonHint)
+        {
+            var ordered = availableSeasons
+                .Where(s => s > 0)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToList();
+
+            if (ordered.Count == 0)
+                return seasonHint > 0 ? seasonHint : 1;
+
+            if (seasonHint > 0 && ordered.Contains(seasonHint))
+                return seasonHint;
+
+            return ordered[0];
+        }
+
+        private static int? ExtractSeasonNumber(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var match = _reSeason.Match(value);
+            if (!match.Success)
+                return null;
+
+            string rawNumber = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+            if (int.TryParse(rawNumber, out int seasonNumber))
+                return seasonNumber;
+
+            return null;
+        }
+
+        private static int ExtractEpisodeNumber(string title, int fallback)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return fallback;
+
+            var episodeMatch = _reEpisode.Match(title);
+            if (episodeMatch.Success && int.TryParse(episodeMatch.Groups[1].Value, out int episodeNumber))
+                return episodeNumber;
+
+            var trailingMatch = Regex.Match(title, @"(\d+)(?!.*\d)");
+            if (trailingMatch.Success && int.TryParse(trailingMatch.Groups[1].Value, out int trailingNumber))
+                return trailingNumber;
+
+            return fallback;
+        }
+
+        private static string GetString(JsonObject obj, string key)
+        {
+            if (obj == null || string.IsNullOrWhiteSpace(key) || !obj.TryGetPropertyValue(key, out JsonNode node) || node == null)
+                return null;
+
+            if (node is JsonValue valueNode)
+            {
+                try
+                {
+                    return valueNode.GetValue<string>();
+                }
+                catch
+                {
+                    return valueNode.ToString();
+                }
+            }
+
+            return node.ToString();
+        }
+
+        private static string NormalizeFileValue(string value)
+        {
+            string text = Nullish(value);
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            return WebUtility.HtmlDecode(text)
+                .Replace("\\/", "/")
+                .Trim();
         }
 
         private static string NormalizeVoiceName(string source, int fallbackIndex)
         {
             string voice = WebUtility.HtmlDecode(source ?? string.Empty).Trim();
             return string.IsNullOrWhiteSpace(voice) ? $"Озвучка {fallbackIndex}" : voice;
-        }
-
-        private static int ParseEpisodeNumber(string title, int fallback)
-        {
-            if (string.IsNullOrWhiteSpace(title))
-                return fallback;
-
-            var match = Regex.Match(title, @"\d+");
-            if (match.Success && int.TryParse(match.Value, out int number))
-                return number;
-
-            return fallback;
         }
 
         private static string NormalizeQuality(string quality)
@@ -342,99 +1089,6 @@ namespace NMoonAnime
             return quality.Equals("auto", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
         }
 
-        private static string GetStringProperty(JsonElement element, string name)
-        {
-            return element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-                ? value.GetString()
-                : null;
-        }
-
-        private static string ExtractFileArrayJson(string html)
-        {
-            if (string.IsNullOrWhiteSpace(html))
-                return null;
-
-            var match = Regex.Match(html, @"file\s*:\s*(\[[\s\S]*?\])\s*,\s*skip\s*:", RegexOptions.IgnoreCase);
-            if (match.Success)
-                return match.Groups[1].Value;
-
-            int fileIndex = html.IndexOf("file", StringComparison.OrdinalIgnoreCase);
-            if (fileIndex < 0)
-                return null;
-
-            int colonIndex = html.IndexOf(':', fileIndex);
-            if (colonIndex < 0)
-                return null;
-
-            int arrayIndex = html.IndexOf('[', colonIndex);
-            if (arrayIndex < 0)
-                return null;
-
-            return ExtractBracketArray(html, arrayIndex);
-        }
-
-        private static string ExtractBracketArray(string source, int startIndex)
-        {
-            bool inString = false;
-            bool escaped = false;
-            char stringChar = '\0';
-            int depth = 0;
-            int begin = -1;
-
-            for (int i = startIndex; i < source.Length; i++)
-            {
-                char c = source[i];
-
-                if (inString)
-                {
-                    if (escaped)
-                    {
-                        escaped = false;
-                        continue;
-                    }
-
-                    if (c == '\\')
-                    {
-                        escaped = true;
-                        continue;
-                    }
-
-                    if (c == stringChar)
-                    {
-                        inString = false;
-                        stringChar = '\0';
-                    }
-
-                    continue;
-                }
-
-                if (c == '"' || c == '\'')
-                {
-                    inString = true;
-                    stringChar = c;
-                    continue;
-                }
-
-                if (c == '[')
-                {
-                    if (depth == 0)
-                        begin = i;
-
-                    depth++;
-                    continue;
-                }
-
-                if (c == ']')
-                {
-                    depth--;
-                    if (depth == 0 && begin >= 0)
-                        return source.Substring(begin, i - begin + 1);
-                }
-            }
-
-            return null;
-        }
-
         private List<HeadersModel> DefaultHeaders()
         {
             return new List<HeadersModel>
@@ -454,6 +1108,20 @@ namespace NMoonAnime
                 ctime = multiaccess;
 
             return TimeSpan.FromMinutes(ctime);
+        }
+
+        private sealed class PlayerPayload
+        {
+            public string Title { get; set; }
+
+            public object FilePayload { get; set; }
+        }
+
+        private sealed class NMoonAnimeMovieEntry
+        {
+            public string Title { get; set; }
+
+            public string File { get; set; }
         }
     }
 }
