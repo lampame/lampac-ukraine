@@ -3,6 +3,7 @@ using Shared;
 using Shared.Engine;
 using Shared.Models.Online.Settings;
 using Shared.Models.Module;
+using Shared.Models.Module.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using System;
@@ -16,9 +17,9 @@ using System.Threading.Tasks;
 
 namespace KlonFUN
 {
-    public class ModInit
+    public class ModInit : IModuleLoaded
     {
-        public static double Version => 1.1;
+        public static double Version => 2.0;
 
         public static OnlinesSettings KlonFUN;
         public static bool ApnHostProvided;
@@ -32,7 +33,7 @@ namespace KlonFUN
         /// <summary>
         /// Модуль завантажено.
         /// </summary>
-        public static void loaded(InitspaceModel initspace)
+        public void Loaded(InitspaceModel initspace)
         {
             KlonFUN = new OnlinesSettings("KlonFUN", "https://klon.fun", streamproxy: false, useproxy: false)
             {
@@ -47,7 +48,7 @@ namespace KlonFUN
                 }
             };
 
-            var conf = ModuleInvoke.Conf("KlonFUN", KlonFUN);
+            var conf = ModuleInvoke.Init("KlonFUN", JObject.FromObject(KlonFUN));
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");
@@ -67,7 +68,45 @@ namespace KlonFUN
             }
 
             // Додаємо підтримку "уточнити пошук".
-            AppInit.conf.online.with_search.Add("klonfun");
+            RegisterWithSearch("klonfun");
+        }
+
+        private static void RegisterWithSearch(string plugin)
+        {
+            try
+            {
+                var onlineType = Type.GetType("Online.ModInit");
+                if (onlineType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        onlineType = asm.GetType("Online.ModInit");
+                        if (onlineType != null)
+                            break;
+                    }
+                }
+                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var conf = confField?.GetValue(null);
+                var withSearchProp = conf?.GetType().GetProperty("with_search", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (withSearchProp?.GetValue(conf) is System.Collections.IList list)
+                {
+                    foreach (var item in list)
+                    {
+                        if (string.Equals(item?.ToString(), plugin, StringComparison.OrdinalIgnoreCase))
+                            return;
+                    }
+
+                    list.Add(plugin);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        public void Dispose()
+        {
         }
     }
 

@@ -27,27 +27,27 @@ namespace AnimeON.Controllers
         }
         
         [HttpGet]
-        [Route("animeon")]
+        [Route("lite/animeon")]
         async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.AnimeON);
+            var init = loadKit(ModInit.AnimeON);
             if (!init.enable)
                 return Forbid();
 
-            var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
+            var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
 
             if (checksearch)
             {
-                if (AppInit.conf?.online?.checkOnlineSearch != true)
-                    return OnError("animeon", proxyManager);
+                if (!IsCheckOnlineSearchEnabled())
+                    return OnError("animeon", refresh_proxy: true);
 
                 var checkSeasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial);
                 if (checkSeasons != null && checkSeasons.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("animeon", proxyManager);
+                return OnError("animeon", refresh_proxy: true);
             }
 
             OnLog($"AnimeON Index: title={title}, original_title={original_title}, serial={serial}, s={s}, t={t}, year={year}, imdb_id={imdb_id}, kp={kinopoisk_id}");
@@ -55,7 +55,7 @@ namespace AnimeON.Controllers
             var seasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial);
             OnLog($"AnimeON: search results = {seasons?.Count ?? 0}");
             if (seasons == null || seasons.Count == 0)
-                return OnError("animeon", proxyManager);
+                return OnError("animeon", refresh_proxy: true);
 
             // [Refactoring] Використовується агрегована структура (AggregateSerialStructure) — попередній збір allOptions не потрібний
 
@@ -81,7 +81,7 @@ namespace AnimeON.Controllers
                     foreach (var item in seasonItems)
                     {
                         string seasonName = item.SeasonNumber.ToString();
-                        string link = $"{host}/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={item.SeasonNumber}";
+                        string link = $"{host}/lite/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={item.SeasonNumber}";
                         season_tpl.Append(seasonName, link, seasonName);
                     }
                     OnLog($"AnimeON: return seasons count={seasonItems.Count}");
@@ -106,13 +106,13 @@ namespace AnimeON.Controllers
                         selected = new { Anime = seasons[s], Index = s, SeasonNumber = seasons[s].Season > 0 ? seasons[s].Season : s + 1 };
 
                     if (selected == null)
-                        return OnError("animeon", proxyManager);
+                        return OnError("animeon", refresh_proxy: true);
 
                     var selectedAnime = selected.Anime;
                     int selectedSeasonNumber = selected.SeasonNumber;
                     var structure = await invoke.AggregateSerialStructure(selectedAnime.Id, selectedSeasonNumber);
                     if (structure == null || !structure.Voices.Any())
-                        return OnError("animeon", proxyManager);
+                        return OnError("animeon", refresh_proxy: true);
 
                     OnLog($"AnimeON: voices found = {structure.Voices.Count}");
                     var voiceItems = structure.Voices
@@ -135,14 +135,14 @@ namespace AnimeON.Controllers
                     var voice_tpl = new VoiceTpl();
                     foreach (var voice in voiceItems)
                     {
-                        string voiceLink = $"{host}/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&t={HttpUtility.UrlEncode(voice.Key)}";
+                        string voiceLink = $"{host}/lite/animeon?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&t={HttpUtility.UrlEncode(voice.Key)}";
                         bool isActive = voice.Key == t;
                         voice_tpl.Append(voice.Display, isActive, voiceLink);
                     }
 
                     // Перевірка вибраної озвучки
                     if (!structure.Voices.ContainsKey(t))
-                        return OnError("animeon", proxyManager);
+                        return OnError("animeon", refresh_proxy: true);
 
                     var episode_tpl = new EpisodeTpl();
                     var selectedVoiceInfo = structure.Voices[t];
@@ -179,7 +179,7 @@ namespace AnimeON.Controllers
 
                         if (string.IsNullOrEmpty(streamLink) && ep.EpisodeId > 0)
                         {
-                            string callUrl = $"{host}/animeon/play?episode_id={ep.EpisodeId}&serial=1";
+                            string callUrl = $"{host}/lite/animeon/play?episode_id={ep.EpisodeId}&serial=1";
                             episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, accsArgs(callUrl), "call");
                             continue;
                         }
@@ -189,7 +189,7 @@ namespace AnimeON.Controllers
 
                         if (needsResolve || streamLink.Contains("moonanime.art") || streamLink.Contains("ashdi.vip/vod"))
                         {
-                            string callUrl = $"{host}/animeon/play?url={HttpUtility.UrlEncode(streamLink)}&serial=1";
+                            string callUrl = $"{host}/lite/animeon/play?url={HttpUtility.UrlEncode(streamLink)}&serial=1";
                             episode_tpl.Append(episodeName, title ?? original_title, seasonStr, episodeStr, accsArgs(callUrl), "call");
                         }
                         else
@@ -212,12 +212,12 @@ namespace AnimeON.Controllers
             {
                 var firstAnime = seasons.FirstOrDefault();
                 if (firstAnime == null)
-                    return OnError("animeon", proxyManager);
+                    return OnError("animeon", refresh_proxy: true);
 
                 var fundubs = await invoke.GetFundubs(firstAnime.Id);
                 OnLog($"AnimeON: movie fundubs count = {fundubs?.Count ?? 0}");
                 if (fundubs == null || fundubs.Count == 0)
-                    return OnError("animeon", proxyManager);
+                    return OnError("animeon", refresh_proxy: true);
 
                 var tpl = new MovieTpl(title, original_title);
 
@@ -251,7 +251,7 @@ namespace AnimeON.Controllers
                                 foreach (var ashdiStream in ashdiStreams)
                                 {
                                     string optionName = $"{translationName} {ashdiStream.title}";
-                                    string callUrl = $"{host}/animeon/play?url={HttpUtility.UrlEncode(ashdiStream.link)}";
+                                    string callUrl = $"{host}/lite/animeon/play?url={HttpUtility.UrlEncode(ashdiStream.link)}";
                                     tpl.Append(optionName, accsArgs(callUrl), "call");
                                 }
                                 continue;
@@ -260,7 +260,7 @@ namespace AnimeON.Controllers
 
                         if (needsResolve || streamLink.Contains("moonanime.art/iframe/") || streamLink.Contains("ashdi.vip/vod"))
                         {
-                            string callUrl = $"{host}/animeon/play?url={HttpUtility.UrlEncode(streamLink)}";
+                            string callUrl = $"{host}/lite/animeon/play?url={HttpUtility.UrlEncode(streamLink)}";
                             tpl.Append(translationName, accsArgs(callUrl), "call");
                         }
                         else
@@ -272,7 +272,7 @@ namespace AnimeON.Controllers
 
                 // Якщо не зібрали жодної опції — повертаємо помилку
                 if (tpl.data == null || tpl.data.Count == 0)
-                    return OnError("animeon", proxyManager);
+                    return OnError("animeon", refresh_proxy: true);
 
                 OnLog("AnimeON: return movie options");
                 return rjson ? Content(tpl.ToJson(), "application/json; charset=utf-8") : Content(tpl.ToHtml(), "text/html; charset=utf-8");
@@ -283,7 +283,7 @@ namespace AnimeON.Controllers
         {
             string fundubsUrl = $"{init.host}/api/player/{animeId}/translations";
 
-            string fundubsJson = await Http.Get(init.cors(fundubsUrl), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
+            string fundubsJson = await httpHydra.Get(fundubsUrl, newheaders: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
             if (string.IsNullOrEmpty(fundubsJson))
                 return null;
 
@@ -308,7 +308,7 @@ namespace AnimeON.Controllers
         {
             string episodesUrl = $"{init.host}/api/player/{animeId}/episodes?take=100&skip=-1&playerId={playerId}&translationId={fundubId}";
 
-            string episodesJson = await Http.Get(init.cors(episodesUrl), headers: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
+            string episodesJson = await httpHydra.Get(episodesUrl, newheaders: new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", init.host) });
             if (string.IsNullOrEmpty(episodesJson))
                 return null;
 
@@ -332,7 +332,7 @@ namespace AnimeON.Controllers
 
                     string searchUrl = $"{init.host}/api/anime/search?text={HttpUtility.UrlEncode(query)}";
 
-                    string searchJson = await Http.Get(init.cors(searchUrl), headers: headers);
+                    string searchJson = await httpHydra.Get(searchUrl, newheaders: headers);
                     if (string.IsNullOrEmpty(searchJson))
                         return null;
 
@@ -373,16 +373,16 @@ namespace AnimeON.Controllers
             return null;
         }
 
-        [HttpGet("animeon/play")]
+        [HttpGet("lite/animeon/play")]
         public async Task<ActionResult> Play(string url, int episode_id = 0, string title = null, int serial = 0)
         {
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.AnimeON);
+            var init = loadKit(ModInit.AnimeON);
             if (!init.enable)
                 return Forbid();
 
-            var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager);
+            var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
             bool disableAshdiMultivoiceForVod = serial == 1;
             OnLog($"AnimeON Play: url={url}, episode_id={episode_id}, serial={serial}");
 
@@ -398,13 +398,13 @@ namespace AnimeON.Controllers
             else
             {
                 OnLog("AnimeON Play: empty url");
-                return OnError("animeon", proxyManager);
+                return OnError("animeon", refresh_proxy: true);
             }
 
             if (string.IsNullOrEmpty(streamLink))
             {
                 OnLog("AnimeON Play: cannot extract stream");
-                return OnError("animeon", proxyManager);
+                return OnError("animeon", refresh_proxy: true);
             }
 
             List<HeadersModel> streamHeaders = null;
@@ -461,6 +461,39 @@ namespace AnimeON.Controllers
             }
 
             return HostStreamProxy(init, link, headers: headers, force_streamproxy: forceProxy);
+        }
+
+        private static bool IsCheckOnlineSearchEnabled()
+        {
+            try
+            {
+                var onlineType = Type.GetType("Online.ModInit");
+                if (onlineType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        onlineType = asm.GetType("Online.ModInit");
+                        if (onlineType != null)
+                            break;
+                    }
+                }
+                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var conf = confField?.GetValue(null);
+                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (checkProp?.GetValue(conf) is bool enabled)
+                    return enabled;
+            }
+            catch
+            {
+            }
+
+            return true;
+        }
+
+        private static void OnLog(string message)
+        {
+            System.Console.WriteLine(message);
         }
     }
 }

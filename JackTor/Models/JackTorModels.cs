@@ -197,4 +197,18 @@ namespace JackTor.Models
 
         public int[] Seasons { get; set; }
     }
+
+    public class FileStat
+    {
+        public int Id { get; set; }
+
+        public string Path { get; set; }
+
+        public long Length { get; set; }
+    }
+
+    public class Stat
+    {
+        public FileStat[] file_stats { get; set; }
+    }
 }

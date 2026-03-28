@@ -28,13 +28,15 @@ namespace KlonFUN
         private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
+        private readonly HttpHydra _httpHydra;
 
-        public KlonFUNInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public KlonFUNInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, HttpHydra httpHydra = null)
         {
             _init = init;
             _hybridCache = hybridCache;
             _onLog = onLog;
             _proxyManager = proxyManager;
+            _httpHydra = httpHydra;
         }
 
         public async Task<List<SearchResult>> Search(string imdbId, string title, string originalTitle)
@@ -108,7 +110,7 @@ namespace KlonFUN
             try
             {
                 var headers = DefaultHeaders();
-                string html = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+                string html = await HttpGet(url, headers);
                 if (string.IsNullOrWhiteSpace(html))
                     return null;
 
@@ -362,7 +364,7 @@ namespace KlonFUN
                 var headers = DefaultHeaders();
 
                 string form = $"do=search&subaction=search&story={HttpUtility.UrlEncode(query)}";
-                string html = await Http.Post(_init.cors(_init.host), form, headers: headers, proxy: _proxyManager.Get());
+                string html = await HttpPost(_init.host, form, headers);
                 if (string.IsNullOrWhiteSpace(html))
                     return null;
 
@@ -465,7 +467,7 @@ namespace KlonFUN
                 requestUrl = ApnHelper.WrapUrl(_init, playerUrl);
 
             var headers = DefaultHeaders();
-            return await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
+            return await HttpGet(requestUrl, headers);
         }
 
         private static JArray ParsePlayerArray(string html)
@@ -699,16 +701,28 @@ namespace KlonFUN
             return null;
         }
 
+        private Task<string> HttpGet(string url, List<HeadersModel> headers)
+        {
+            if (_httpHydra != null)
+                return _httpHydra.Get(url, newheaders: headers);
+
+            return Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+        }
+
+        private Task<string> HttpPost(string url, string data, List<HeadersModel> headers)
+        {
+            if (_httpHydra != null)
+                return _httpHydra.Post(url, data, newheaders: headers);
+
+            return Http.Post(_init.cors(url), data, headers: headers, proxy: _proxyManager.Get());
+        }
+
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
         {
             if (init != null && init.rhub && rhub != -1)
                 return TimeSpan.FromMinutes(rhub);
 
-            int ctime = AppInit.conf.mikrotik
-                ? mikrotik
-                : AppInit.conf.multiaccess
-                    ? init != null && init.cache_time > 0 ? init.cache_time : multiaccess
-                    : home;
+            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
 
             if (ctime > multiaccess)
                 ctime = multiaccess;

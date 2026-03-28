@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using Shared;
 using Shared.Engine;
 using Shared.Models.Module;
+using Shared.Models.Module.Interfaces;
 using Shared.Models.Online.Settings;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis.Scripting;
@@ -23,9 +24,9 @@ using System.Threading.Tasks;
 
 namespace AnimeON
 {
-    public class ModInit
+    public class ModInit : IModuleLoaded
     {
-        public static double Version => 3.7;
+        public static double Version => 4.0;
 
         public static OnlinesSettings AnimeON;
         public static bool ApnHostProvided;
@@ -39,7 +40,7 @@ namespace AnimeON
         /// <summary>
         /// модуль загружен
         /// </summary>
-        public static void loaded(InitspaceModel initspace)
+        public void Loaded(InitspaceModel initspace)
         {
             
 
@@ -55,7 +56,7 @@ namespace AnimeON
                     list = new string[] { "socks5://ip:port" }
                 }
             };
-            var conf = ModuleInvoke.Conf("AnimeON", AnimeON);
+            var conf = ModuleInvoke.Init("AnimeON", JObject.FromObject(AnimeON));
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");
@@ -74,7 +75,45 @@ namespace AnimeON
             }
 
             // Виводити "уточнити пошук"
-            AppInit.conf.online.with_search.Add("animeon");
+            RegisterWithSearch("animeon");
+        }
+
+        private static void RegisterWithSearch(string plugin)
+        {
+            try
+            {
+                var onlineType = Type.GetType("Online.ModInit");
+                if (onlineType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        onlineType = asm.GetType("Online.ModInit");
+                        if (onlineType != null)
+                            break;
+                    }
+                }
+                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var conf = confField?.GetValue(null);
+                var withSearchProp = conf?.GetType().GetProperty("with_search", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (withSearchProp?.GetValue(conf) is System.Collections.IList list)
+                {
+                    foreach (var item in list)
+                    {
+                        if (string.Equals(item?.ToString(), plugin, StringComparison.OrdinalIgnoreCase))
+                            return;
+                    }
+
+                    list.Add(plugin);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        public void Dispose()
+        {
         }
     }
 

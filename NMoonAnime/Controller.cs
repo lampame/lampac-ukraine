@@ -25,35 +25,35 @@ namespace NMoonAnime.Controllers
         }
 
         [HttpGet]
-        [Route("nmoonanime")]
+        [Route("lite/nmoonanime")]
         public async Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string mal_id, string t, int s = -1, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.NMoonAnime);
+            var init = loadKit(ModInit.NMoonAnime);
             if (!init.enable)
                 return Forbid();
 
-            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager);
+            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
             string effectiveMalId = ResolveMalId(mal_id, kinopoisk_id, source);
 
             if (checksearch)
             {
-                if (AppInit.conf?.online?.checkOnlineSearch != true)
-                    return OnError("nmoonanime", proxyManager);
+                if (!IsCheckOnlineSearchEnabled())
+                    return OnError("nmoonanime", refresh_proxy: true);
 
                 var checkResults = await invoke.Search(imdb_id, effectiveMalId, title, year);
                 if (checkResults != null && checkResults.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
             }
 
             OnLog($"NMoonAnime: назва={title}, source={source}, imdb={imdb_id}, kinopoisk_id(як mal_id)={kinopoisk_id}, mal_id_ефективний={effectiveMalId}, рік={year}, серіал={serial}, сезон={s}, озвучка={t}");
 
             var seasons = await invoke.Search(imdb_id, effectiveMalId, title, year);
             if (seasons == null || seasons.Count == 0)
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
 
             bool isSeries = serial == 1;
             NMoonAnimeSeasonContent firstSeasonData = null;
@@ -62,7 +62,7 @@ namespace NMoonAnime.Controllers
             {
                 firstSeasonData = await invoke.GetSeasonContent(seasons[0]);
                 if (firstSeasonData == null || firstSeasonData.Voices.Count == 0)
-                    return OnError("nmoonanime", proxyManager);
+                    return OnError("nmoonanime", refresh_proxy: true);
 
                 isSeries = firstSeasonData.IsSeries;
             }
@@ -75,22 +75,22 @@ namespace NMoonAnime.Controllers
             return await RenderMovie(invoke, seasons, title, original_title, firstSeasonData, rjson);
         }
 
-        [HttpGet("nmoonanime/play")]
+        [HttpGet("lite/nmoonanime/play")]
         public async Task<ActionResult> Play(string file, string title = null)
         {
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.NMoonAnime);
+            var init = loadKit(ModInit.NMoonAnime);
             if (!init.enable)
                 return Forbid();
 
             if (string.IsNullOrWhiteSpace(file))
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
 
-            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager);
+            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
             var streams = invoke.ParseStreams(file);
             if (streams == null || streams.Count == 0)
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
 
             if (streams.Count == 1)
             {
@@ -107,7 +107,7 @@ namespace NMoonAnime.Controllers
             }
 
             if (!streamQuality.Any())
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
 
             var first = streamQuality.Firts();
             string json = VideoTpl.ToJson("play", first.link, title ?? string.Empty, streamquality: streamQuality);
@@ -133,7 +133,7 @@ namespace NMoonAnime.Controllers
                 .ToList();
 
             if (orderedSeasons.Count == 0)
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
 
             if (selectedSeason == -1)
             {
@@ -154,14 +154,14 @@ namespace NMoonAnime.Controllers
             var currentSeason = orderedSeasons.FirstOrDefault(s => s.SeasonNumber == selectedSeason) ?? orderedSeasons[0];
             var seasonData = await invoke.GetSeasonContent(currentSeason);
             if (seasonData == null)
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
 
             var voices = seasonData.Voices
                 .Where(v => v != null && v.Episodes != null && v.Episodes.Count > 0)
                 .ToList();
 
             if (voices.Count == 0)
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
 
             int activeVoiceIndex = ParseVoiceIndex(selectedVoice, voices.Count);
             var voiceTpl = new VoiceTpl(voices.Count);
@@ -180,7 +180,7 @@ namespace NMoonAnime.Controllers
                 .ToList();
 
             if (episodes.Count == 0)
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
 
             string displayTitle = !string.IsNullOrWhiteSpace(title)
                 ? title
@@ -193,7 +193,7 @@ namespace NMoonAnime.Controllers
             {
                 int episodeNumber = episode.Number <= 0 ? 1 : episode.Number;
                 string episodeName = string.IsNullOrWhiteSpace(episode.Name) ? $"Епізод {episodeNumber}" : episode.Name;
-                string callUrl = $"{host}/nmoonanime/play?file={HttpUtility.UrlEncode(episode.File)}&title={HttpUtility.UrlEncode(displayTitle)}";
+                string callUrl = $"{host}/lite/nmoonanime/play?file={HttpUtility.UrlEncode(episode.File)}&title={HttpUtility.UrlEncode(displayTitle)}";
                 episodeTpl.Append(episodeName, displayTitle, currentSeason.SeasonNumber.ToString(), episodeNumber.ToString(), accsArgs(callUrl), "call");
             }
 
@@ -218,14 +218,14 @@ namespace NMoonAnime.Controllers
                 .FirstOrDefault();
 
             if (currentSeason == null)
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
 
             NMoonAnimeSeasonContent seasonData = firstSeasonData;
             if (seasonData == null || !string.Equals(seasonData.Url, currentSeason.Url, StringComparison.OrdinalIgnoreCase))
                 seasonData = await invoke.GetSeasonContent(currentSeason);
 
             if (seasonData == null || seasonData.Voices.Count == 0)
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
 
             string displayTitle = !string.IsNullOrWhiteSpace(title)
                 ? title
@@ -249,13 +249,13 @@ namespace NMoonAnime.Controllers
                     continue;
 
                 string voiceName = string.IsNullOrWhiteSpace(voice.Name) ? $"Озвучка {fallbackIndex}" : voice.Name;
-                string callUrl = $"{host}/nmoonanime/play?file={HttpUtility.UrlEncode(file)}&title={HttpUtility.UrlEncode(displayTitle)}";
+                string callUrl = $"{host}/lite/nmoonanime/play?file={HttpUtility.UrlEncode(file)}&title={HttpUtility.UrlEncode(displayTitle)}";
                 movieTpl.Append(voiceName, accsArgs(callUrl), "call");
                 fallbackIndex++;
             }
 
             if (movieTpl.IsEmpty)
-                return OnError("nmoonanime", proxyManager);
+                return OnError("nmoonanime", refresh_proxy: true);
 
             return rjson
                 ? Content(movieTpl.ToJson(), "application/json; charset=utf-8")
@@ -265,7 +265,7 @@ namespace NMoonAnime.Controllers
         private string BuildIndexUrl(string imdbId, long kinopoiskId, string title, string originalTitle, int year, int serial, string malId, int season, string voice)
         {
             var url = new StringBuilder();
-            url.Append($"{host}/nmoonanime?imdb_id={HttpUtility.UrlEncode(imdbId)}");
+            url.Append($"{host}/lite/nmoonanime?imdb_id={HttpUtility.UrlEncode(imdbId)}");
             url.Append($"&kinopoisk_id={kinopoiskId}");
             url.Append($"&title={HttpUtility.UrlEncode(title)}");
             url.Append($"&original_title={HttpUtility.UrlEncode(originalTitle)}");
@@ -352,6 +352,39 @@ namespace NMoonAnime.Controllers
 
             cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
             return cleaned;
+        }
+
+        private static bool IsCheckOnlineSearchEnabled()
+        {
+            try
+            {
+                var onlineType = Type.GetType("Online.ModInit");
+                if (onlineType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        onlineType = asm.GetType("Online.ModInit");
+                        if (onlineType != null)
+                            break;
+                    }
+                }
+                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var conf = confField?.GetValue(null);
+                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (checkProp?.GetValue(conf) is bool enabled)
+                    return enabled;
+            }
+            catch
+            {
+            }
+
+            return true;
+        }
+
+        private static void OnLog(string message)
+        {
+            System.Console.WriteLine(message);
         }
     }
 }

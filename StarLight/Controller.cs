@@ -24,27 +24,27 @@ namespace StarLight.Controllers
         }
 
         [HttpGet]
-        [Route("starlight")]
+        [Route("lite/starlight")]
         async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, int s = -1, bool rjson = false, string href = null, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.StarLight);
+            var init = loadKit(ModInit.StarLight);
             if (!init.enable)
                 return Forbid();
 
-            var invoke = new StarLightInvoke(init, hybridCache, OnLog, proxyManager);
+            var invoke = new StarLightInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
 
             if (checksearch)
             {
-                if (AppInit.conf?.online?.checkOnlineSearch != true)
-                    return OnError("starlight", proxyManager);
+                if (!IsCheckOnlineSearchEnabled())
+                    return OnError("starlight", refresh_proxy: true);
 
                 var searchResults = await invoke.Search(title, original_title);
                 if (searchResults != null && searchResults.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("starlight", proxyManager);
+                return OnError("starlight", refresh_proxy: true);
             }
 
             string itemUrl = href;
@@ -52,14 +52,14 @@ namespace StarLight.Controllers
             {
                 var searchResults = await invoke.Search(title, original_title);
                 if (searchResults == null || searchResults.Count == 0)
-                    return OnError("starlight", proxyManager);
+                    return OnError("starlight", refresh_proxy: true);
 
                 if (searchResults.Count > 1)
                 {
                     var similar_tpl = new SimilarTpl(searchResults.Count);
                     foreach (var res in searchResults)
                     {
-                        string link = $"{host}/starlight?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(res.Href)}";
+                        string link = $"{host}/lite/starlight?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(res.Href)}";
                         similar_tpl.Append(res.Title, string.Empty, string.Empty, link, string.Empty);
                     }
 
@@ -71,7 +71,7 @@ namespace StarLight.Controllers
 
             var project = await invoke.GetProject(itemUrl);
             if (project == null)
-                return OnError("starlight", proxyManager);
+                return OnError("starlight", refresh_proxy: true);
 
             if (serial == 1 && project.Seasons.Count > 0)
             {
@@ -82,7 +82,7 @@ namespace StarLight.Controllers
                     {
                         var seasonInfo = project.Seasons[i];
                         string seasonName = string.IsNullOrEmpty(seasonInfo.Title) ? $"Сезон {i + 1}" : seasonInfo.Title;
-                        string link = $"{host}/starlight?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={i}&href={HttpUtility.UrlEncode(itemUrl)}";
+                        string link = $"{host}/lite/starlight?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={i}&href={HttpUtility.UrlEncode(itemUrl)}";
                         season_tpl.Append(seasonName, link, i.ToString());
                     }
 
@@ -90,13 +90,13 @@ namespace StarLight.Controllers
                 }
 
                 if (s < 0 || s >= project.Seasons.Count)
-                    return OnError("starlight", proxyManager);
+                    return OnError("starlight", refresh_proxy: true);
 
                 var season = project.Seasons[s];
                 string seasonSlug = season.Slug;
                 var episodes = invoke.GetEpisodes(project, seasonSlug);
                 if (episodes == null || episodes.Count == 0)
-                    return OnError("starlight", proxyManager);
+                    return OnError("starlight", refresh_proxy: true);
 
                 var episode_tpl = new EpisodeTpl();
                 int index = 1;
@@ -114,7 +114,7 @@ namespace StarLight.Controllers
                         continue;
 
                     string episodeName = string.IsNullOrEmpty(ep.Title) ? $"Епізод {index}" : ep.Title;
-                    string callUrl = $"{host}/starlight/play?hash={HttpUtility.UrlEncode(ep.Hash)}&title={HttpUtility.UrlEncode(title ?? original_title)}";
+                    string callUrl = $"{host}/lite/starlight/play?hash={HttpUtility.UrlEncode(ep.Hash)}&title={HttpUtility.UrlEncode(title ?? original_title)}";
                     episode_tpl.Append(episodeName, title ?? original_title, seasonNumber, index.ToString("D2"), accsArgs(callUrl), "call");
                     index++;
                 }
@@ -128,9 +128,9 @@ namespace StarLight.Controllers
                     hash = project.Episodes.FirstOrDefault(e => !string.IsNullOrEmpty(e.Hash))?.Hash;
 
                 if (string.IsNullOrEmpty(hash))
-                    return OnError("starlight", proxyManager);
+                    return OnError("starlight", refresh_proxy: true);
 
-                string callUrl = $"{host}/starlight/play?hash={HttpUtility.UrlEncode(hash)}&title={HttpUtility.UrlEncode(title ?? original_title)}";
+                string callUrl = $"{host}/lite/starlight/play?hash={HttpUtility.UrlEncode(hash)}&title={HttpUtility.UrlEncode(title ?? original_title)}";
                 var movie_tpl = new MovieTpl(title, original_title, 1);
                 movie_tpl.Append(string.IsNullOrEmpty(title) ? "StarLight" : title, accsArgs(callUrl), "call");
 
@@ -139,22 +139,22 @@ namespace StarLight.Controllers
         }
 
         [HttpGet]
-        [Route("starlight/play")]
+        [Route("lite/starlight/play")]
         async public Task<ActionResult> Play(string hash, string title)
         {
             await UpdateService.ConnectAsync(host);
 
             if (string.IsNullOrEmpty(hash))
-                return OnError("starlight", proxyManager);
+                return OnError("starlight", refresh_proxy: true);
 
-            var init = await loadKit(ModInit.StarLight);
+            var init = loadKit(ModInit.StarLight);
             if (!init.enable)
                 return Forbid();
 
-            var invoke = new StarLightInvoke(init, hybridCache, OnLog, proxyManager);
+            var invoke = new StarLightInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
             var result = await invoke.ResolveStream(hash);
             if (result == null || string.IsNullOrEmpty(result.Stream))
-                return OnError("starlight", proxyManager);
+                return OnError("starlight", refresh_proxy: true);
 
             string videoTitle = title ?? result.Name ?? "";
 
@@ -265,6 +265,39 @@ namespace StarLight.Controllers
                 return dt;
 
             return DateTime.TryParse(episode.Date, CultureInfo.InvariantCulture, DateTimeStyles.None, out dt) ? dt : null;
+        }
+
+        private static bool IsCheckOnlineSearchEnabled()
+        {
+            try
+            {
+                var onlineType = Type.GetType("Online.ModInit");
+                if (onlineType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        onlineType = asm.GetType("Online.ModInit");
+                        if (onlineType != null)
+                            break;
+                    }
+                }
+                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var conf = confField?.GetValue(null);
+                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (checkProp?.GetValue(conf) is bool enabled)
+                    return enabled;
+            }
+            catch
+            {
+            }
+
+            return true;
+        }
+
+        private static void OnLog(string message)
+        {
+            System.Console.WriteLine(message);
         }
     }
 }

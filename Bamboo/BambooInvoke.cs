@@ -20,13 +20,15 @@ namespace Bamboo
         private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
+        private readonly HttpHydra _httpHydra;
 
-        public BambooInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public BambooInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, HttpHydra httpHydra = null)
         {
             _init = init;
             _hybridCache = hybridCache;
             _onLog = onLog;
             _proxyManager = proxyManager;
+            _httpHydra = httpHydra;
         }
 
         public async Task<List<SearchResult>> Search(string title, string original_title)
@@ -50,7 +52,7 @@ namespace Bamboo
                 };
 
                 _onLog?.Invoke($"Bamboo search: {searchUrl}");
-                string html = await Http.Get(_init.cors(searchUrl), headers: headers, proxy: _proxyManager.Get());
+                string html = await HttpGet(searchUrl, headers);
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -109,7 +111,7 @@ namespace Bamboo
                 };
 
                 _onLog?.Invoke($"Bamboo series page: {href}");
-                string html = await Http.Get(_init.cors(href), headers: headers, proxy: _proxyManager.Get());
+                string html = await HttpGet(href, headers);
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -183,7 +185,7 @@ namespace Bamboo
                 };
 
                 _onLog?.Invoke($"Bamboo movie page: {href}");
-                string html = await Http.Get(_init.cors(href), headers: headers, proxy: _proxyManager.Get());
+                string html = await HttpGet(href, headers);
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -311,12 +313,20 @@ namespace Bamboo
             return HtmlEntity.DeEntitize(value).Trim();
         }
 
+        private Task<string> HttpGet(string url, List<HeadersModel> headers)
+        {
+            if (_httpHydra != null)
+                return _httpHydra.Get(url, newheaders: headers);
+
+            return Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+        }
+
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
         {
             if (init != null && init.rhub && rhub != -1)
                 return TimeSpan.FromMinutes(rhub);
 
-            int ctime = AppInit.conf.mikrotik ? mikrotik : AppInit.conf.multiaccess ? init != null && init.cache_time > 0 ? init.cache_time : multiaccess : home;
+            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
             if (ctime > multiaccess)
                 ctime = multiaccess;
 

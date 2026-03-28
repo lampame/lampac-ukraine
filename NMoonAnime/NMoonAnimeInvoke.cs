@@ -22,6 +22,7 @@ namespace NMoonAnime
         private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
+        private readonly HttpHydra _httpHydra;
         private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -35,12 +36,13 @@ namespace NMoonAnime
         private static readonly UTF8Encoding _utf8Strict = new UTF8Encoding(false, true);
         private static readonly Encoding _latin1 = Encoding.GetEncoding("ISO-8859-1");
 
-        public NMoonAnimeInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public NMoonAnimeInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, HttpHydra httpHydra = null)
         {
             _init = init;
             _hybridCache = hybridCache;
             _onLog = onLog;
             _proxyManager = proxyManager;
+            _httpHydra = httpHydra;
         }
 
         public async Task<List<NMoonAnimeSeasonRef>> Search(string imdbId, string malId, string title, int year)
@@ -64,7 +66,7 @@ namespace NMoonAnime
                         continue;
 
                     _onLog($"NMoonAnime: пошук через {searchUrl}");
-                    string json = await Http.Get(_init.cors(searchUrl), headers: DefaultHeaders(), proxy: _proxyManager.Get());
+                    string json = await HttpGet(searchUrl, DefaultHeaders());
                     if (string.IsNullOrWhiteSpace(json))
                         continue;
 
@@ -108,7 +110,7 @@ namespace NMoonAnime
             try
             {
                 _onLog($"NMoonAnime: завантаження сезону {season.Url}");
-                string html = await Http.Get(_init.cors(season.Url), headers: DefaultHeaders(), proxy: _proxyManager.Get());
+                string html = await HttpGet(season.Url, DefaultHeaders());
                 if (string.IsNullOrWhiteSpace(html))
                     return null;
 
@@ -1098,12 +1100,20 @@ namespace NMoonAnime
             };
         }
 
+        private Task<string> HttpGet(string url, List<HeadersModel> headers)
+        {
+            if (_httpHydra != null)
+                return _httpHydra.Get(url, newheaders: headers);
+
+            return Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+        }
+
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
         {
             if (init != null && init.rhub && rhub != -1)
                 return TimeSpan.FromMinutes(rhub);
 
-            int ctime = AppInit.conf.mikrotik ? mikrotik : AppInit.conf.multiaccess ? init != null && init.cache_time > 0 ? init.cache_time : multiaccess : home;
+            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
             if (ctime > multiaccess)
                 ctime = multiaccess;
 

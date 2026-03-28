@@ -28,14 +28,16 @@ namespace Uaflix
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
         private readonly UaflixAuth _auth;
+        private readonly HttpHydra _httpHydra;
 
-        public UaflixInvoke(UaflixSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, UaflixAuth auth)
+        public UaflixInvoke(UaflixSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, UaflixAuth auth, HttpHydra httpHydra = null)
         {
             _init = init;
             _hybridCache = hybridCache;
             _onLog = onLog;
             _proxyManager = proxyManager;
             _auth = auth;
+            _httpHydra = httpHydra;
         }
 
         string AshdiRequestUrl(string url)
@@ -76,7 +78,6 @@ namespace Uaflix
             if (string.IsNullOrWhiteSpace(url))
                 return null;
 
-            string requestUrl = _init.cors(url);
             bool withAuth = ShouldUseAuth(url);
             var requestHeaders = headers != null ? new List<HeadersModel>(headers) : new List<HeadersModel>();
 
@@ -86,6 +87,26 @@ namespace Uaflix
                 _auth.ApplyCookieHeader(requestHeaders, cookie);
             }
 
+            if (_httpHydra != null)
+            {
+                string content = await _httpHydra.Get(url, newheaders: requestHeaders, statusCodeOK: false);
+
+                if (string.IsNullOrWhiteSpace(content)
+                    && retryOnUnauthorized
+                    && withAuth
+                    && _auth != null
+                    && _auth.CanUseCredentials)
+                {
+                    _onLog($"UaflixAuth: порожня відповідь для {url}, виконую повторну авторизацію");
+                    string refreshedCookie = await _auth.GetCookieHeaderAsync(forceRefresh: true);
+                    _auth.ApplyCookieHeader(requestHeaders, refreshedCookie);
+                    content = await _httpHydra.Get(url, newheaders: requestHeaders, statusCodeOK: false);
+                }
+
+                return string.IsNullOrWhiteSpace(content) ? null : content;
+            }
+
+            string requestUrl = _init.cors(url);
             var response = await Http.BaseGet(requestUrl,
                 headers: requestHeaders,
                 timeoutSeconds: timeoutSeconds,
@@ -1790,7 +1811,7 @@ namespace Uaflix
             if (init != null && init.rhub && rhub != -1)
                 return TimeSpan.FromMinutes(rhub);
             
-            int ctime = AppInit.conf.mikrotik ? mikrotik : AppInit.conf.multiaccess ? init != null && init.cache_time > 0 ? init.cache_time : multiaccess : home;
+            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
             if (ctime > multiaccess)
                 ctime = multiaccess;
             
@@ -1805,9 +1826,9 @@ namespace Uaflix
             if (init != null && init.rhub && rhub != -1)
                 return TimeSpan.FromMinutes(rhub);
             
-            int ctime = AppInit.conf.mikrotik ? mikrotik : AppInit.conf.multiaccess ? init != null && init.cache_time > 0 ? init.cache_time : multiaccess : home;
-            if (init != null && ctime > init.cache_time && init.cache_time > 0)
-                ctime = init.cache_time;
+            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
+            if (ctime > multiaccess)
+                ctime = multiaccess;
             
             return TimeSpan.FromMinutes(ctime);
         }

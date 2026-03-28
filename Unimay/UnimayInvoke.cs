@@ -6,7 +6,6 @@ using Shared.Models.Online.Settings;
 using Shared.Models;
 using System.Linq;
 using Unimay.Models;
-using Shared.Engine;
 using System.Net;
 using System.Text;
 
@@ -18,13 +17,15 @@ namespace Unimay
         private ProxyManager _proxyManager;
         private IHybridCache _hybridCache;
         private Action<string> _onLog;
+        private readonly HttpHydra _httpHydra;
 
-        public UnimayInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public UnimayInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, HttpHydra httpHydra = null)
         {
             _init = init;
             _hybridCache = hybridCache;
             _onLog = onLog;
             _proxyManager = proxyManager;
+            _httpHydra = httpHydra;
         }
 
         public async Task<SearchResponse> Search(string title, string original_title, int serial)
@@ -39,7 +40,7 @@ namespace Unimay
                 string searchUrl = $"{_init.host}/release/search?page=0&page_size=10&title={searchQuery}";
 
                 var headers = httpHeaders(_init);
-                SearchResponse root = await Http.Get<SearchResponse>(_init.cors(searchUrl), timeoutSeconds: 8, proxy: _proxyManager.Get(), headers: headers);
+                SearchResponse root = await HttpGet<SearchResponse>(searchUrl, headers, timeoutSeconds: 8);
 
                 if (root == null || root.Content == null || root.Content.Count == 0)
                 {
@@ -69,7 +70,7 @@ namespace Unimay
                 string releaseUrl = $"{_init.host}/release?code={code}";
 
                 var headers = httpHeaders(_init);
-                ReleaseResponse root = await Http.Get<ReleaseResponse>(_init.cors(releaseUrl), timeoutSeconds: 8, proxy: _proxyManager.Get(), headers: headers);
+                ReleaseResponse root = await HttpGet<ReleaseResponse>(releaseUrl, headers, timeoutSeconds: 8);
 
                 if (root == null)
                 {
@@ -103,7 +104,7 @@ namespace Unimay
                 }
 
                 string itemTitle = item.Names?.Ukr ?? item.Names?.Eng ?? item.Title;
-                string releaseUrl = $"{host}/unimay?code={item.Code}&title={System.Web.HttpUtility.UrlEncode(itemTitle)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial={serial}";
+                string releaseUrl = $"{host}/lite/unimay?code={item.Code}&title={System.Web.HttpUtility.UrlEncode(itemTitle)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial={serial}";
                 results.Add((itemTitle, item.Year, item.Type, releaseUrl));
             }
 
@@ -116,7 +117,7 @@ namespace Unimay
                 return (null, null);
 
             var movieEpisode = releaseDetail.Playlist[0];
-            string movieLink = $"{host}/unimay?code={releaseDetail.Code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=0&play=true";
+            string movieLink = $"{host}/lite/unimay?code={releaseDetail.Code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=0&play=true";
             string movieTitle = movieEpisode.Title ?? title;
 
             return (movieTitle, movieLink);
@@ -124,7 +125,7 @@ namespace Unimay
 
         public (string seasonName, string seasonUrl, string seasonId) GetSeasonInfo(string host, string code, string title, string original_title)
         {
-            string seasonUrl = $"{host}/unimay?code={code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=1&s=1";
+            string seasonUrl = $"{host}/lite/unimay?code={code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=1&s=1";
             return ("Сезон 1", seasonUrl, "1");
         }
 
@@ -138,7 +139,7 @@ namespace Unimay
             foreach (var ep in releaseDetail.Playlist.Where(ep => ep.Number >= 1 && ep.Number <= 24).OrderBy(ep => ep.Number))
             {
                 string epTitle = ep.Title ?? $"Епізод {ep.Number}";
-                string epLink = $"{host}/unimay?code={releaseDetail.Code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=1&s=1&e={ep.Number}&play=true";
+                string epLink = $"{host}/lite/unimay?code={releaseDetail.Code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=1&s=1&e={ep.Number}&play=true";
                 episodes.Add((epTitle, epLink));
             }
 
@@ -160,12 +161,20 @@ namespace Unimay
             };
         }
 
+        private Task<T> HttpGet<T>(string url, List<HeadersModel> headers, int timeoutSeconds = 15)
+        {
+            if (_httpHydra != null)
+                return _httpHydra.Get<T>(url, newheaders: headers);
+
+            return Http.Get<T>(_init.cors(url), timeoutSeconds: timeoutSeconds, proxy: _proxyManager.Get(), headers: headers);
+        }
+
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
         {
             if (init != null && init.rhub && rhub != -1)
                 return TimeSpan.FromMinutes(rhub);
 
-            int ctime = AppInit.conf.mikrotik ? mikrotik : AppInit.conf.multiaccess ? init != null && init.cache_time > 0 ? init.cache_time : multiaccess : home;
+            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
             if (ctime > multiaccess)
                 ctime = multiaccess;
 

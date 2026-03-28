@@ -2,8 +2,8 @@ using JackTor.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Shared;
-using Shared.Engine;
 using Shared.Models.Module;
+using Shared.Models.Module.Interfaces;
 using System;
 using System.Net.Http;
 using System.Net.Mime;
@@ -15,9 +15,9 @@ using System.Threading.Tasks;
 
 namespace JackTor
 {
-    public class ModInit
+    public class ModInit : IModuleLoaded
     {
-        public static double Version => 1.0;
+        public static double Version => 2.0;
 
         public static JackTorSettings JackTor;
 
@@ -30,7 +30,7 @@ namespace JackTor
         /// <summary>
         /// Модуль завантажено.
         /// </summary>
-        public static void loaded(InitspaceModel initspace)
+        public void Loaded(InitspaceModel initspace)
         {
             JackTor = new JackTorSettings("JackTor", "http://127.0.0.1:9117", streamproxy: false, useproxy: false)
             {
@@ -66,7 +66,7 @@ namespace JackTor
                 }
             };
 
-            var conf = ModuleInvoke.Conf("JackTor", JackTor) ?? JObject.FromObject(JackTor);
+            var conf = ModuleInvoke.Init("JackTor", JObject.FromObject(JackTor)) ?? JObject.FromObject(JackTor);
             JackTor = conf.ToObject<JackTorSettings>();
 
             if (string.IsNullOrWhiteSpace(JackTor.jackett))
@@ -76,7 +76,45 @@ namespace JackTor
                 JackTor.host = JackTor.jackett;
 
             // Показувати «уточнити пошук».
-            AppInit.conf.online.with_search.Add("jacktor");
+            RegisterWithSearch("jacktor");
+        }
+
+        private static void RegisterWithSearch(string plugin)
+        {
+            try
+            {
+                var onlineType = Type.GetType("Online.ModInit");
+                if (onlineType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        onlineType = asm.GetType("Online.ModInit");
+                        if (onlineType != null)
+                            break;
+                    }
+                }
+                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var conf = confField?.GetValue(null);
+                var withSearchProp = conf?.GetType().GetProperty("with_search", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (withSearchProp?.GetValue(conf) is System.Collections.IList list)
+                {
+                    foreach (var item in list)
+                    {
+                        if (string.Equals(item?.ToString(), plugin, StringComparison.OrdinalIgnoreCase))
+                            return;
+                    }
+
+                    list.Add(plugin);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        public void Dispose()
+        {
         }
     }
 

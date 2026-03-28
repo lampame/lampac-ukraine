@@ -24,13 +24,15 @@ namespace Makhno
         private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
+        private readonly HttpHydra _httpHydra;
 
-        public MakhnoInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public MakhnoInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, HttpHydra httpHydra = null)
         {
             _init = init;
             _hybridCache = hybridCache;
             _onLog = onLog;
             _proxyManager = proxyManager;
+            _httpHydra = httpHydra;
         }
 
         public async Task<string> GetWormholePlay(string imdbId)
@@ -46,7 +48,7 @@ namespace Makhno
                     new HeadersModel("User-Agent", Http.UserAgent)
                 };
 
-                string response = await Http.Get(_init.cors(url), timeoutSeconds: 4, headers: headers, proxy: _proxyManager.Get());
+                string response = await HttpGet(url, headers, timeoutSeconds: 4);
                 if (string.IsNullOrWhiteSpace(response))
                     return null;
 
@@ -84,7 +86,7 @@ namespace Makhno
 
                 _onLog($"Makhno getting player data from: {requestUrl}");
 
-                var response = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
+                var response = await HttpGet(requestUrl, headers);
                 if (string.IsNullOrEmpty(response))
                     return null;
 
@@ -524,6 +526,14 @@ namespace Makhno
                 return suffix;
 
             return normalized;
+        }
+
+        private Task<string> HttpGet(string url, List<HeadersModel> headers, int timeoutSeconds = 15)
+        {
+            if (_httpHydra != null)
+                return _httpHydra.Get(url, newheaders: headers);
+
+            return Http.Get(_init.cors(url), timeoutSeconds: timeoutSeconds, headers: headers, proxy: _proxyManager.Get());
         }
 
         private class WormholeResponse

@@ -3,6 +3,7 @@ using Shared;
 using Shared.Engine;
 using Shared.Models.Online.Settings;
 using Shared.Models.Module;
+using Shared.Models.Module.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.Extensions.Caching.Memory;
@@ -22,9 +23,9 @@ using System.Threading.Tasks;
 
 namespace Mikai
 {
-    public class ModInit
+    public class ModInit : IModuleLoaded
     {
-        public static double Version => 3.8;
+        public static double Version => 4.0;
 
         public static OnlinesSettings Mikai;
         public static bool ApnHostProvided;
@@ -38,7 +39,7 @@ namespace Mikai
         /// <summary>
         /// модуль загружен
         /// </summary>
-        public static void loaded(InitspaceModel initspace)
+        public void Loaded(InitspaceModel initspace)
         {
             
 
@@ -56,7 +57,7 @@ namespace Mikai
                 }
             };
 
-            var conf = ModuleInvoke.Conf("Mikai", Mikai);
+            var conf = ModuleInvoke.Init("Mikai", JObject.FromObject(Mikai));
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");
@@ -75,7 +76,45 @@ namespace Mikai
             }
 
             // Виводити "уточнити пошук"
-            AppInit.conf.online.with_search.Add("mikai");
+            RegisterWithSearch("mikai");
+        }
+
+        private static void RegisterWithSearch(string plugin)
+        {
+            try
+            {
+                var onlineType = Type.GetType("Online.ModInit");
+                if (onlineType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        onlineType = asm.GetType("Online.ModInit");
+                        if (onlineType != null)
+                            break;
+                    }
+                }
+                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var conf = confField?.GetValue(null);
+                var withSearchProp = conf?.GetType().GetProperty("with_search", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (withSearchProp?.GetValue(conf) is System.Collections.IList list)
+                {
+                    foreach (var item in list)
+                    {
+                        if (string.Equals(item?.ToString(), plugin, StringComparison.OrdinalIgnoreCase))
+                            return;
+                    }
+
+                    list.Add(plugin);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        public void Dispose()
+        {
         }
     }
 

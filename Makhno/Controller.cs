@@ -13,7 +13,7 @@ using Makhno.Models;
 
 namespace Makhno
 {
-    [Route("makhno")]
+    [Route("lite/makhno")]
     public class MakhnoController : BaseOnlineController
     {
         private readonly ProxyManager proxyManager;
@@ -28,7 +28,7 @@ namespace Makhno
         {
             if (checksearch)
             {
-                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                if (!IsCheckOnlineSearchEnabled())
                     return OnError();
 
                 return Content("data-json=", "text/plain; charset=utf-8");
@@ -36,14 +36,14 @@ namespace Makhno
 
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.Makhno);
+            var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
             Initialization(init);
 
             OnLog($"Makhno: {title} (serial={serial}, s={s}, season={season}, t={t})");
 
-            var invoke = new MakhnoInvoke(init, hybridCache, OnLog, proxyManager);
+            var invoke = new MakhnoInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
 
             var resolved = await ResolvePlaySource(imdb_id, serial, invoke);
             if (resolved == null || string.IsNullOrEmpty(resolved.PlayUrl))
@@ -61,14 +61,14 @@ namespace Makhno
         {
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.Makhno);
+            var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
             Initialization(init);
 
             OnLog($"Makhno Play: {title} (s={s}, season={season}, t={t}, episodeId={episodeId}) play={play}");
 
-            var invoke = new MakhnoInvoke(init, hybridCache, OnLog, proxyManager);
+            var invoke = new MakhnoInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
             var resolved = await ResolvePlaySource(imdb_id, serial: 1, invoke);
             if (resolved == null || string.IsNullOrEmpty(resolved.PlayUrl))
                 return OnError();
@@ -119,14 +119,14 @@ namespace Makhno
         {
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.Makhno);
+            var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
             Initialization(init);
 
             OnLog($"Makhno PlayMovie: {title} ({year}) play={play}");
 
-            var invoke = new MakhnoInvoke(init, hybridCache, OnLog, proxyManager);
+            var invoke = new MakhnoInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
             var resolved = await ResolvePlaySource(imdb_id, serial: 0, invoke);
             if (resolved == null || string.IsNullOrEmpty(resolved.PlayUrl))
                 return OnError();
@@ -267,7 +267,7 @@ namespace Makhno
 
                     string voiceParam = seasonVoiceIndex.HasValue ? $"&t={seasonVoiceIndex.Value}" : string.Empty;
                     string seasonName = seasonItem.HasValue ? seasonItem.Value.Season?.Title ?? $"Сезон {seasonNumber}" : $"Сезон {seasonNumber}";
-                    string link = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}{voiceParam}";
+                    string link = $"{host}/lite/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}{voiceParam}";
                     season_tpl.Append(seasonName, link, seasonNumber.ToString());
                 }
 
@@ -337,7 +337,7 @@ namespace Makhno
 
                 string voiceParam = seasonVoiceIndexForTpl.HasValue ? $"&t={seasonVoiceIndexForTpl.Value}" : string.Empty;
                 string seasonName = seasonItem.HasValue ? seasonItem.Value.Season?.Title ?? $"Сезон {seasonNumber}" : $"Сезон {seasonNumber}";
-                string link = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}{voiceParam}";
+                string link = $"{host}/lite/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={seasonNumber}{voiceParam}";
                 seasonTplForVoice.Append(seasonName, link, seasonNumber.ToString());
             }
 
@@ -354,11 +354,11 @@ namespace Makhno
                 bool sameSeasonSet = seasonsForVoice.Select(s => s.Number).ToHashSet().SetEquals(selectedVoiceSeasonSet);
                 if (hasRequestedSeason && sameSeasonSet)
                 {
-                    voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={requestedSeason}&t={i}";
+                    voiceLink = $"{host}/lite/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season={requestedSeason}&t={i}";
                 }
                 else
                 {
-                    voiceLink = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season=-1&t={i}";
+                    voiceLink = $"{host}/lite/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season=-1&t={i}";
                 }
 
                 bool isActive = selectedVoice == i.ToString();
@@ -374,7 +374,7 @@ namespace Makhno
                     bool hasRequestedSeason = seasonsForVoice.Any(s => s.Number == requestedSeason);
                     if (!hasRequestedSeason)
                     {
-                        string redirectUrl = $"{host}/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season=-1&t={voiceIndex}";
+                        string redirectUrl = $"{host}/lite/makhno?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&season=-1&t={voiceIndex}";
                         return UpdateService.Validate(Redirect(redirectUrl));
                     }
 
@@ -516,6 +516,39 @@ namespace Makhno
         {
             public string PlayUrl { get; set; }
             public bool IsSerial { get; set; }
+        }
+
+        private static bool IsCheckOnlineSearchEnabled()
+        {
+            try
+            {
+                var onlineType = Type.GetType("Online.ModInit");
+                if (onlineType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        onlineType = asm.GetType("Online.ModInit");
+                        if (onlineType != null)
+                            break;
+                    }
+                }
+                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var conf = confField?.GetValue(null);
+                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (checkProp?.GetValue(conf) is bool enabled)
+                    return enabled;
+            }
+            catch
+            {
+            }
+
+            return true;
+        }
+
+        private static void OnLog(string message)
+        {
+            System.Console.WriteLine(message);
         }
     }
 }

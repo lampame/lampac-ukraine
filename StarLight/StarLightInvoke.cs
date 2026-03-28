@@ -24,13 +24,15 @@ namespace StarLight
         private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
+        private readonly HttpHydra _httpHydra;
 
-        public StarLightInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public StarLightInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, HttpHydra httpHydra = null)
         {
             _init = init;
             _hybridCache = hybridCache;
             _onLog = onLog;
             _proxyManager = proxyManager;
+            _httpHydra = httpHydra;
         }
 
         public async Task<List<SearchResult>> Search(string title, string original_title)
@@ -54,7 +56,7 @@ namespace StarLight
             try
             {
                 _onLog?.Invoke($"StarLight search: {url}");
-                string payload = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+                string payload = await HttpGet(url, headers);
                 if (string.IsNullOrEmpty(payload))
                     return null;
 
@@ -112,7 +114,7 @@ namespace StarLight
             try
             {
                 _onLog?.Invoke($"StarLight project: {href}");
-                string payload = await Http.Get(_init.cors(href), headers: headers, proxy: _proxyManager.Get());
+                string payload = await HttpGet(href, headers);
                 if (string.IsNullOrEmpty(payload))
                     return null;
 
@@ -193,7 +195,7 @@ namespace StarLight
                 try
                 {
                     _onLog?.Invoke($"StarLight season: {seasonUrl}");
-                    string payload = await Http.Get(_init.cors(seasonUrl), headers: headers, proxy: _proxyManager.Get());
+                    string payload = await HttpGet(seasonUrl, headers);
                     if (string.IsNullOrEmpty(payload))
                         continue;
 
@@ -279,7 +281,7 @@ namespace StarLight
             try
             {
                 _onLog?.Invoke($"StarLight stream: {url}");
-                string payload = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+                string payload = await HttpGet(url, headers);
                 if (string.IsNullOrEmpty(payload))
                     return null;
 
@@ -338,12 +340,20 @@ namespace StarLight
             return $"{_init.host}{path}";
         }
 
+        private Task<string> HttpGet(string url, List<HeadersModel> headers)
+        {
+            if (_httpHydra != null)
+                return _httpHydra.Get(url, newheaders: headers);
+
+            return Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+        }
+
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
         {
             if (init != null && init.rhub && rhub != -1)
                 return TimeSpan.FromMinutes(rhub);
 
-            int ctime = AppInit.conf.mikrotik ? mikrotik : AppInit.conf.multiaccess ? init != null && init.cache_time > 0 ? init.cache_time : multiaccess : home;
+            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
             if (ctime > multiaccess)
                 ctime = multiaccess;
 

@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using Shared;
 using Shared.Engine;
 using Shared.Models.Module;
+using Shared.Models.Module.Interfaces;
 using System;
 using System.Net.Http;
 using System.Net.Mime;
@@ -16,9 +17,9 @@ using Uaflix.Models;
 
 namespace Uaflix
 {
-    public class ModInit
+    public class ModInit : IModuleLoaded
     {
-        public static double Version => 4.0;
+        public static double Version => 5.0;
 
         public static UaflixSettings UaFlix;
 
@@ -33,7 +34,7 @@ namespace Uaflix
         /// <summary>
         /// Модуль завантажено.
         /// </summary>
-        public static void loaded(InitspaceModel initspace)
+        public void Loaded(InitspaceModel initspace)
         {
             UaFlix = new UaflixSettings("Uaflix", "https://uafix.net", streamproxy: false, useproxy: false)
             {
@@ -53,7 +54,7 @@ namespace Uaflix
                 }
             };
 
-            var conf = ModuleInvoke.Conf("Uaflix", UaFlix) ?? JObject.FromObject(UaFlix);
+            var conf = ModuleInvoke.Init("Uaflix", JObject.FromObject(UaFlix)) ?? JObject.FromObject(UaFlix);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");
@@ -74,7 +75,45 @@ namespace Uaflix
             }
 
             // Показувати «уточнити пошук».
-            AppInit.conf.online.with_search.Add("uaflix");
+            RegisterWithSearch("uaflix");
+        }
+
+        private static void RegisterWithSearch(string plugin)
+        {
+            try
+            {
+                var onlineType = Type.GetType("Online.ModInit");
+                if (onlineType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        onlineType = asm.GetType("Online.ModInit");
+                        if (onlineType != null)
+                            break;
+                    }
+                }
+                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var conf = confField?.GetValue(null);
+                var withSearchProp = conf?.GetType().GetProperty("with_search", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (withSearchProp?.GetValue(conf) is System.Collections.IList list)
+                {
+                    foreach (var item in list)
+                    {
+                        if (string.Equals(item?.ToString(), plugin, StringComparison.OrdinalIgnoreCase))
+                            return;
+                    }
+
+                    list.Add(plugin);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        public void Dispose()
+        {
         }
     }
 

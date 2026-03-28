@@ -23,13 +23,15 @@ namespace Mikai
         private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
+        private readonly HttpHydra _httpHydra;
 
-        public MikaiInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager)
+        public MikaiInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, HttpHydra httpHydra = null)
         {
             _init = init;
             _hybridCache = hybridCache;
             _onLog = onLog;
             _proxyManager = proxyManager;
+            _httpHydra = httpHydra;
         }
 
         public async Task<List<MikaiAnime>> Search(string title, string original_title, int year)
@@ -49,7 +51,7 @@ namespace Mikai
                     var headers = DefaultHeaders();
 
                     _onLog($"Mikai: using proxy {_proxyManager.CurrentProxyIp} for {searchUrl}");
-                    string json = await Http.Get(_init.cors(searchUrl), headers: headers, proxy: _proxyManager.Get());
+                    string json = await HttpGet(searchUrl, headers);
                     if (string.IsNullOrEmpty(json))
                         return null;
 
@@ -93,7 +95,7 @@ namespace Mikai
                 var headers = DefaultHeaders();
 
                 _onLog($"Mikai: using proxy {_proxyManager.CurrentProxyIp} for {url}");
-                string json = await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+                string json = await HttpGet(url, headers);
                 if (string.IsNullOrEmpty(json))
                     return null;
 
@@ -144,7 +146,7 @@ namespace Mikai
                 };
 
                 _onLog($"Mikai: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
-                string html = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
+                string html = await HttpGet(requestUrl, headers);
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -190,7 +192,7 @@ namespace Mikai
 
                 string requestUrl = AshdiRequestUrl(WithAshdiMultivoice(url, enable: !disableAshdiMultivoiceForVod));
                 _onLog($"Mikai: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
-                string html = await Http.Get(_init.cors(requestUrl), headers: headers, proxy: _proxyManager.Get());
+                string html = await HttpGet(requestUrl, headers);
                 if (string.IsNullOrEmpty(html))
                     return streams;
 
@@ -415,12 +417,20 @@ namespace Mikai
             return null;
         }
 
+        private Task<string> HttpGet(string url, List<HeadersModel> headers)
+        {
+            if (_httpHydra != null)
+                return _httpHydra.Get(url, newheaders: headers);
+
+            return Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+        }
+
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
         {
             if (init != null && init.rhub && rhub != -1)
                 return TimeSpan.FromMinutes(rhub);
 
-            int ctime = AppInit.conf.mikrotik ? mikrotik : AppInit.conf.multiaccess ? init != null && init.cache_time > 0 ? init.cache_time : multiaccess : home;
+            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
             if (ctime > multiaccess)
                 ctime = multiaccess;
 

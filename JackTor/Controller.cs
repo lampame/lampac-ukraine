@@ -1,10 +1,9 @@
 using JackTor.Models;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
-using Shared.Engine;
 using Shared.Models;
-using Shared.Models.Online.PiTor;
 using Shared.Models.Online.Settings;
+using Shared.Services.Utilities;
 using Shared.Models.Templates;
 using System;
 using System.Collections.Generic;
@@ -27,7 +26,7 @@ namespace JackTor.Controllers
         }
 
         [HttpGet]
-        [Route("jacktor")]
+        [Route("lite/jacktor")]
         async public Task<ActionResult> Index(
             long id,
             string imdb_id,
@@ -46,7 +45,7 @@ namespace JackTor.Controllers
         {
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.Settings);
+            var init = loadKit(ModInit.Settings);
             if (!init.enable)
                 return Forbid();
 
@@ -57,14 +56,14 @@ namespace JackTor.Controllers
 
             if (checksearch)
             {
-                if (AppInit.conf?.online?.checkOnlineSearch != true)
-                    return OnError("jacktor", proxyManager);
+                if (!IsCheckOnlineSearchEnabled())
+                    return OnError("jacktor", refresh_proxy: true);
 
                 var check = await invoke.Search(title, original_title, year, serial, original_language);
                 if (check.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("jacktor", proxyManager);
+                return OnError("jacktor", refresh_proxy: true);
             }
 
             var torrents = await invoke.Search(title, original_title, year, serial, original_language);
@@ -98,7 +97,7 @@ namespace JackTor.Controllers
                     {
                         seasonTpl.Append(
                             $"{season} сезон",
-                            $"{host}/jacktor?rjson={rjson}&title={enTitle}&original_title={enOriginal}&year={year}&original_language={original_language}&serial=1&s={season}",
+                            $"{host}/lite/jacktor?rjson={rjson}&title={enTitle}&original_title={enOriginal}&year={year}&original_language={original_language}&serial=1&s={season}",
                             season);
                     }
 
@@ -127,7 +126,7 @@ namespace JackTor.Controllers
                         : $"{seasonLabel} • {torrent.Voice}";
 
                     string qualityInfo = $"{torrent.Tracker} / {torrent.QualityLabel} / {torrent.MediaInfo} / ↑{torrent.Seeders}";
-                    string releaseLink = accsArgs($"{host}/jacktor/serial/{torrent.Rid}?rjson={rjson}&title={enTitle}&original_title={enOriginal}&s={targetSeason}");
+                    string releaseLink = accsArgs($"{host}/lite/jacktor/serial/{torrent.Rid}?rjson={rjson}&title={enTitle}&original_title={enOriginal}&s={targetSeason}");
 
                     similarTpl.Append(releaseName, null, qualityInfo, releaseLink);
                 }
@@ -147,7 +146,7 @@ namespace JackTor.Controllers
                         : torrent.Voice;
 
                     string voiceName = $"{torrent.QualityLabel} / {torrent.MediaInfo} / ↑{torrent.Seeders}";
-                    string streamLink = accsArgs($"{host}/jacktor/s{torrent.Rid}");
+                    string streamLink = accsArgs($"{host}/lite/jacktor/s{torrent.Rid}");
 
                     movieTpl.Append(
                         voice,
@@ -163,10 +162,10 @@ namespace JackTor.Controllers
         }
 
         [HttpGet]
-        [Route("jacktor/serial/{rid}")]
+        [Route("lite/jacktor/serial/{rid}")]
         async public ValueTask<ActionResult> Serial(string rid, string account_email, string title, string original_title, int s = 1, bool rjson = false)
         {
-            var init = await loadKit(ModInit.Settings);
+            var init = loadKit(ModInit.Settings);
             if (!init.enable)
                 return Forbid();
 
@@ -175,7 +174,7 @@ namespace JackTor.Controllers
 
             var invoke = new JackTorInvoke(init, hybridCache, OnLog, proxyManager);
             if (!invoke.TryGetSource(rid, out JackTorSourceCache source))
-                return OnError("jacktor", proxyManager);
+                return OnError("jacktor", refresh_proxy: true);
 
             string memKey = $"jacktor:serial:{rid}";
 
@@ -185,49 +184,49 @@ namespace JackTor.Controllers
                 {
                     var ts = ResolveProbeTorrentServer(init, account_email);
                     if (string.IsNullOrWhiteSpace(ts.host))
-                        return OnError("jacktor", proxyManager);
+                        return OnError("jacktor", refresh_proxy: true);
 
-                    string hashResponse = await Http.Post(
+                    string hashResponse = await httpHydra.Post(
                         $"{ts.host}/torrents",
                         BuildAddPayload(source.SourceUri),
-                        timeoutSeconds: 8,
-                        headers: ts.headers);
+                        statusCodeOK: false,
+                        newheaders: ts.headers);
 
                     string hash = ExtractHash(hashResponse);
                     if (string.IsNullOrWhiteSpace(hash))
-                        return OnError("jacktor", proxyManager);
+                        return OnError("jacktor", refresh_proxy: true);
 
                     Stat stat = null;
                     DateTime deadline = DateTime.Now.AddSeconds(20);
 
                     while (true)
                     {
-                        stat = await Http.Post<Stat>(
+                        stat = await httpHydra.Post<Stat>(
                             $"{ts.host}/torrents",
                             BuildGetPayload(hash),
-                            timeoutSeconds: 3,
-                            headers: ts.headers);
+                            statusCodeOK: false,
+                            newheaders: ts.headers);
 
                         if (stat?.file_stats != null && stat.file_stats.Length > 0)
                             break;
 
                         if (DateTime.Now > deadline)
                         {
-                            _ = Http.Post($"{ts.host}/torrents", BuildRemovePayload(hash), headers: ts.headers);
-                            return OnError("jacktor", proxyManager);
+                            _ = httpHydra.Post($"{ts.host}/torrents", BuildRemovePayload(hash), statusCodeOK: false, newheaders: ts.headers);
+                            return OnError("jacktor", refresh_proxy: true);
                         }
 
                         await Task.Delay(250);
                     }
 
-                    _ = Http.Post($"{ts.host}/torrents", BuildRemovePayload(hash), headers: ts.headers);
+                    _ = httpHydra.Post($"{ts.host}/torrents", BuildRemovePayload(hash), statusCodeOK: false, newheaders: ts.headers);
 
                     fileStats = stat.file_stats;
                     hybridCache.Set(memKey, fileStats, DateTime.Now.AddHours(36));
                 }
 
                 if (fileStats == null || fileStats.Length == 0)
-                    return OnError("jacktor", proxyManager);
+                    return OnError("jacktor", refresh_proxy: true);
 
                 var episodeTpl = new EpisodeTpl();
                 int appended = 0;
@@ -242,13 +241,13 @@ namespace JackTor.Controllers
                         title ?? original_title,
                         s.ToString(),
                         file.Id.ToString(),
-                        accsArgs($"{host}/jacktor/s{rid}?tsid={file.Id}"));
+                        accsArgs($"{host}/lite/jacktor/s{rid}?tsid={file.Id}"));
 
                     appended++;
                 }
 
                 if (appended == 0)
-                    return OnError("jacktor", proxyManager);
+                    return OnError("jacktor", refresh_proxy: true);
 
                 return rjson
                     ? Content(episodeTpl.ToJson(), "application/json; charset=utf-8")
@@ -257,10 +256,10 @@ namespace JackTor.Controllers
         }
 
         [HttpGet]
-        [Route("jacktor/s{rid}")]
+        [Route("lite/jacktor/s{rid}")]
         async public ValueTask<ActionResult> Stream(string rid, int tsid = -1, string account_email = null)
         {
-            var init = await loadKit(ModInit.Settings);
+            var init = loadKit(ModInit.Settings);
             if (!init.enable)
                 return Forbid();
 
@@ -269,7 +268,7 @@ namespace JackTor.Controllers
 
             var invoke = new JackTorInvoke(init, hybridCache, OnLog, proxyManager);
             if (!invoke.TryGetSource(rid, out JackTorSourceCache source))
-                return OnError("jacktor", proxyManager);
+                return OnError("jacktor", refresh_proxy: true);
 
             int index = tsid != -1 ? tsid : 1;
             string country = requestInfo.Country;
@@ -284,15 +283,15 @@ namespace JackTor.Controllers
                     var headers = HeadersModel.Init("Authorization", $"Basic {CrypTo.Base64($"{login}:{passwd}")}");
                     headers = HeadersModel.Join(headers, addheaders);
 
-                    string response = await Http.Post(
+                    string response = await httpHydra.Post(
                         $"{tsHost}/torrents",
                         BuildAddPayload(source.SourceUri),
-                        timeoutSeconds: 5,
-                        headers: headers);
+                        statusCodeOK: false,
+                        newheaders: headers);
 
                     hash = ExtractHash(response);
                     if (string.IsNullOrWhiteSpace(hash))
-                        return OnError("jacktor", proxyManager);
+                        return OnError("jacktor", refresh_proxy: true);
 
                     hybridCache.Set(memKey, hash, DateTime.Now.AddMinutes(1));
                 }
@@ -329,7 +328,7 @@ namespace JackTor.Controllers
                     }
 
                     if (servers.Count == 0)
-                        return OnError("jacktor", proxyManager);
+                        return OnError("jacktor", refresh_proxy: true);
 
                     ts = servers[Random.Shared.Next(0, servers.Count)];
                     hybridCache.Set(tsKey, ts, DateTime.Now.AddHours(4));
@@ -342,7 +341,7 @@ namespace JackTor.Controllers
                 if (init.base_auth != null && init.base_auth.enable)
                 {
                     if (init.torrs == null || init.torrs.Length == 0)
-                        return OnError("jacktor", proxyManager);
+                        return OnError("jacktor", refresh_proxy: true);
 
                     string tsKey = $"jacktor:ts3:{rid}:{requestInfo.IP}";
                     if (!hybridCache.TryGetValue(tsKey, out string tsHost))
@@ -355,7 +354,7 @@ namespace JackTor.Controllers
                 }
 
                 if (init.torrs == null || init.torrs.Length == 0)
-                    return OnError("jacktor", proxyManager);
+                    return OnError("jacktor", refresh_proxy: true);
 
                 string key = $"jacktor:ts4:{rid}:{requestInfo.IP}";
                 if (!hybridCache.TryGetValue(key, out string torrentHost))
@@ -473,6 +472,39 @@ namespace JackTor.Controllers
                 return string.Empty;
 
             return Regex.Replace(url, "(apikey=)[^&]+", "$1***", RegexOptions.IgnoreCase);
+        }
+
+        private static bool IsCheckOnlineSearchEnabled()
+        {
+            try
+            {
+                var onlineType = Type.GetType("Online.ModInit");
+                if (onlineType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        onlineType = asm.GetType("Online.ModInit");
+                        if (onlineType != null)
+                            break;
+                    }
+                }
+                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var conf = confField?.GetValue(null);
+                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (checkProp?.GetValue(conf) is bool enabled)
+                    return enabled;
+            }
+            catch
+            {
+            }
+
+            return true;
+        }
+
+        private static void OnLog(string message)
+        {
+            System.Console.WriteLine(message);
         }
     }
 }

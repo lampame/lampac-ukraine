@@ -1,4 +1,3 @@
-using Shared.Engine;
 using System;
 using System.Threading.Tasks;
 using System.Linq;
@@ -22,20 +21,20 @@ namespace Unimay.Controllers
         }
 
         [HttpGet]
-        [Route("unimay")]
+        [Route("lite/unimay")]
         async public ValueTask<ActionResult> Index(string title, string original_title, string code, int serial = -1, int s = -1, int e = -1, bool play = false, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
 
-            var init = await loadKit(ModInit.Unimay);
-            if (await IsBadInitialization(init, rch: false))
+            if (await IsRequestBlocked(rch: false))
                 return badInitMsg;
 
-            var invoke = new UnimayInvoke(init, hybridCache, OnLog, proxyManager);
+            var init = this.init;
+            var invoke = new UnimayInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
 
             if (checksearch)
             {
-                if (AppInit.conf?.online?.checkOnlineSearch != true)
+                if (!IsCheckOnlineSearchEnabled())
                     return OnError("unimay");
 
                 var searchResults = await invoke.Search(title, original_title, serial);
@@ -168,6 +167,39 @@ namespace Unimay.Controllers
 
             cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
             return cleaned;
+        }
+
+        private static bool IsCheckOnlineSearchEnabled()
+        {
+            try
+            {
+                var onlineType = Type.GetType("Online.ModInit");
+                if (onlineType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        onlineType = asm.GetType("Online.ModInit");
+                        if (onlineType != null)
+                            break;
+                    }
+                }
+                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var conf = confField?.GetValue(null);
+                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (checkProp?.GetValue(conf) is bool enabled)
+                    return enabled;
+            }
+            catch
+            {
+            }
+
+            return true;
+        }
+
+        private static void OnLog(string message)
+        {
+            System.Console.WriteLine(message);
         }
     }
 }
