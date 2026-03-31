@@ -10,20 +10,11 @@ namespace KlonFUN
 {
     public class OnlineApi : IModuleOnline
     {
-        public List<ModuleOnlineItem> Invoke(HttpContext httpContext, IMemoryCache memoryCache, RequestModel requestInfo, string host, OnlineEventsModel args)
+        public List<ModuleOnlineItem> Invoke(HttpContext httpContext, RequestModel requestInfo, string host, OnlineEventsModel args)
         {
             long.TryParse(args.id, out long tmdbid);
             return Events(host, tmdbid, args.imdb_id, args.kinopoisk_id, args.title, args.original_title, args.original_language, args.year, args.source, args.serial, args.account_email);
         }
-
-        public Task<List<ModuleOnlineItem>> InvokeAsync(HttpContext httpContext, IMemoryCache memoryCache, RequestModel requestInfo, string host, OnlineEventsModel args)
-            => Task.FromResult(default(List<ModuleOnlineItem>));
-
-        public List<ModuleOnlineSpiderItem> Spider(HttpContext httpContext, IMemoryCache memoryCache, RequestModel requestInfo, string host, OnlineSpiderModel args)
-            => null;
-
-        public Task<List<ModuleOnlineSpiderItem>> SpiderAsync(HttpContext httpContext, IMemoryCache memoryCache, RequestModel requestInfo, string host, OnlineSpiderModel args)
-            => Task.FromResult(default(List<ModuleOnlineSpiderItem>));
 
         private static List<ModuleOnlineItem> Events(string host, long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email)
         {
@@ -32,11 +23,10 @@ namespace KlonFUN
             var init = ModInit.KlonFUN;
             if (init.enable && !init.rip)
             {
-                string url = init.overridehost;
-                if (string.IsNullOrEmpty(url) || UpdateService.IsDisconnected())
-                    url = $"{host}/lite/klonfun";
+                if (UpdateService.IsDisconnected())
+                    init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init.displayname, url, "klonfun", init.displayindex));
+                online.Add(new ModuleOnlineItem(init, "klonfun"));
             }
 
             return online;

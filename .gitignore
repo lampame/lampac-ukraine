@@ -11,3 +11,6 @@
 .DS_Store
 AGENTS.md
 /planing/
+.vs
+bin
+obj
