@@ -1,6 +1,3 @@
 {
-  "enable": true,
-  "version": 3,
-  "initspace": "Bamboo.ModInit",
-  "online": "Bamboo.OnlineApi"
+  "enable": true
 }
