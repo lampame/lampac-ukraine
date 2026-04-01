@@ -31,6 +31,14 @@ namespace KlonFUN.Controllers
             if (!init.enable)
                 return Forbid();
 
+            if (init.apn is null
+                && !init.streamproxy
+                && init.magic_apn
+                && new RchClient(HttpContext, host, init, requestInfo).InfoConnected().player == "inner")
+            {
+                ApnHelper.ApplyInitConf(true, null, init);
+            }
+
             var invoke = new KlonFUNInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
 
             if (checksearch)
