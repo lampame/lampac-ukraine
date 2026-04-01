@@ -37,6 +37,7 @@ namespace Uaflix.Controllers
                 return badInitMsg;
 
             var init = this.init;
+            TryEnableMagicApn(init);
             OnLog($"=== UAFLIX INDEX START ===");
             OnLog($"Uaflix Index: title={title}, serial={serial}, s={s}, play={play}, href={href}, checksearch={checksearch}");
             OnLog($"Uaflix Index: kinopoisk_id={kinopoisk_id}, imdb_id={imdb_id}, id={id}");
@@ -433,6 +434,24 @@ namespace Uaflix.Controllers
             }
 
             return HostStreamProxy(init, link);
+        }
+
+        private void TryEnableMagicApn(OnlinesSettings init)
+        {
+            if (init == null
+                || init.apn != null
+                || init.streamproxy
+                || string.IsNullOrWhiteSpace(ModInit.MagicApnAshdiHost))
+                return;
+
+            string player = new RchClient(HttpContext, host, init, requestInfo).InfoConnected()?.player;
+            bool useInnerPlayer = string.IsNullOrWhiteSpace(player)
+                || player.Equals("inner", StringComparison.OrdinalIgnoreCase);
+            if (!useInnerPlayer)
+                return;
+
+            ApnHelper.ApplyInitConf(true, ModInit.MagicApnAshdiHost, init);
+            OnLog($"Uaflix: увімкнено magic_apn для Ashdi (player={player ?? "unknown"}).");
         }
 
         private static string StripLampacArgs(string url)

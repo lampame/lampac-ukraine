@@ -29,6 +29,7 @@ namespace Mikai
 
         public static OnlinesSettings Mikai;
         public static bool ApnHostProvided;
+        public static string MagicApnAshdiHost;
 
         public static OnlinesSettings Settings
         {
@@ -57,15 +58,23 @@ namespace Mikai
                 }
             };
 
-            var conf = ModuleInvoke.Init("Mikai", JObject.FromObject(Mikai));
+            var defaults = JObject.FromObject(Mikai);
+            defaults["magic_apn"] = new JObject()
+            {
+                ["ashdi"] = ApnHelper.DefaultHost
+            };
+
+            var conf = ModuleInvoke.Init("Mikai", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
+            MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
+            conf.Remove("magic_apn");
             conf.Remove("apn");
             conf.Remove("apn_host");
             Mikai = conf.ToObject<OnlinesSettings>();
             if (hasApn)
                 ApnHelper.ApplyInitConf(apnEnabled, apnHost, Mikai);
-            ApnHostProvided = hasApn && apnEnabled && !string.IsNullOrWhiteSpace(apnHost);
-            if (hasApn && apnEnabled)
+            ApnHostProvided = ApnHelper.IsEnabled(Mikai);
+            if (ApnHostProvided)
             {
                 Mikai.streamproxy = false;
             }

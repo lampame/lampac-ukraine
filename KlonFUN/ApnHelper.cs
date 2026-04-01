@@ -25,6 +25,23 @@ namespace Shared.Engine
             return true;
         }
 
+        public static string TryGetMagicAshdiHost(JObject conf)
+        {
+            if (conf == null || !conf.TryGetValue("magic_apn", out var magicToken) || magicToken == null)
+                return null;
+
+            if (magicToken.Type == JTokenType.Boolean)
+                return magicToken.Value<bool>() ? DefaultHost : null;
+
+            if (magicToken.Type == JTokenType.String)
+                return NormalizeHost(magicToken.Value<string>());
+
+            if (magicToken.Type != JTokenType.Object)
+                return null;
+
+            return NormalizeHost(((JObject)magicToken).Value<string>("ashdi"));
+        }
+
         public static void ApplyInitConf(bool enabled, string host, BaseSettings init)
         {
             if (init == null)
@@ -37,8 +54,13 @@ namespace Shared.Engine
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(host))
-                host = DefaultHost;
+            host = NormalizeHost(host);
+            if (host == null)
+            {
+                init.apnstream = false;
+                init.apn = null;
+                return;
+            }
 
             if (init.apn == null)
                 init.apn = new ApnConf();
@@ -81,6 +103,14 @@ namespace Shared.Engine
                 return host.Replace("{uri}", url);
 
             return $"{host.TrimEnd('/')}/{url}";
+        }
+
+        private static string NormalizeHost(string host)
+        {
+            if (string.IsNullOrWhiteSpace(host))
+                return null;
+
+            return host.Trim();
         }
     }
 }

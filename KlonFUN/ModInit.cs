@@ -24,6 +24,7 @@ namespace KlonFUN
 
         public static ModuleConfig KlonFUN;
         public static bool ApnHostProvided;
+        public static string MagicApnAshdiHost;
 
         public static ModuleConfig Settings
         {
@@ -58,16 +59,24 @@ namespace KlonFUN
                 }
             };
 
-            var conf = ModuleInvoke.Init("KlonFUN", JObject.FromObject(KlonFUN));
+            var defaults = JObject.FromObject(KlonFUN);
+            defaults["magic_apn"] = new JObject()
+            {
+                ["ashdi"] = ApnHelper.DefaultHost
+            };
+
+            var conf = ModuleInvoke.Init("KlonFUN", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
+            MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
+            conf.Remove("magic_apn");
             conf.Remove("apn");
             conf.Remove("apn_host");
             KlonFUN = conf.ToObject<ModuleConfig>();
             if (hasApn)
                 ApnHelper.ApplyInitConf(apnEnabled, apnHost, KlonFUN);
-            ApnHostProvided = hasApn && apnEnabled && !string.IsNullOrWhiteSpace(apnHost);
+            ApnHostProvided = ApnHelper.IsEnabled(KlonFUN);
 
-            if (hasApn && apnEnabled)
+            if (ApnHostProvided)
             {
                 KlonFUN.streamproxy = false;
             }

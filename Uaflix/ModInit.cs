@@ -24,6 +24,7 @@ namespace Uaflix
         public static UaflixSettings UaFlix;
 
         public static bool ApnHostProvided;
+        public static string MagicApnAshdiHost;
 
         public static UaflixSettings Settings
         {
@@ -54,8 +55,16 @@ namespace Uaflix
                 }
             };
 
-            var conf = ModuleInvoke.Init("Uaflix", JObject.FromObject(UaFlix)) ?? JObject.FromObject(UaFlix);
+            var defaults = JObject.FromObject(UaFlix);
+            defaults["magic_apn"] = new JObject()
+            {
+                ["ashdi"] = ApnHelper.DefaultHost
+            };
+
+            var conf = ModuleInvoke.Init("Uaflix", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
+            MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
+            conf.Remove("magic_apn");
             conf.Remove("apn");
             conf.Remove("apn_host");
             UaFlix = conf.ToObject<UaflixSettings>();
@@ -63,8 +72,8 @@ namespace Uaflix
             if (hasApn)
                 ApnHelper.ApplyInitConf(apnEnabled, apnHost, UaFlix);
 
-            ApnHostProvided = hasApn && apnEnabled && !string.IsNullOrWhiteSpace(apnHost);
-            if (hasApn && apnEnabled)
+            ApnHostProvided = ApnHelper.IsEnabled(UaFlix);
+            if (ApnHostProvided)
             {
                 UaFlix.streamproxy = false;
             }

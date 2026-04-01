@@ -30,6 +30,7 @@ namespace AnimeON
 
         public static OnlinesSettings AnimeON;
         public static bool ApnHostProvided;
+        public static string MagicApnAshdiHost;
 
         public static OnlinesSettings Settings
         {
@@ -56,15 +57,23 @@ namespace AnimeON
                     list = new string[] { "socks5://ip:port" }
                 }
             };
-            var conf = ModuleInvoke.Init("AnimeON", JObject.FromObject(AnimeON));
+            var defaults = JObject.FromObject(AnimeON);
+            defaults["magic_apn"] = new JObject()
+            {
+                ["ashdi"] = ApnHelper.DefaultHost
+            };
+
+            var conf = ModuleInvoke.Init("AnimeON", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
+            MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
+            conf.Remove("magic_apn");
             conf.Remove("apn");
             conf.Remove("apn_host");
             AnimeON = conf.ToObject<OnlinesSettings>();
             if (hasApn)
                 ApnHelper.ApplyInitConf(apnEnabled, apnHost, AnimeON);
-            ApnHostProvided = hasApn && apnEnabled && !string.IsNullOrWhiteSpace(apnHost);
-            if (hasApn && apnEnabled)
+            ApnHostProvided = ApnHelper.IsEnabled(AnimeON);
+            if (ApnHostProvided)
             {
                 AnimeON.streamproxy = false;
             }

@@ -28,6 +28,7 @@ namespace Makhno
 
         public static OnlinesSettings Makhno;
         public static bool ApnHostProvided;
+        public static string MagicApnAshdiHost;
 
         public static OnlinesSettings Settings
         {
@@ -52,8 +53,16 @@ namespace Makhno
                     list = new string[] { "socks5://ip:port" }
                 }
             };
-            var conf = ModuleInvoke.Init("Makhno", JObject.FromObject(Makhno));
+            var defaults = JObject.FromObject(Makhno);
+            defaults["magic_apn"] = new JObject()
+            {
+                ["ashdi"] = ApnHelper.DefaultHost
+            };
+
+            var conf = ModuleInvoke.Init("Makhno", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
+            MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
+            conf.Remove("magic_apn");
             if (hasApn)
             {
                 conf.Remove("apn");
@@ -62,8 +71,8 @@ namespace Makhno
             Makhno = conf.ToObject<OnlinesSettings>();
             if (hasApn)
                 ApnHelper.ApplyInitConf(apnEnabled, apnHost, Makhno);
-            ApnHostProvided = hasApn && apnEnabled && !string.IsNullOrWhiteSpace(apnHost);
-            if (hasApn && apnEnabled)
+            ApnHostProvided = ApnHelper.IsEnabled(Makhno);
+            if (ApnHostProvided)
             {
                 Makhno.streamproxy = false;
             }

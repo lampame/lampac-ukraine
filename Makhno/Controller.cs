@@ -39,6 +39,7 @@ namespace Makhno
             var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
+            TryEnableMagicApn(init);
             Initialization(init);
 
             OnLog($"Makhno: {title} (serial={serial}, s={s}, season={season}, t={t})");
@@ -64,6 +65,7 @@ namespace Makhno
             var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
+            TryEnableMagicApn(init);
             Initialization(init);
 
             OnLog($"Makhno Play: {title} (s={s}, season={season}, t={t}, episodeId={episodeId}) play={play}");
@@ -122,6 +124,7 @@ namespace Makhno
             var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
+            TryEnableMagicApn(init);
             Initialization(init);
 
             OnLog($"Makhno PlayMovie: {title} ({year}) play={play}");
@@ -510,6 +513,24 @@ namespace Makhno
             }
 
             return HostStreamProxy(init, link);
+        }
+
+        private void TryEnableMagicApn(OnlinesSettings init)
+        {
+            if (init == null
+                || init.apn != null
+                || init.streamproxy
+                || string.IsNullOrWhiteSpace(ModInit.MagicApnAshdiHost))
+                return;
+
+            string player = new RchClient(HttpContext, host, init, requestInfo).InfoConnected()?.player;
+            bool useInnerPlayer = string.IsNullOrWhiteSpace(player)
+                || player.Equals("inner", StringComparison.OrdinalIgnoreCase);
+            if (!useInnerPlayer)
+                return;
+
+            ApnHelper.ApplyInitConf(true, ModInit.MagicApnAshdiHost, init);
+            OnLog($"Makhno: увімкнено magic_apn для Ashdi (player={player ?? "unknown"}).");
         }
 
         private class ResolveResult

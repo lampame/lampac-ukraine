@@ -76,15 +76,17 @@ modules - optional, if not specified, all modules from the repository will be in
       ]
     },
     "displayindex": 1,
-    "apn": true,
-    "apn_host": "domaine.com/{encodeurl}"
+    "magic_apn": {
+      "ashdi": "https://tut.im/proxy.php?url={encodeurl}"
+    }
   }
 ```
 
 Parameter compatibility:
 - `webcorshost` + `useproxy`: work together (parsing via CORS host, and network output can go through a proxy with `useproxy`).
 - `webcorshost` does not conflict with `streamproxy`: CORS is used for parsing, `streamproxy` is used for streaming.
-- `webcorshost` does not conflict with `apn`: APN is used at the streaming stage, not for regular parsing.
+- `magic_apn.ashdi` використовується тільки для Ashdi-посилань і лише коли значення непорожнє.
+- `webcorshost` не конфліктує з `magic_apn`: CORS використовується для парсингу, `magic_apn` — для Ashdi-стрімінгу.
 
 ## JackTor config example (`init.conf`)
 
