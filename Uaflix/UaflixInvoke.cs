@@ -821,6 +821,440 @@ namespace Uaflix
         
         #endregion
 
+        #region Сезонний (лінивий) парсинг серіалу
+
+        public async Task<PaginationInfo> GetSeasonIndex(string serialUrl)
+        {
+            string memKey = $"UaFlix:season-index:{serialUrl}";
+            if (_hybridCache.TryGetValue(memKey, out PaginationInfo cached))
+                return cached;
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(serialUrl) || !Uri.IsWellFormedUriString(serialUrl, UriKind.Absolute))
+                    return null;
+
+                var headers = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", "Mozilla/5.0"),
+                    new HeadersModel("Referer", _init.host)
+                };
+
+                string html = await GetHtml(serialUrl, headers);
+                if (string.IsNullOrWhiteSpace(html))
+                    return null;
+
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+
+                var result = new PaginationInfo
+                {
+                    SerialUrl = serialUrl
+                };
+
+                var seasonNodes = doc.DocumentNode.SelectNodes("//div[contains(@class, 'sez-wr')]//a");
+                if (seasonNodes == null)
+                    seasonNodes = doc.DocumentNode.SelectNodes("//div[contains(@class, 'fss-box')]//a");
+
+                if (seasonNodes == null || seasonNodes.Count == 0)
+                {
+                    // Якщо явного списку сезонів немає, вважаємо що є один сезон.
+                    result.Seasons[1] = 1;
+                    result.SeasonUrls[1] = serialUrl;
+                    _hybridCache.Set(memKey, result, cacheTime(40));
+                    return result;
+                }
+
+                foreach (var node in seasonNodes)
+                {
+                    string href = node.GetAttributeValue("href", null);
+                    string seasonUrl = ToAbsoluteUrl(href);
+                    if (string.IsNullOrWhiteSpace(seasonUrl))
+                        continue;
+
+                    string tabText = WebUtility.HtmlDecode(node.InnerText ?? string.Empty);
+                    if (!IsSeasonTabLink(seasonUrl, tabText))
+                        continue;
+
+                    int season = ExtractSeasonNumber(seasonUrl, tabText);
+                    if (season <= 0)
+                        continue;
+
+                    if (!result.SeasonUrls.TryGetValue(season, out string existing))
+                    {
+                        result.SeasonUrls[season] = seasonUrl;
+                        result.Seasons[season] = 1;
+                        continue;
+                    }
+
+                    if (IsPreferableSeasonUrl(existing, seasonUrl, season))
+                        result.SeasonUrls[season] = seasonUrl;
+                }
+
+                if (result.SeasonUrls.Count == 0)
+                {
+                    result.Seasons[1] = 1;
+                    result.SeasonUrls[1] = serialUrl;
+                }
+
+                _hybridCache.Set(memKey, result, cacheTime(40));
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _onLog($"GetSeasonIndex error: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<List<EpisodeLinkInfo>> GetSeasonEpisodes(string serialUrl, int season)
+        {
+            if (season < 0)
+                return new List<EpisodeLinkInfo>();
+
+            string memKey = $"UaFlix:season-episodes:{serialUrl}:{season}";
+            if (_hybridCache.TryGetValue(memKey, out List<EpisodeLinkInfo> cached))
+                return cached;
+
+            try
+            {
+                var headers = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", "Mozilla/5.0"),
+                    new HeadersModel("Referer", _init.host)
+                };
+
+                var index = await GetSeasonIndex(serialUrl);
+                string seasonUrl = index?.SeasonUrls != null && index.SeasonUrls.TryGetValue(season, out string mapped)
+                    ? mapped
+                    : serialUrl;
+
+                if (string.IsNullOrWhiteSpace(seasonUrl))
+                    seasonUrl = serialUrl;
+
+                string html = await GetHtml(seasonUrl, headers);
+                if (string.IsNullOrWhiteSpace(html) && !string.Equals(seasonUrl, serialUrl, StringComparison.OrdinalIgnoreCase))
+                    html = await GetHtml(serialUrl, headers);
+
+                if (string.IsNullOrWhiteSpace(html))
+                    return new List<EpisodeLinkInfo>();
+
+                var result = ParseSeasonEpisodesFromHtml(html, season);
+                if (result.Count == 0 && !string.Equals(seasonUrl, serialUrl, StringComparison.OrdinalIgnoreCase))
+                {
+                    string serialHtml = await GetHtml(serialUrl, headers);
+                    if (!string.IsNullOrWhiteSpace(serialHtml))
+                        result = ParseSeasonEpisodesFromHtml(serialHtml, season);
+                }
+
+                if (result.Count == 0 && season == 1 && string.Equals(seasonUrl, serialUrl, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Fallback для сторінок без окремих епізодів.
+                    result.Add(new EpisodeLinkInfo
+                    {
+                        url = serialUrl,
+                        title = "Епізод 1",
+                        season = 1,
+                        episode = 1
+                    });
+                }
+
+                _hybridCache.Set(memKey, result, cacheTime(20));
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _onLog($"GetSeasonEpisodes error: {ex.Message}");
+                return new List<EpisodeLinkInfo>();
+            }
+        }
+
+        List<EpisodeLinkInfo> ParseSeasonEpisodesFromHtml(string html, int season)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+                return new List<EpisodeLinkInfo>();
+
+            var doc = new HtmlDocument();
+            doc.LoadHtml(html);
+
+            var episodeNodes = doc.DocumentNode.SelectNodes("//div[contains(@class, 'frels')]//a[contains(@class, 'vi-img')]");
+            if (episodeNodes == null || episodeNodes.Count == 0)
+                return new List<EpisodeLinkInfo>();
+
+            var episodes = new List<EpisodeLinkInfo>();
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int fallbackEpisode = 1;
+
+            foreach (var episodeNode in episodeNodes)
+            {
+                string episodeUrl = ToAbsoluteUrl(episodeNode.GetAttributeValue("href", null));
+                if (string.IsNullOrWhiteSpace(episodeUrl) || !used.Add(episodeUrl))
+                    continue;
+
+                var match = Regex.Match(episodeUrl, @"season-(\d+).*?episode-(\d+)", RegexOptions.IgnoreCase);
+                int parsedSeason = season;
+                int parsedEpisode = fallbackEpisode;
+
+                if (match.Success)
+                {
+                    if (int.TryParse(match.Groups[1].Value, out int seasonFromUrl))
+                        parsedSeason = seasonFromUrl;
+                    if (int.TryParse(match.Groups[2].Value, out int episodeFromUrl))
+                        parsedEpisode = episodeFromUrl;
+                }
+
+                episodes.Add(new EpisodeLinkInfo
+                {
+                    url = episodeUrl,
+                    title = episodeNode.SelectSingleNode(".//div[@class='vi-rate']")?.InnerText.Trim() ?? $"Епізод {parsedEpisode}",
+                    season = parsedSeason,
+                    episode = parsedEpisode
+                });
+
+                fallbackEpisode = Math.Max(fallbackEpisode, parsedEpisode + 1);
+            }
+
+            return episodes
+                .Where(e => e != null && !string.IsNullOrWhiteSpace(e.url))
+                .Where(e => e.season == season)
+                .OrderBy(e => e.episode)
+                .ToList();
+        }
+
+        public async Task<SerialAggregatedStructure> GetSeasonStructure(string serialUrl, int season)
+        {
+            if (season < 0)
+                return null;
+
+            string memKey = $"UaFlix:season-structure:{serialUrl}:{season}";
+            if (_hybridCache.TryGetValue(memKey, out SerialAggregatedStructure cached))
+            {
+                _onLog($"GetSeasonStructure: Using cached structure for season={season}, url={serialUrl}");
+                return cached;
+            }
+
+            try
+            {
+                var seasonEpisodes = await GetSeasonEpisodes(serialUrl, season);
+                if (seasonEpisodes == null || seasonEpisodes.Count == 0)
+                {
+                    _onLog($"GetSeasonStructure: No episodes for season={season}, url={serialUrl}");
+                    return null;
+                }
+
+                var structure = new SerialAggregatedStructure
+                {
+                    SerialUrl = serialUrl,
+                    AllEpisodes = seasonEpisodes
+                };
+
+                var seasonProbe = await ProbeSeasonPlayer(seasonEpisodes);
+                if (string.IsNullOrWhiteSpace(seasonProbe.playerType))
+                {
+                    // fallback: інколи плеєр є лише на головній сторінці
+                    seasonProbe = await ProbeEpisodePlayer(serialUrl);
+                    if (string.IsNullOrWhiteSpace(seasonProbe.playerType))
+                    {
+                        _onLog($"GetSeasonStructure: unsupported player for season={season}");
+                        return null;
+                    }
+                }
+
+                if (seasonProbe.playerType == "ashdi-serial" || seasonProbe.playerType == "zetvideo-serial")
+                {
+                    var voices = await ParseMultiEpisodePlayerCached(seasonProbe.iframeUrl, seasonProbe.playerType);
+                    foreach (var voice in voices)
+                    {
+                        if (voice?.Seasons == null || !voice.Seasons.TryGetValue(season, out List<EpisodeInfo> seasonVoiceEpisodes) || seasonVoiceEpisodes == null || seasonVoiceEpisodes.Count == 0)
+                            continue;
+
+                        structure.Voices[voice.DisplayName] = new VoiceInfo
+                        {
+                            Name = voice.Name,
+                            PlayerType = voice.PlayerType,
+                            DisplayName = voice.DisplayName,
+                            Seasons = new Dictionary<int, List<EpisodeInfo>>
+                            {
+                                [season] = seasonVoiceEpisodes
+                                    .Where(ep => ep != null && !string.IsNullOrWhiteSpace(ep.File))
+                                    .Select(ep => new EpisodeInfo
+                                    {
+                                        Number = ep.Number,
+                                        Title = ep.Title,
+                                        File = ep.File,
+                                        Id = ep.Id,
+                                        Poster = ep.Poster,
+                                        Subtitle = ep.Subtitle
+                                    })
+                                    .ToList()
+                            }
+                        };
+                    }
+                }
+                else if (seasonProbe.playerType == "ashdi-vod" || seasonProbe.playerType == "zetvideo-vod")
+                {
+                    AddVodSeasonEpisodes(structure, seasonProbe.playerType, season, seasonEpisodes);
+                }
+                else
+                {
+                    _onLog($"GetSeasonStructure: player '{seasonProbe.playerType}' is not supported");
+                    return null;
+                }
+
+                if (!structure.Voices.Any())
+                {
+                    _onLog($"GetSeasonStructure: voices are empty for season={season}, url={serialUrl}");
+                    return null;
+                }
+
+                NormalizeUaflixVoiceNames(structure);
+                _hybridCache.Set(memKey, structure, cacheTime(30));
+                return structure;
+            }
+            catch (Exception ex)
+            {
+                _onLog($"GetSeasonStructure error: {ex.Message}");
+                return null;
+            }
+        }
+
+        async Task<List<VoiceInfo>> ParseMultiEpisodePlayerCached(string iframeUrl, string playerType)
+        {
+            string serialKey = NormalizeSerialPlayerKey(playerType, iframeUrl);
+            string memKey = $"UaFlix:player-voices:{playerType}:{serialKey}";
+            if (_hybridCache.TryGetValue(memKey, out List<VoiceInfo> cached))
+                return CloneVoices(cached);
+
+            var parsed = await ParseMultiEpisodePlayer(iframeUrl, playerType);
+            if (parsed == null || parsed.Count == 0)
+                return new List<VoiceInfo>();
+
+            _hybridCache.Set(memKey, parsed, cacheTime(40));
+            return CloneVoices(parsed);
+        }
+
+        static List<VoiceInfo> CloneVoices(List<VoiceInfo> voices)
+        {
+            if (voices == null || voices.Count == 0)
+                return new List<VoiceInfo>();
+
+            var result = new List<VoiceInfo>(voices.Count);
+            foreach (var voice in voices)
+            {
+                if (voice == null)
+                    continue;
+
+                var clone = new VoiceInfo
+                {
+                    Name = voice.Name,
+                    PlayerType = voice.PlayerType,
+                    DisplayName = voice.DisplayName,
+                    Seasons = new Dictionary<int, List<EpisodeInfo>>()
+                };
+
+                if (voice.Seasons != null)
+                {
+                    foreach (var season in voice.Seasons)
+                    {
+                        clone.Seasons[season.Key] = season.Value?
+                            .Where(ep => ep != null)
+                            .Select(ep => new EpisodeInfo
+                            {
+                                Number = ep.Number,
+                                Title = ep.Title,
+                                File = ep.File,
+                                Id = ep.Id,
+                                Poster = ep.Poster,
+                                Subtitle = ep.Subtitle
+                            })
+                            .ToList() ?? new List<EpisodeInfo>();
+                    }
+                }
+
+                result.Add(clone);
+            }
+
+            return result;
+        }
+
+        string ToAbsoluteUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return null;
+
+            string clean = WebUtility.HtmlDecode(url.Trim());
+            if (clean.StartsWith("//"))
+                clean = "https:" + clean;
+
+            if (clean.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || clean.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                return clean;
+
+            if (string.IsNullOrWhiteSpace(_init?.host))
+                return clean;
+
+            return $"{_init.host.TrimEnd('/')}/{clean.TrimStart('/')}";
+        }
+
+        static bool IsSeasonTabLink(string url, string text)
+        {
+            string u = (url ?? string.Empty).ToLowerInvariant();
+            string t = (text ?? string.Empty).ToLowerInvariant();
+
+            if (u.Contains("/date/") || t.Contains("графік") || t.Contains("дата виходу"))
+                return false;
+
+            if (Regex.IsMatch(u, @"(?:sezon|season)[-_/ ]?\d+", RegexOptions.IgnoreCase))
+                return true;
+
+            if (Regex.IsMatch(t, @"(?:сезон|season)\s*\d+", RegexOptions.IgnoreCase))
+                return true;
+
+            return false;
+        }
+
+        static bool IsPreferableSeasonUrl(string oldUrl, string newUrl, int season)
+        {
+            if (string.IsNullOrWhiteSpace(newUrl))
+                return false;
+
+            if (string.IsNullOrWhiteSpace(oldUrl))
+                return true;
+
+            string marker = $"/sezon-{season}/";
+            bool oldHasMarker = oldUrl.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0;
+            bool newHasMarker = newUrl.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0;
+
+            if (!oldHasMarker && newHasMarker)
+                return true;
+
+            return false;
+        }
+
+        static int ExtractSeasonNumber(string url, string text)
+        {
+            foreach (string source in new[] { url, text })
+            {
+                if (string.IsNullOrWhiteSpace(source))
+                    continue;
+
+                var seasonBySlug = Regex.Match(source, @"(?:sezon|season)[-_/ ]?(\d+)", RegexOptions.IgnoreCase);
+                if (seasonBySlug.Success && int.TryParse(seasonBySlug.Groups[1].Value, out int seasonSlug) && seasonSlug > 0)
+                    return seasonSlug;
+
+                var seasonByWordUa = Regex.Match(source, @"сезон\s*(\d+)", RegexOptions.IgnoreCase);
+                if (seasonByWordUa.Success && int.TryParse(seasonByWordUa.Groups[1].Value, out int seasonWordUa) && seasonWordUa > 0)
+                    return seasonWordUa;
+
+                var seasonByWordEn = Regex.Match(source, @"season\s*(\d+)", RegexOptions.IgnoreCase);
+                if (seasonByWordEn.Success && int.TryParse(seasonByWordEn.Groups[1].Value, out int seasonWordEn) && seasonWordEn > 0)
+                    return seasonWordEn;
+            }
+
+            return 0;
+        }
+
+        #endregion
+
         public async Task<List<SearchResult>> Search(string imdb_id, long kinopoisk_id, string title, string original_title, int year, int serial, string original_language, string source, string search_query)
         {
             bool allowAnime = IsAnimeRequest(title, original_title, original_language, source);

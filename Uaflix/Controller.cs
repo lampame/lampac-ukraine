@@ -163,97 +163,50 @@ namespace Uaflix.Controllers
 
             if (serial == 1)
             {
-                // Агрегуємо всі озвучки з усіх плеєрів
-                var structure = await invoke.AggregateSerialStructure(filmUrl);
-                if (structure == null || !structure.Voices.Any())
-                {
-                    OnLog("No voices found in aggregated structure");
-                    OnLog("=== RETURN: no voices OnError ===");
-                    return OnError("uaflix", refresh_proxy: true);
-                }
-
-                OnLog($"Structure aggregated successfully: {structure.Voices.Count} voices, URL: {filmUrl}");
-                foreach (var voice in structure.Voices)
-                {
-                    OnLog($"Voice: {voice.Key}, Type: {voice.Value.PlayerType}, Seasons: {voice.Value.Seasons.Count}");
-                    foreach (var season in voice.Value.Seasons)
-                    {
-                        OnLog($"  Season {season.Key}: {season.Value.Count} episodes");
-                    }
-                }
-
-                // s == -1: Вибір сезону
+                // s == -1: швидкий вибір сезону без повної агрегації серіалу
                 if (s == -1)
                 {
-                    List<int> allSeasons;
-                    VoiceInfo tVoice = null;
-                    bool restrictByVoice = !string.IsNullOrEmpty(t) && structure.Voices.TryGetValue(t, out tVoice) && IsAshdiVoice(tVoice);
-                    if (restrictByVoice)
-                    {
-                        allSeasons = GetSeasonSet(tVoice).OrderBy(sn => sn).ToList();
-                        OnLog($"Ashdi voice selected (t='{t}'), seasons count={allSeasons.Count}");
-                    }
-                    else
-                    {
-                        allSeasons = structure.Voices
-                            .SelectMany(v => GetSeasonSet(v.Value))
-                            .Distinct()
-                            .OrderBy(sn => sn)
-                            .ToList();
-                    }
+                    var seasonIndex = await invoke.GetSeasonIndex(filmUrl);
+                    var seasons = seasonIndex?.Seasons?.Keys
+                        .Distinct()
+                        .OrderBy(sn => sn)
+                        .ToList();
 
-                    OnLog($"Found {allSeasons.Count} seasons in structure: {string.Join(", ", allSeasons)}");
-
-                    // Перевіряємо чи сезони містять валідні епізоди з файлами
-                    var seasonsWithValidEpisodes = allSeasons.Where(season =>
-                        structure.Voices.Values.Any(v =>
-                            v.Seasons.ContainsKey(season) &&
-                            v.Seasons[season].Any(ep => !string.IsNullOrEmpty(ep.File))
-                        )
-                    ).ToList();
-
-                    OnLog($"Seasons with valid episodes: {seasonsWithValidEpisodes.Count}");
-                    foreach (var season in allSeasons)
+                    if (seasons == null || seasons.Count == 0)
                     {
-                        var episodesInSeason = structure.Voices.Values
-                            .Where(v => v.Seasons.ContainsKey(season))
-                            .SelectMany(v => v.Seasons[season])
-                            .Where(ep => !string.IsNullOrEmpty(ep.File))
-                            .ToList();
-                        OnLog($"Season {season}: {episodesInSeason.Count} valid episodes");
-                    }
-
-                    if (!seasonsWithValidEpisodes.Any())
-                    {
-                        OnLog("No seasons with valid episodes found in structure");
-                        OnLog("=== RETURN: no valid seasons OnError ===");
+                        OnLog("No seasons found in season index");
+                        OnLog("=== RETURN: no seasons OnError ===");
                         return OnError("uaflix", refresh_proxy: true);
                     }
 
-                    var season_tpl = new SeasonTpl(seasonsWithValidEpisodes.Count);
-                    foreach (var season in seasonsWithValidEpisodes)
+                    var season_tpl = new SeasonTpl(seasons.Count);
+                    foreach (int season in seasons)
                     {
                         string link = $"{host}/lite/uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={season}&href={HttpUtility.UrlEncode(filmUrl)}";
-                        if (restrictByVoice)
+                        if (!string.IsNullOrWhiteSpace(t))
                             link += $"&t={HttpUtility.UrlEncode(t)}";
+
                         season_tpl.Append($"{season}", link, season.ToString());
-                        OnLog($"Added season {season} to template");
                     }
 
-                    OnLog($"Returning season template with {seasonsWithValidEpisodes.Count} seasons");
-                    
-                    var htmlContent = rjson ? season_tpl.ToJson() : season_tpl.ToHtml();
-                    OnLog($"Season template response length: {htmlContent.Length}");
-                    OnLog($"Season template HTML (first 300): {htmlContent.Substring(0, Math.Min(300, htmlContent.Length))}");
-                    OnLog($"=== RETURN: season template ({seasonsWithValidEpisodes.Count} seasons) ===");
-                    
-                    return Content(htmlContent, rjson ? "application/json; charset=utf-8" : "text/html; charset=utf-8");
+                    OnLog($"=== RETURN: season template ({seasons.Count} seasons) ===");
+                    return Content(
+                        rjson ? season_tpl.ToJson() : season_tpl.ToHtml(),
+                        rjson ? "application/json; charset=utf-8" : "text/html; charset=utf-8"
+                    );
                 }
-                // s >= 0: Показуємо озвучки + епізоди
-                else if (s >= 0)
+
+                // s >= 0: завантажуємо тільки потрібний сезон
+                if (s >= 0)
                 {
+                    var structure = await invoke.GetSeasonStructure(filmUrl, s);
+                    if (structure == null || structure.Voices == null || structure.Voices.Count == 0)
+                    {
+                        OnLog($"No voices found for season {s}");
+                        OnLog("=== RETURN: no voices for season OnError ===");
+                        return OnError("uaflix", refresh_proxy: true);
+                    }
                     var voicesForSeason = structure.Voices
-                        .Where(v => v.Value.Seasons.ContainsKey(s))
                         .Select(v => new { DisplayName = v.Key, Info = v.Value })
                         .ToList();
 
@@ -276,60 +229,48 @@ namespace Uaflix.Controllers
                         OnLog($"Voice '{t}' not found, fallback to first voice: {t}");
                     }
 
+                    VoiceInfo selectedVoice = null;
+                    if (!structure.Voices.TryGetValue(t, out selectedVoice) || !selectedVoice.Seasons.ContainsKey(s) || selectedVoice.Seasons[s] == null || selectedVoice.Seasons[s].Count == 0)
+                    {
+                        var fallbackVoice = voicesForSeason.FirstOrDefault(v => v.Info.Seasons.ContainsKey(s) && v.Info.Seasons[s] != null && v.Info.Seasons[s].Count > 0);
+                        if (fallbackVoice == null)
+                        {
+                            OnLog($"Season {s} not found for selected voice and fallback voice missing");
+                            OnLog("=== RETURN: season not found for voice OnError ===");
+                            return OnError("uaflix", refresh_proxy: true);
+                        }
+
+                        t = fallbackVoice.DisplayName;
+                        selectedVoice = fallbackVoice.Info;
+                        OnLog($"Selected voice had no episodes, fallback to: {t}");
+                    }
+
                     // Створюємо VoiceTpl з усіма озвучками
                     var voice_tpl = new VoiceTpl();
-                    var selectedVoiceInfo = structure.Voices[t];
-                    var selectedSeasonSet = GetSeasonSet(selectedVoiceInfo);
-                    bool selectedIsAshdi = IsAshdiVoice(selectedVoiceInfo);
-
                     foreach (var voice in voicesForSeason)
                     {
-                        bool targetIsAshdi = IsAshdiVoice(voice.Info);
-                        var targetSeasonSet = GetSeasonSet(voice.Info);
-                        bool sameSeasonSet = targetSeasonSet.SetEquals(selectedSeasonSet);
-                        bool needSeasonReset = (selectedIsAshdi || targetIsAshdi) && !sameSeasonSet;
-
                         string voiceLink = $"{host}/lite/uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&href={HttpUtility.UrlEncode(filmUrl)}";
-                        if (needSeasonReset)
-                            voiceLink += $"&s=-1&t={HttpUtility.UrlEncode(voice.DisplayName)}";
-                        else
-                            voiceLink += $"&s={s}&t={HttpUtility.UrlEncode(voice.DisplayName)}";
+                        voiceLink += $"&s={s}&t={HttpUtility.UrlEncode(voice.DisplayName)}";
 
                         bool isActive = voice.DisplayName == t;
                         voice_tpl.Append(voice.DisplayName, isActive, voiceLink);
                     }
                     OnLog($"Created VoiceTpl with {voicesForSeason.Count} voices, active: {t}");
-                    
-                    // Відображення епізодів для вибраної озвучки
-                    if (!structure.Voices.ContainsKey(t))
-                    {
-                        OnLog($"Voice '{t}' not found in structure");
-                        OnLog("=== RETURN: voice not found OnError ===");
-                        return OnError("uaflix", refresh_proxy: true);
-                    }
 
-                    if (!structure.Voices[t].Seasons.ContainsKey(s))
-                    {
-                        OnLog($"Season {s} not found for voice '{t}'");
-                        if (IsAshdiVoice(structure.Voices[t]))
-                        {
-                            string redirectUrl = $"{host}/lite/uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s=-1&t={HttpUtility.UrlEncode(t)}&href={HttpUtility.UrlEncode(filmUrl)}";
-                            OnLog($"Ashdi voice missing season, redirect to season selector: {redirectUrl}");
-                            return Redirect(redirectUrl);
-                        }
-
-                        OnLog("=== RETURN: season not found for voice OnError ===");
-                        return OnError("uaflix", refresh_proxy: true);
-                    }
-
-                    var episodes = structure.Voices[t].Seasons[s];
+                    var episodes = selectedVoice.Seasons[s];
                     var episode_tpl = new EpisodeTpl();
+                    int appendedEpisodes = 0;
 
                     foreach (var ep in episodes)
                     {
+                        if (ep == null || string.IsNullOrWhiteSpace(ep.File))
+                            continue;
+
+                        string episodeTitle = !string.IsNullOrWhiteSpace(ep.Title) ? ep.Title : $"Епізод {ep.Number}";
+
                         // Для zetvideo-vod повертаємо URL епізоду з методом call
                         // Для ashdi/zetvideo-serial повертаємо готове посилання з play
-                        var voice = structure.Voices[t];
+                        var voice = selectedVoice;
                         
                         if (voice.PlayerType == "zetvideo-vod" || voice.PlayerType == "ashdi-vod")
                         {
@@ -337,7 +278,7 @@ namespace Uaflix.Controllers
                             // Потрібно передати URL епізоду в інший параметр, щоб не плутати з play=true
                             string callUrl = $"{host}/lite/uaflix?episode_url={HttpUtility.UrlEncode(ep.File)}&imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&s={s}&e={ep.Number}";
                             episode_tpl.Append(
-                                name: ep.Title,
+                                name: episodeTitle,
                                 title: title,
                                 s: s.ToString(),
                                 e: ep.Number.ToString(),
@@ -351,16 +292,25 @@ namespace Uaflix.Controllers
                             // Для багатосерійних плеєрів (ashdi-serial, zetvideo-serial) - пряме відтворення
                             string playUrl = BuildStreamUrl(init, ep.File);
                             episode_tpl.Append(
-                                name: ep.Title,
+                                name: episodeTitle,
                                 title: title,
                                 s: s.ToString(),
                                 e: ep.Number.ToString(),
                                 link: playUrl
                             );
                         }
+
+                        appendedEpisodes++;
                     }
 
-                    OnLog($"Created EpisodeTpl with {episodes.Count} episodes");
+                    if (appendedEpisodes == 0)
+                    {
+                        OnLog($"No valid episodes after filtering for season {s}, voice {t}");
+                        OnLog("=== RETURN: no valid episodes OnError ===");
+                        return OnError("uaflix", refresh_proxy: true);
+                    }
+
+                    OnLog($"Created EpisodeTpl with {appendedEpisodes} episodes");
                     
                     // Повертаємо VoiceTpl + EpisodeTpl разом
                     episode_tpl.Append(voice_tpl);
@@ -468,25 +418,6 @@ namespace Uaflix.Controllers
 
             cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
             return cleaned;
-        }
-
-        private static bool IsAshdiVoice(VoiceInfo voice)
-        {
-            if (voice == null || string.IsNullOrEmpty(voice.PlayerType))
-                return false;
-
-            return voice.PlayerType == "ashdi-serial" || voice.PlayerType == "ashdi-vod";
-        }
-
-        private static HashSet<int> GetSeasonSet(VoiceInfo voice)
-        {
-            if (voice?.Seasons == null || voice.Seasons.Count == 0)
-                return new HashSet<int>();
-
-            return voice.Seasons
-                .Where(kv => kv.Value != null && kv.Value.Any(ep => !string.IsNullOrEmpty(ep.File)))
-                .Select(kv => kv.Key)
-                .ToHashSet();
         }
 
         private static bool IsCheckOnlineSearchEnabled()

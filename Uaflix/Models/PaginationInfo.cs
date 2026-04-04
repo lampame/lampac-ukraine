@@ -7,6 +7,9 @@ namespace Uaflix.Models
     {
         // Словник сезонів, де ключ - номер сезону, значення - кількість сторінок
         public Dictionary<int, int> Seasons { get; set; } = new Dictionary<int, int>();
+
+        // URL сторінки сезону: ключ - номер сезону, значення - абсолютний URL сторінки
+        public Dictionary<int, string> SeasonUrls { get; set; } = new Dictionary<int, string>();
         
         // Загальна кількість сторінок (якщо потрібно)
         public int TotalPages { get; set; }
