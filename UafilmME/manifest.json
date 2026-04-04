@@ -1,0 +1,6 @@
+{
+  "enable": true,
+  "version": 3,
+  "initspace": "UafilmME.ModInit",
+  "online": "UafilmME.OnlineApi"
+}
