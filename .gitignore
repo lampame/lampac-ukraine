@@ -14,3 +14,4 @@ AGENTS.md
 .vs
 bin
 obj
+.vscode/settings.json
