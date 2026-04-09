@@ -1,4 +1,4 @@
-# Ukraine online source for Lampac
+# Ukraine online source for Lampac NextGen
 
 ## Sources
 ### TVShows and Movies
