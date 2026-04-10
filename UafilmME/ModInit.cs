@@ -74,31 +74,16 @@ namespace UafilmME
         {
             try
             {
-                var onlineType = Type.GetType("Online.ModInit");
-                if (onlineType == null)
+                if (CoreInit.conf.online.with_search == null)
+                    return;
+
+                foreach (var item in CoreInit.conf.online.with_search)
                 {
-                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                    {
-                        onlineType = asm.GetType("Online.ModInit");
-                        if (onlineType != null)
-                            break;
-                    }
+                    if (string.Equals(item, plugin, StringComparison.OrdinalIgnoreCase))
+                        return;
                 }
 
-                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                var conf = confField?.GetValue(null);
-                var withSearchProp = conf?.GetType().GetProperty("with_search", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-                if (withSearchProp?.GetValue(conf) is System.Collections.IList list)
-                {
-                    foreach (var item in list)
-                    {
-                        if (string.Equals(item?.ToString(), plugin, StringComparison.OrdinalIgnoreCase))
-                            return;
-                    }
-
-                    list.Add(plugin);
-                }
+                CoreInit.conf.online.with_search.Add(plugin);
             }
             catch
             {
