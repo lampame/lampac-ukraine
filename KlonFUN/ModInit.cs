@@ -60,6 +60,7 @@ namespace KlonFUN
             };
 
             var defaults = JObject.FromObject(KlonFUN);
+            defaults["enabled"] = true;
             defaults["magic_apn"] = new JObject()
             {
                 ["ashdi"] = ApnHelper.DefaultHost

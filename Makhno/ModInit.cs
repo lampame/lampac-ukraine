@@ -54,6 +54,7 @@ namespace Makhno
                 }
             };
             var defaults = JObject.FromObject(Makhno);
+            defaults["enabled"] = true;
             defaults["magic_apn"] = new JObject()
             {
                 ["ashdi"] = ApnHelper.DefaultHost

@@ -58,6 +58,7 @@ namespace AnimeON
                 }
             };
             var defaults = JObject.FromObject(AnimeON);
+            defaults["enabled"] = true;
             defaults["magic_apn"] = new JObject()
             {
                 ["ashdi"] = ApnHelper.DefaultHost

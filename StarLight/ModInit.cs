@@ -55,7 +55,9 @@ namespace StarLight
                     list = new string[] { "socks5://ip:port" }
                 }
             };
-            var conf = ModuleInvoke.Init("StarLight", JObject.FromObject(StarLight));
+            var defaults = JObject.FromObject(StarLight);
+            defaults["enabled"] = true;
+            var conf = ModuleInvoke.Init("StarLight", defaults);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");

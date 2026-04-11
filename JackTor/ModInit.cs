@@ -66,7 +66,9 @@ namespace JackTor
                 }
             };
 
-            var conf = ModuleInvoke.Init("JackTor", JObject.FromObject(JackTor)) ?? JObject.FromObject(JackTor);
+            var defaults = JObject.FromObject(JackTor);
+            defaults["enabled"] = true;
+            var conf = ModuleInvoke.Init("JackTor", defaults) ?? defaults;
             JackTor = conf.ToObject<JackTorSettings>();
 
             if (string.IsNullOrWhiteSpace(JackTor.jackett))

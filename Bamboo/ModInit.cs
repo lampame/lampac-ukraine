@@ -55,7 +55,9 @@ namespace Bamboo
                     list = new string[] { "socks5://ip:port" }
                 }
             };
-            var conf = ModuleInvoke.Init("Bamboo", JObject.FromObject(Bamboo));
+            var defaults = JObject.FromObject(Bamboo);
+            defaults["enabled"] = true;
+            var conf = ModuleInvoke.Init("Bamboo", defaults);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");

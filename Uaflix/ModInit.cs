@@ -56,6 +56,7 @@ namespace Uaflix
             };
 
             var defaults = JObject.FromObject(UaFlix);
+            defaults["enabled"] = true;
             defaults["magic_apn"] = new JObject()
             {
                 ["ashdi"] = ApnHelper.DefaultHost

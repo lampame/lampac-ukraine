@@ -59,6 +59,7 @@ namespace Mikai
             };
 
             var defaults = JObject.FromObject(Mikai);
+            defaults["enabled"] = true;
             defaults["magic_apn"] = new JObject()
             {
                 ["ashdi"] = ApnHelper.DefaultHost

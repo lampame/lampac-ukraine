@@ -48,7 +48,9 @@ namespace UafilmME
                 }
             };
 
-            var conf = ModuleInvoke.Init("UafilmME", JObject.FromObject(UafilmME));
+            var defaults = JObject.FromObject(UafilmME);
+            defaults["enabled"] = true;
+            var conf = ModuleInvoke.Init("UafilmME", defaults);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");

@@ -49,7 +49,9 @@ namespace NMoonAnime
                 }
             };
 
-            var conf = ModuleInvoke.Init("NMoonAnime", JObject.FromObject(NMoonAnime)) ?? JObject.FromObject(NMoonAnime);
+            var defaults = JObject.FromObject(NMoonAnime);
+            defaults["enabled"] = true;
+            var conf = ModuleInvoke.Init("NMoonAnime", defaults) ?? JObject.FromObject(NMoonAnime);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");

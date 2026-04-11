@@ -49,7 +49,9 @@ namespace Unimay
                     list = new string[] { "socks5://IP:PORT" }
                 }
             };
-            Unimay = ModuleInvoke.Init("Unimay", JObject.FromObject(Unimay)).ToObject<OnlinesSettings>();
+            var defaults = JObject.FromObject(Unimay);
+            defaults["enabled"] = true;
+            Unimay = ModuleInvoke.Init("Unimay", defaults).ToObject<OnlinesSettings>();
 
             // Виводити "уточнити пошук"
             RegisterWithSearch("unimay");
