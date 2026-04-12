@@ -16,11 +16,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Shared.Models.Events;
 
-namespace KlonFUN
+namespace LME.KlonFUN
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 2.0;
+        public static double Version => 2.1;
 
         public static ModuleConfig KlonFUN;
         public static bool ApnHostProvided;
@@ -41,12 +41,12 @@ namespace KlonFUN
             EventListener.UpdateInitFile += UpdateConfig;
 
             // Додаємо підтримку "уточнити пошук".
-            RegisterWithSearch("klonfun");
+            RegisterWithSearch("lme.klonfun");
         }
 
         private void UpdateConfig()
         {
-            KlonFUN = new ModuleConfig("KlonFUN", "https://klon.fun", streamproxy: false, useproxy: false)
+            KlonFUN = new ModuleConfig("LME.KlonFUN", "https://klon.fun", streamproxy: false, useproxy: false)
             {
                 displayname = "KlonFUN",
                 displayindex = 0,
@@ -66,7 +66,7 @@ namespace KlonFUN
                 ["ashdi"] = ApnHelper.DefaultHost
             };
 
-            var conf = ModuleInvoke.Init("KlonFUN", defaults) ?? defaults;
+            var conf = ModuleInvoke.Init("LME.KlonFUN", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
             conf.Remove("magic_apn");

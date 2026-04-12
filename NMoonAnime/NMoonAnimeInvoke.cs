@@ -1,4 +1,4 @@
-using NMoonAnime.Models;
+using LME.NMoonAnime.Models;
 using Shared;
 using Shared.Engine;
 using Shared.Models;
@@ -14,7 +14,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 
-namespace NMoonAnime
+namespace LME.NMoonAnime
 {
     public class NMoonAnimeInvoke
     {

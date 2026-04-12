@@ -1,4 +1,4 @@
-using JackTor.Models;
+using LME.JackTor.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Shared;
@@ -13,11 +13,11 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JackTor
+namespace LME.JackTor
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 2.0;
+        public static double Version => 2.1;
 
         public static JackTorSettings JackTor;
 
@@ -32,7 +32,7 @@ namespace JackTor
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            JackTor = new JackTorSettings("JackTor", "http://127.0.0.1:9117", streamproxy: false, useproxy: false)
+            JackTor = new JackTorSettings("LME.JackTor", "http://127.0.0.1:9117", streamproxy: false, useproxy: false)
             {
                 displayname = "JackTor",
                 displayindex = 0,
@@ -68,7 +68,7 @@ namespace JackTor
 
             var defaults = JObject.FromObject(JackTor);
             defaults["enabled"] = true;
-            var conf = ModuleInvoke.Init("JackTor", defaults) ?? defaults;
+            var conf = ModuleInvoke.Init("LME.JackTor", defaults) ?? defaults;
             JackTor = conf.ToObject<JackTorSettings>();
 
             if (string.IsNullOrWhiteSpace(JackTor.jackett))
@@ -78,7 +78,7 @@ namespace JackTor
                 JackTor.host = JackTor.jackett;
 
             // Показувати «уточнити пошук».
-            RegisterWithSearch("jacktor");
+            RegisterWithSearch("lme.jacktor");
         }
 
         private static void RegisterWithSearch(string plugin)

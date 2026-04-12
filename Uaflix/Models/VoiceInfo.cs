@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Uaflix.Models
+namespace LME.Uaflix.Models
 {
     /// <summary>
     /// Модель для зберігання інформації про озвучку серіалу

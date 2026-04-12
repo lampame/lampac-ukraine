@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 using HtmlAgilityPack;
-using KlonFUN.Models;
+using LME.KlonFUN.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Shared;
@@ -14,7 +14,7 @@ using Shared.Engine;
 using Shared.Models;
 using Shared.Models.Online.Settings;
 
-namespace KlonFUN
+namespace LME.KlonFUN
 {
     public class KlonFUNInvoke
     {

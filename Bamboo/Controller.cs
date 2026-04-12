@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Web;
-using Bamboo.Models;
+using LME.Bamboo.Models;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
 using Shared.Engine;
@@ -11,7 +11,7 @@ using Shared.Models;
 using Shared.Models.Online.Settings;
 using Shared.Models.Templates;
 
-namespace Bamboo.Controllers
+namespace LME.Bamboo.Controllers
 {
     public class Controller : BaseOnlineController
     {
@@ -23,7 +23,7 @@ namespace Bamboo.Controllers
         }
 
         [HttpGet]
-        [Route("lite/bamboo")]
+        [Route("lite/lme.bamboo")]
         async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, bool rjson = false, string href = null, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
@@ -37,13 +37,13 @@ namespace Bamboo.Controllers
             if (checksearch)
             {
                 if (!IsCheckOnlineSearchEnabled())
-                    return OnError("bamboo", refresh_proxy: true);
+                    return OnError("lme.bamboo", refresh_proxy: true);
 
                 var searchResults = await invoke.Search(title, original_title);
                 if (searchResults != null && searchResults.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("bamboo", refresh_proxy: true);
+                return OnError("lme.bamboo", refresh_proxy: true);
             }
 
             string itemUrl = href;
@@ -51,14 +51,14 @@ namespace Bamboo.Controllers
             {
                 var searchResults = await invoke.Search(title, original_title);
                 if (searchResults == null || searchResults.Count == 0)
-                    return OnError("bamboo", refresh_proxy: true);
+                    return OnError("lme.bamboo", refresh_proxy: true);
 
                 if (searchResults.Count > 1)
                 {
                     var similar_tpl = new SimilarTpl(searchResults.Count);
                     foreach (var res in searchResults)
                     {
-                        string link = $"{host}/lite/bamboo?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(res.Url)}";
+                        string link = $"{host}/lite/lme.bamboo?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(res.Url)}";
                         similar_tpl.Append(res.Title, string.Empty, string.Empty, link, res.Poster);
                     }
 
@@ -72,7 +72,7 @@ namespace Bamboo.Controllers
             {
                 var series = await invoke.GetSeriesEpisodes(itemUrl);
                 if (series == null || (series.Sub.Count == 0 && series.Dub.Count == 0))
-                    return OnError("bamboo", refresh_proxy: true);
+                    return OnError("lme.bamboo", refresh_proxy: true);
 
                 var voice_tpl = new VoiceTpl();
                 var episode_tpl = new EpisodeTpl();
@@ -88,13 +88,13 @@ namespace Bamboo.Controllers
 
                 foreach (var voice in availableVoices)
                 {
-                    string voiceLink = $"{host}/lite/bamboo?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&t={voice.key}&href={HttpUtility.UrlEncode(itemUrl)}";
+                    string voiceLink = $"{host}/lite/lme.bamboo?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&t={voice.key}&href={HttpUtility.UrlEncode(itemUrl)}";
                     voice_tpl.Append(voice.name, voice.key == t, voiceLink);
                 }
 
                 var selected = availableVoices.FirstOrDefault(v => v.key == t);
                 if (selected.episodes == null || selected.episodes.Count == 0)
-                    return OnError("bamboo", refresh_proxy: true);
+                    return OnError("lme.bamboo", refresh_proxy: true);
 
                 int index = 1;
                 foreach (var ep in selected.episodes.OrderBy(e => e.Episode ?? int.MaxValue))
@@ -116,7 +116,7 @@ namespace Bamboo.Controllers
             {
                 var streams = await invoke.GetMovieStreams(itemUrl);
                 if (streams == null || streams.Count == 0)
-                    return OnError("bamboo", refresh_proxy: true);
+                    return OnError("lme.bamboo", refresh_proxy: true);
 
                 var movie_tpl = new MovieTpl(title, original_title);
                 for (int i = 0; i < streams.Count; i++)

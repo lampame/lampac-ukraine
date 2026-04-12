@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Unimay.Models
+namespace LME.Unimay.Models
 {
     public class Episode
     {

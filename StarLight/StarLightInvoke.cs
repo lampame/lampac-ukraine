@@ -11,9 +11,9 @@ using Shared;
 using Shared.Engine;
 using Shared.Models;
 using Shared.Models.Online.Settings;
-using StarLight.Models;
+using LME.StarLight.Models;
 
-namespace StarLight
+namespace LME.StarLight
 {
     public class StarLightInvoke
     {

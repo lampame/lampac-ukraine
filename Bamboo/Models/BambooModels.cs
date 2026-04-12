@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Bamboo.Models
+namespace LME.Bamboo.Models
 {
     public class SearchResult
     {

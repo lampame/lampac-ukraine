@@ -6,7 +6,7 @@ using Shared.Models.Module.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace KlonFUN
+namespace LME.KlonFUN
 {
     public class OnlineApi : IModuleOnline
     {
@@ -26,7 +26,7 @@ namespace KlonFUN
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "klonfun"));
+                online.Add(new ModuleOnlineItem(init, "lme.klonfun"));
             }
 
             return online;

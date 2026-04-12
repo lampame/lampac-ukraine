@@ -1,6 +1,6 @@
 using System;
 
-namespace Uaflix.Models
+namespace LME.Uaflix.Models
 {
     public class EpisodeLinkInfo
     {

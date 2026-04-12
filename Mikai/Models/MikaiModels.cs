@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace Mikai.Models
+namespace LME.Mikai.Models
 {
     public class SearchResponse
     {

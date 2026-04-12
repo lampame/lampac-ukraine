@@ -21,11 +21,11 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-namespace StarLight
+namespace LME.StarLight
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 4.0;
+        public static double Version => 4.1;
 
         public static OnlinesSettings StarLight;
         public static bool ApnHostProvided;
@@ -41,9 +41,9 @@ namespace StarLight
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            
 
-            StarLight = new OnlinesSettings("StarLight", "https://tp-back.starlight.digital", streamproxy: false, useproxy: false)
+
+            StarLight = new OnlinesSettings("LME.StarLight", "https://tp-back.starlight.digital", streamproxy: false, useproxy: false)
             {
                 displayname = "StarLight",
                 displayindex = 0,
@@ -57,7 +57,7 @@ namespace StarLight
             };
             var defaults = JObject.FromObject(StarLight);
             defaults["enabled"] = true;
-            var conf = ModuleInvoke.Init("StarLight", defaults);
+            var conf = ModuleInvoke.Init("LME.StarLight", defaults);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");
@@ -76,7 +76,7 @@ namespace StarLight
             }
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("starlight");
+            RegisterWithSearch("lme.starlight");
         }
 
         private static void RegisterWithSearch(string plugin)

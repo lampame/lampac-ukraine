@@ -6,7 +6,7 @@ using Shared.Models.Module.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Bamboo
+namespace LME.Bamboo
 {
     public class OnlineApi : IModuleOnline
     {
@@ -33,7 +33,7 @@ namespace Bamboo
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "bamboo"));
+                online.Add(new ModuleOnlineItem(init, "lme.bamboo"));
             }
 
             return online;

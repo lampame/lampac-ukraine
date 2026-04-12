@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Uaflix.Models
+namespace LME.Uaflix.Models
 {
     /// <summary>
     /// Агрегована структура серіалу з озвучками з усіх джерел (ashdi, zetvideo-serial, zetvideo-vod, ashdi-vod)

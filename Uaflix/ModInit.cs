@@ -13,13 +13,13 @@ using System.Security.Authentication;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Uaflix.Models;
+using LME.Uaflix.Models;
 
-namespace Uaflix
+namespace LME.Uaflix
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 5.1;
+        public static double Version => 5.2;
 
         public static UaflixSettings UaFlix;
 
@@ -37,7 +37,7 @@ namespace Uaflix
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            UaFlix = new UaflixSettings("Uaflix", "https://uafix.net", streamproxy: false, useproxy: false)
+            UaFlix = new UaflixSettings("LME.Uaflix", "https://uafix.net", streamproxy: false, useproxy: false)
             {
                 displayname = "UaFlix",
                 group = 0,
@@ -62,7 +62,7 @@ namespace Uaflix
                 ["ashdi"] = ApnHelper.DefaultHost
             };
 
-            var conf = ModuleInvoke.Init("Uaflix", defaults) ?? defaults;
+            var conf = ModuleInvoke.Init("LME.Uaflix", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
             conf.Remove("magic_apn");
@@ -85,7 +85,7 @@ namespace Uaflix
             }
 
             // Показувати «уточнити пошук».
-            RegisterWithSearch("uaflix");
+            RegisterWithSearch("lme.uaflix");
         }
 
         private static void RegisterWithSearch(string plugin)

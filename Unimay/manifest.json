@@ -1,3 +1,6 @@
 {
-  "enable": true
+  "enable": true,
+  "version": 3,
+  "initspace": "LME.Unimay.ModInit",
+  "online": "LME.Unimay.OnlineApi"
 }

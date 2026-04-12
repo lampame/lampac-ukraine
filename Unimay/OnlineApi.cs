@@ -6,7 +6,7 @@ using Shared.Models.Module.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Unimay
+namespace LME.Unimay
 {
     public class OnlineApi : IModuleOnline
     {
@@ -30,7 +30,7 @@ namespace Unimay
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "unimay"));
+                online.Add(new ModuleOnlineItem(init, "lme.unimay"));
             }
 
             return online;

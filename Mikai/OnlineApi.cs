@@ -6,7 +6,7 @@ using Shared.Models.Module.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Mikai
+namespace LME.Mikai
 {
     public class OnlineApi : IModuleOnline
     {
@@ -30,7 +30,7 @@ namespace Mikai
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "mikai"));
+                online.Add(new ModuleOnlineItem(init, "lme.mikai"));
             }
 
             return online;

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace AnimeON.Models
+namespace LME.AnimeON.Models
 {
     public class Voice
     {

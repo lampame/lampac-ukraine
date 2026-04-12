@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Mikai.Models
+namespace LME.Mikai.Models
 {
     public class MikaiVoiceInfo
     {

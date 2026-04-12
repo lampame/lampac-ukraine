@@ -6,7 +6,7 @@ using Shared.Models.Module.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace JackTor
+namespace LME.JackTor
 {
     public class OnlineApi : IModuleOnline
     {
@@ -26,7 +26,7 @@ namespace JackTor
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "jacktor"));
+                online.Add(new ModuleOnlineItem(init, "lme.jacktor"));
             }
 
             return online;

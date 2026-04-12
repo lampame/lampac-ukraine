@@ -1,6 +1,6 @@
 using Shared.Engine;
 using Shared.Models;
-using Uaflix.Models;
+using LME.Uaflix.Models;
 using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Collections.Concurrent;
@@ -10,7 +10,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 
-namespace Uaflix
+namespace LME.Uaflix
 {
     public sealed class UaflixAuth
     {
@@ -44,7 +44,7 @@ namespace Uaflix
             }
             catch
             {
-                _onLog("UaflixAuth: некоректний host у конфігурації");
+                _onLog("lme.uaflix: Auth: некоректний host у конфігурації");
                 return null;
             }
 
@@ -83,7 +83,7 @@ namespace Uaflix
             if (!CanUseCredentials)
                 return null;
 
-            string loginThrottleKey = $"uaflix:login:{_init.host}:{_init.login}";
+            string loginThrottleKey = $"lme.uaflix:login:{_init.host}:{_init.login}";
             if (!forceRefresh && _memoryCache.TryGetValue(loginThrottleKey, out _))
                 return null;
 
@@ -141,7 +141,7 @@ namespace Uaflix
 
                 if (response.response == null)
                 {
-                    _onLog("UaflixAuth: логін не вдався, немає HTTP-відповіді");
+                    _onLog("lme.uaflix: Auth: логін не вдався, немає HTTP-відповіді");
                     return (false, null, null);
                 }
 
@@ -176,16 +176,16 @@ namespace Uaflix
 
                 if (hasAuthError || !hasSession || !hasDleAuthCookie)
                 {
-                    _onLog($"UaflixAuth: авторизація неуспішна, status={(int)response.response.StatusCode}");
+                    _onLog($"lme.uaflix: Auth: авторизація неуспішна, status={(int)response.response.StatusCode}");
                     return (false, null, null);
                 }
 
-                _onLog("UaflixAuth: авторизація успішна");
+                _onLog("lme.uaflix: Auth: авторизація успішна");
                 return (true, cookie, container);
             }
             catch (Exception ex)
             {
-                _onLog($"UaflixAuth: помилка авторизації - {ex.Message}");
+                _onLog($"lme.uaflix: Auth: помилка авторизації - {ex.Message}");
                 return (false, null, null);
             }
         }

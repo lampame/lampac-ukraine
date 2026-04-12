@@ -9,10 +9,10 @@ using System.Linq;
 using System.Text;
 using System.Net;
 using System.Text.RegularExpressions;
-using AnimeON.Models;
+using LME.AnimeON.Models;
 using Shared.Engine;
 
-namespace AnimeON
+namespace LME.AnimeON
 {
     public class AnimeONInvoke
     {

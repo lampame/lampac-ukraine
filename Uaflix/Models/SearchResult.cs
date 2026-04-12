@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Uaflix.Models
+namespace LME.Uaflix.Models
 {
     public class SearchResult
     {

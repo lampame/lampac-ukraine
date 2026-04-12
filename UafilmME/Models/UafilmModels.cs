@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace UafilmME.Models
+namespace LME.UafilmME.Models
 {
     public class UafilmSearchItem
     {

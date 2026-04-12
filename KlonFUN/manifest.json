@@ -1,3 +1,5 @@
 {
-  "enable": true
+  "enable": true,
+  "initspace": "LME.KlonFUN.ModInit",
+  "online": "LME.KlonFUN.OnlineApi"
 }

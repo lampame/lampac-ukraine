@@ -15,11 +15,11 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NMoonAnime
+namespace LME.NMoonAnime
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 2.0;
+        public static double Version => 2.1;
 
         public static OnlinesSettings NMoonAnime;
 
@@ -36,7 +36,7 @@ namespace NMoonAnime
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            NMoonAnime = new OnlinesSettings("NMoonAnime", "https://moonanime.art", "https://apx.lme.isroot.in", streamproxy: false, useproxy: false)
+            NMoonAnime = new OnlinesSettings("LME.NMoonAnime", "https://moonanime.art", "https://apx.lme.isroot.in", streamproxy: false, useproxy: false)
             {
                 displayname = "New MoonAnime",
                 displayindex = 0,
@@ -51,7 +51,7 @@ namespace NMoonAnime
 
             var defaults = JObject.FromObject(NMoonAnime);
             defaults["enabled"] = true;
-            var conf = ModuleInvoke.Init("NMoonAnime", defaults) ?? JObject.FromObject(NMoonAnime);
+            var conf = ModuleInvoke.Init("LME.NMoonAnime", defaults) ?? JObject.FromObject(NMoonAnime);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");
@@ -71,7 +71,7 @@ namespace NMoonAnime
                 NMoonAnime.apn = null;
             }
 
-            RegisterWithSearch("nmoonanime");
+            RegisterWithSearch("lme.nmoonanime");
         }
 
         private static void RegisterWithSearch(string plugin)

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Makhno.Models
+namespace LME.Makhno.Models
 {
     public class PlayerData
     {

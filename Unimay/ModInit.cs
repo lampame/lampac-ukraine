@@ -16,11 +16,11 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-namespace Unimay
+namespace LME.Unimay
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 4.0;
+        public static double Version => 4.1;
 
         public static OnlinesSettings Unimay;
 
@@ -35,9 +35,9 @@ namespace Unimay
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            
 
-            Unimay = new OnlinesSettings("Unimay", "https://api.unimay.media/v1", streamproxy: false, useproxy: false)
+
+            Unimay = new OnlinesSettings("LME.Unimay", "https://api.unimay.media/v1", streamproxy: false, useproxy: false)
             {
                 displayname = "Unimay",
                 displayindex = 0,
@@ -51,10 +51,10 @@ namespace Unimay
             };
             var defaults = JObject.FromObject(Unimay);
             defaults["enabled"] = true;
-            Unimay = ModuleInvoke.Init("Unimay", defaults).ToObject<OnlinesSettings>();
+            Unimay = ModuleInvoke.Init("LME.Unimay", defaults).ToObject<OnlinesSettings>();
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("unimay");
+            RegisterWithSearch("lme.unimay");
         }
 
         private static void RegisterWithSearch(string plugin)

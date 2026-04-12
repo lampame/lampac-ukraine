@@ -1,3 +1,6 @@
 {
-  "enable": true
+  "enable": true,
+  "version": 3,
+  "initspace": "LME.Uaflix.ModInit",
+  "online": "LME.Uaflix.OnlineApi"
 }

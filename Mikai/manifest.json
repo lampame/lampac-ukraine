@@ -1,3 +1,6 @@
 {
-  "enable": true
+  "enable": true,
+  "version": 3,
+  "initspace": "LME.Mikai.ModInit",
+  "online": "LME.Mikai.OnlineApi"
 }

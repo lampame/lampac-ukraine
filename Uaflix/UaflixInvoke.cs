@@ -6,9 +6,9 @@ using Shared.Models.Online.Settings;
 using Shared.Models;
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
-using Uaflix.Controllers;
+using LME.Uaflix.Controllers;
 using Shared.Engine;
-using Uaflix.Models;
+using LME.Uaflix.Models;
 using System.Linq;
 using Shared.Models.Templates;
 using System.Net;
@@ -16,7 +16,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Text;
 
-namespace Uaflix
+namespace LME.Uaflix
 {
     public class UaflixInvoke
     {
@@ -97,7 +97,7 @@ namespace Uaflix
                     && _auth != null
                     && _auth.CanUseCredentials)
                 {
-                    _onLog($"UaflixAuth: порожня відповідь для {url}, виконую повторну авторизацію");
+                    _onLog($"lme.uaflix: Auth: порожня відповідь для {url}, виконую повторну авторизацію");
                     string refreshedCookie = await _auth.GetCookieHeaderAsync(forceRefresh: true);
                     _auth.ApplyCookieHeader(requestHeaders, refreshedCookie);
                     content = await _httpHydra.Get(url, newheaders: requestHeaders, statusCodeOK: false);
@@ -119,7 +119,7 @@ namespace Uaflix
                 && _auth != null
                 && _auth.CanUseCredentials)
             {
-                _onLog($"UaflixAuth: отримано 403 для {url}, виконую повторну авторизацію");
+                _onLog($"lme.uaflix: Auth: отримано 403 для {url}, виконую повторну авторизацію");
                 string refreshedCookie = await _auth.GetCookieHeaderAsync(forceRefresh: true);
                 _auth.ApplyCookieHeader(requestHeaders, refreshedCookie);
 
@@ -133,7 +133,7 @@ namespace Uaflix
             if (response.response?.StatusCode != HttpStatusCode.OK)
             {
                 if (response.response != null)
-                    _onLog($"Uaflix HTTP {(int)response.response.StatusCode} для {url}");
+                    _onLog($"lme.uaflix: HTTP {(int)response.response.StatusCode} для {url}");
 
                 return null;
             }
@@ -246,7 +246,7 @@ namespace Uaflix
             if (string.IsNullOrWhiteSpace(pageUrl))
                 return (null, null);
 
-            string memKey = $"UaFlix:episode-player:{pageUrl}";
+            string memKey = $"lme.uaflix:episode-player:{pageUrl}";
             if (_hybridCache.TryGetValue(memKey, out EpisodePlayerInfo cached))
                 return (cached?.IframeUrl, cached?.PlayerType);
 
@@ -644,7 +644,7 @@ namespace Uaflix
         /// </summary>
         public async Task<SerialAggregatedStructure> AggregateSerialStructure(string serialUrl)
         {
-            string memKey = $"UaFlix:aggregated:{serialUrl}";
+            string memKey = $"lme.uaflix:aggregated:{serialUrl}";
             if (_hybridCache.TryGetValue(memKey, out SerialAggregatedStructure cached))
             {
                 _onLog($"AggregateSerialStructure: Using cached structure for {serialUrl}");
@@ -825,7 +825,7 @@ namespace Uaflix
 
         public async Task<PaginationInfo> GetSeasonIndex(string serialUrl)
         {
-            string memKey = $"UaFlix:season-index:{serialUrl}";
+            string memKey = $"lme.uaflix:season-index:{serialUrl}";
             if (_hybridCache.TryGetValue(memKey, out PaginationInfo cached))
                 return cached;
 
@@ -912,7 +912,7 @@ namespace Uaflix
             if (season < 0)
                 return new List<EpisodeLinkInfo>();
 
-            string memKey = $"UaFlix:season-episodes:{serialUrl}:{season}";
+            string memKey = $"lme.uaflix:season-episodes:{serialUrl}:{season}";
             if (_hybridCache.TryGetValue(memKey, out List<EpisodeLinkInfo> cached))
                 return cached;
 
@@ -1026,7 +1026,7 @@ namespace Uaflix
             if (season < 0)
                 return null;
 
-            string memKey = $"UaFlix:season-structure:{serialUrl}:{season}";
+            string memKey = $"lme.uaflix:season-structure:{serialUrl}:{season}";
             if (_hybridCache.TryGetValue(memKey, out SerialAggregatedStructure cached))
             {
                 _onLog($"GetSeasonStructure: Using cached structure for season={season}, url={serialUrl}");
@@ -1121,7 +1121,7 @@ namespace Uaflix
         async Task<List<VoiceInfo>> ParseMultiEpisodePlayerCached(string iframeUrl, string playerType)
         {
             string serialKey = NormalizeSerialPlayerKey(playerType, iframeUrl);
-            string memKey = $"UaFlix:player-voices:{playerType}:{serialKey}";
+            string memKey = $"lme.uaflix:player-voices:{playerType}:{serialKey}";
             if (_hybridCache.TryGetValue(memKey, out List<VoiceInfo> cached))
                 return CloneVoices(cached);
 
@@ -1258,7 +1258,7 @@ namespace Uaflix
         public async Task<List<SearchResult>> Search(string imdb_id, long kinopoisk_id, string title, string original_title, int year, int serial, string original_language, string source, string search_query)
         {
             bool allowAnime = IsAnimeRequest(title, original_title, original_language, source);
-            string memKey = $"UaFlix:search:{kinopoisk_id}:{imdb_id}:{serial}:{year}:{allowAnime}:{title}:{original_title}:{search_query}";
+            string memKey = $"lme.uaflix:search:{kinopoisk_id}:{imdb_id}:{serial}:{year}:{allowAnime}:{title}:{original_title}:{search_query}";
             if (_hybridCache.TryGetValue(memKey, out List<SearchResult> cached))
                 return cached;
 
@@ -1376,7 +1376,7 @@ namespace Uaflix
             }
             catch (Exception ex)
             {
-                _onLog($"UaFlix search error: {ex.Message}");
+                _onLog($"lme.uaflix: search error: {ex.Message}");
                 return null;
             }
         }
@@ -1456,7 +1456,7 @@ namespace Uaflix
 
         private async Task<SearchMeta> LoadSearchMeta(string url)
         {
-            string memKey = $"UaFlix:searchmeta:{url}";
+            string memKey = $"lme.uaflix:searchmeta:{url}";
             if (_hybridCache.TryGetValue(memKey, out SearchMeta cached))
                 return cached;
 
@@ -1693,7 +1693,7 @@ namespace Uaflix
         
         public async Task<FilmInfo> GetFilmInfo(string filmUrl)
         {
-            string memKey = $"UaFlix:filminfo:{filmUrl}";
+            string memKey = $"lme.uaflix:filminfo:{filmUrl}";
             if (_hybridCache.TryGetValue(memKey, out FilmInfo res))
                 return res;
 
@@ -1761,14 +1761,14 @@ namespace Uaflix
             }
             catch (Exception ex)
             {
-                _onLog($"UaFlix GetFilmInfo error: {ex.Message}");
+                _onLog($"lme.uaflix: GetFilmInfo error: {ex.Message}");
             }
             return null;
         }
 
         public async Task<PaginationInfo> GetPaginationInfo(string filmUrl)
         {
-            string memKey = $"UaFlix:pagination:{filmUrl}";
+            string memKey = $"lme.uaflix:pagination:{filmUrl}";
             if (_hybridCache.TryGetValue(memKey, out PaginationInfo res))
                 return res;
 
@@ -1864,14 +1864,14 @@ namespace Uaflix
             }
             catch (Exception ex)
             {
-                _onLog($"UaFlix GetPaginationInfo error: {ex.Message}");
+                _onLog($"lme.uaflix: GetPaginationInfo error: {ex.Message}");
             }
             return null;
         }
         
-        public async Task<Uaflix.Models.PlayResult> ParseEpisode(string url)
+        public async Task<LME.Uaflix.Models.PlayResult> ParseEpisode(string url)
         {
-            var result = new Uaflix.Models.PlayResult() { streams = new List<PlayStream>() };
+            var result = new LME.Uaflix.Models.PlayResult() { streams = new List<PlayStream>() };
             try
             {
                 string html = await GetHtml(url, new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) });

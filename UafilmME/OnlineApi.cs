@@ -4,7 +4,7 @@ using Shared.Models.Module;
 using Shared.Models.Module.Interfaces;
 using System.Collections.Generic;
 
-namespace UafilmME
+namespace LME.UafilmME
 {
     public class OnlineApi : IModuleOnline
     {
@@ -24,7 +24,7 @@ namespace UafilmME
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "uafilmme"));
+                online.Add(new ModuleOnlineItem(init, "lme.uafilmme"));
             }
 
             return online;

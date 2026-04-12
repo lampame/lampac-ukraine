@@ -7,7 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace StarLight
+namespace LME.StarLight
 {
     public class OnlineApi : IModuleOnline
     {
@@ -30,7 +30,7 @@ namespace StarLight
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "starlight"));
+                online.Add(new ModuleOnlineItem(init, "lme.starlight"));
             }
 
             return online;

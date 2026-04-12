@@ -20,11 +20,11 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Makhno
+namespace LME.Makhno
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 3.0;
+        public static double Version => 3.1;
 
         public static OnlinesSettings Makhno;
         public static bool ApnHostProvided;
@@ -41,7 +41,7 @@ namespace Makhno
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            Makhno = new OnlinesSettings("Makhno", "https://wh.lme.isroot.in", streamproxy: false, useproxy: false)
+            Makhno = new OnlinesSettings("LME.Makhno", "https://wh.lme.isroot.in", streamproxy: false, useproxy: false)
             {
                 displayname = "Махно",
                 displayindex = 0,
@@ -60,7 +60,7 @@ namespace Makhno
                 ["ashdi"] = ApnHelper.DefaultHost
             };
 
-            var conf = ModuleInvoke.Init("Makhno", defaults) ?? defaults;
+            var conf = ModuleInvoke.Init("LME.Makhno", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
             conf.Remove("magic_apn");
@@ -84,7 +84,7 @@ namespace Makhno
             }
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("makhno");
+            RegisterWithSearch("lme.makhno");
         }
 
         private static void RegisterWithSearch(string plugin)

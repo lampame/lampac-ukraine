@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace AnimeON.Models
+namespace LME.AnimeON.Models
 {
     /// <summary> Aggregated structure for AnimeON serial content to match Lampac standard navigation.</summary>
     public class AnimeONAggregatedStructure

@@ -10,9 +10,9 @@ using Shared;
 using Shared.Engine;
 using Shared.Models;
 using Shared.Models.Online.Settings;
-using UafilmME.Models;
+using LME.UafilmME.Models;
 
-namespace UafilmME
+namespace LME.UafilmME
 {
     public class UafilmMEInvoke
     {

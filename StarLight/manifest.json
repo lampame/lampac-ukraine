@@ -1,3 +1,6 @@
 {
-  "enable": true
+  "enable": true,
+  "version": 3,
+  "initspace": "LME.StarLight.ModInit",
+  "online": "LME.StarLight.OnlineApi"
 }

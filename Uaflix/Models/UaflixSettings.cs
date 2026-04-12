@@ -1,7 +1,7 @@
 using System;
 using Shared.Models.Online.Settings;
 
-namespace Uaflix.Models
+namespace LME.Uaflix.Models
 {
     public class UaflixSettings : OnlinesSettings, ICloneable
     {

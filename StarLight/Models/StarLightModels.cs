@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace StarLight.Models
+namespace LME.StarLight.Models
 {
     public class SearchResult
     {

@@ -2,7 +2,7 @@ using Shared.Models.Online.Settings;
 using System;
 using System.Collections.Generic;
 
-namespace JackTor.Models
+namespace LME.JackTor.Models
 {
     public class JackTorSettings : OnlinesSettings, ICloneable
     {

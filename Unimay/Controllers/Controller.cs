@@ -8,8 +8,9 @@ using Newtonsoft.Json.Linq;
 using Shared.Models.Templates;
 using Shared.Models.Online.Settings;
 using Shared;
+using LME.Unimay.Models;
 
-namespace Unimay.Controllers
+namespace LME.Unimay.Controllers
 {
     public class Controller : BaseOnlineController
     {
@@ -21,7 +22,7 @@ namespace Unimay.Controllers
         }
 
         [HttpGet]
-        [Route("lite/unimay")]
+        [Route("lite/lme.unimay")]
         async public ValueTask<ActionResult> Index(string title, string original_title, string code, int serial = -1, int s = -1, int e = -1, bool play = false, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
@@ -35,13 +36,13 @@ namespace Unimay.Controllers
             if (checksearch)
             {
                 if (!IsCheckOnlineSearchEnabled())
-                    return OnError("unimay");
+                    return OnError("lme.unimay");
 
                 var searchResults = await invoke.Search(title, original_title, serial);
                 if (searchResults?.Content != null && searchResults.Content.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("unimay");
+                return OnError("lme.unimay");
             }
 
             if (!string.IsNullOrEmpty(code))
@@ -58,7 +59,7 @@ namespace Unimay.Controllers
 
         async ValueTask<ActionResult> Search(UnimayInvoke invoke, OnlinesSettings init, string title, string original_title, int serial, bool rjson)
         {
-            string memKey = $"unimay:search:{title}:{original_title}:{serial}";
+            string memKey = $"lme.unimay:search:{title}:{original_title}:{serial}";
 
             return await InvkSemaphore(memKey, async () =>
             {
@@ -80,7 +81,7 @@ namespace Unimay.Controllers
 
         async ValueTask<ActionResult> Release(UnimayInvoke invoke, OnlinesSettings init, string code, string title, string original_title, int serial, int s, int e, bool play, bool rjson)
         {
-            string memKey = $"unimay:release:{code}";
+            string memKey = $"lme.unimay:release:{code}";
 
             return await InvkSemaphore(memKey, async () =>
             {
@@ -97,7 +98,7 @@ namespace Unimay.Controllers
                 if (play)
                 {
                     // Get specific episode
-                    Unimay.Models.Episode episode = null;
+                    LME.Unimay.Models.Episode episode = null;
                     if (itemType == "Телесеріал")
                     {
                         if (s <= 0 || e <= 0) return OnError("invalid episode");
@@ -199,7 +200,7 @@ namespace Unimay.Controllers
 
         private static void OnLog(string message)
         {
-            System.Console.WriteLine(message);
+            System.Console.WriteLine($"lme.unimay: {message}");
         }
     }
 }

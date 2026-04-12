@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Shared.Models.Templates;
 
-namespace Uaflix.Models
+namespace LME.Uaflix.Models
 {
     public class PlayResult
     {

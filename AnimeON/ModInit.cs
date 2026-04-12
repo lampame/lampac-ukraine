@@ -22,11 +22,11 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-namespace AnimeON
+namespace LME.AnimeON
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 4.0;
+        public static double Version => 4.1;
 
         public static OnlinesSettings AnimeON;
         public static bool ApnHostProvided;
@@ -45,7 +45,7 @@ namespace AnimeON
         {
             
 
-            AnimeON = new OnlinesSettings("AnimeON", "https://animeon.club", streamproxy: false, useproxy: false)
+            AnimeON = new OnlinesSettings("LME.AnimeON", "https://animeon.club", streamproxy: false, useproxy: false)
             {
                 displayname = "AnimeON",
                 displayindex = 0,
@@ -64,7 +64,7 @@ namespace AnimeON
                 ["ashdi"] = ApnHelper.DefaultHost
             };
 
-            var conf = ModuleInvoke.Init("AnimeON", defaults) ?? defaults;
+            var conf = ModuleInvoke.Init("LME.AnimeON", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
             conf.Remove("magic_apn");
@@ -85,7 +85,7 @@ namespace AnimeON
             }
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("animeon");
+            RegisterWithSearch("lme.animeon");
         }
 
         private static void RegisterWithSearch(string plugin)

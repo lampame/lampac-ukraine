@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace KlonFUN.Models
+namespace LME.KlonFUN.Models
 {
     public class SearchResult
     {

@@ -1,6 +1,6 @@
 ﻿using Shared.Models.Online.Settings;
 
-namespace KlonFUN
+namespace LME.KlonFUN
 {
     public class MagicApnSettings
     {

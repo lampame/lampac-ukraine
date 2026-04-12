@@ -5,14 +5,14 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
-using Bamboo.Models;
+using LME.Bamboo.Models;
 using HtmlAgilityPack;
 using Shared;
 using Shared.Engine;
 using Shared.Models;
 using Shared.Models.Online.Settings;
 
-namespace Bamboo
+namespace LME.Bamboo
 {
     public class BambooInvoke
     {

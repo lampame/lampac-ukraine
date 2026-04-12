@@ -21,11 +21,11 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-namespace Mikai
+namespace LME.Mikai
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 4.0;
+        public static double Version => 4.1;
 
         public static OnlinesSettings Mikai;
         public static bool ApnHostProvided;
@@ -42,9 +42,9 @@ namespace Mikai
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            
 
-            Mikai = new OnlinesSettings("Mikai", "https://mikai.me", streamproxy: false, useproxy: false)
+
+            Mikai = new OnlinesSettings("LME.Mikai", "https://mikai.me", streamproxy: false, useproxy: false)
             {
                 displayname = "Mikai",
                 displayindex = 0,
@@ -65,7 +65,7 @@ namespace Mikai
                 ["ashdi"] = ApnHelper.DefaultHost
             };
 
-            var conf = ModuleInvoke.Init("Mikai", defaults) ?? defaults;
+            var conf = ModuleInvoke.Init("LME.Mikai", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
             conf.Remove("magic_apn");
@@ -86,7 +86,7 @@ namespace Mikai
             }
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("mikai");
+            RegisterWithSearch("lme.mikai");
         }
 
         private static void RegisterWithSearch(string plugin)

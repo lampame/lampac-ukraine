@@ -21,11 +21,11 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-namespace Bamboo
+namespace LME.Bamboo
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 4.0;
+        public static double Version => 4.1;
 
         public static OnlinesSettings Bamboo;
         public static bool ApnHostProvided;
@@ -43,7 +43,7 @@ namespace Bamboo
         {
             
 
-            Bamboo = new OnlinesSettings("Bamboo", "https://bambooua.com", streamproxy: false, useproxy: false)
+            Bamboo = new OnlinesSettings("LME.Bamboo", "https://bambooua.com", streamproxy: false, useproxy: false)
             {
                 displayname = "BambooUA",
                 displayindex = 0,
@@ -57,7 +57,7 @@ namespace Bamboo
             };
             var defaults = JObject.FromObject(Bamboo);
             defaults["enabled"] = true;
-            var conf = ModuleInvoke.Init("Bamboo", defaults);
+            var conf = ModuleInvoke.Init("LME.Bamboo", defaults);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");
@@ -76,7 +76,7 @@ namespace Bamboo
             }
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("bamboo");
+            RegisterWithSearch("lme.bamboo");
         }
 
         private static void RegisterWithSearch(string plugin)

@@ -1,3 +1,5 @@
 {
-  "enable": true
+  "enable": true,
+  "initspace": "LME.Makhno.ModInit",
+  "online": "LME.Makhno.OnlineApi"
 }

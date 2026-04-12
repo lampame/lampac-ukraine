@@ -6,7 +6,7 @@ using Shared.Models.Module.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace NMoonAnime
+namespace LME.NMoonAnime
 {
     public class OnlineApi : IModuleOnline
     {
@@ -30,7 +30,7 @@ namespace NMoonAnime
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "nmoonanime"));
+                online.Add(new ModuleOnlineItem(init, "lme.nmoonanime"));
             }
 
             return online;

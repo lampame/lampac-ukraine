@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Web;
-using KlonFUN.Models;
+using LME.KlonFUN.Models;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
 using Shared.Engine;
 using Shared.Models.Online.Settings;
 using Shared.Models.Templates;
 
-namespace KlonFUN.Controllers
+namespace LME.KlonFUN.Controllers
 {
     public class Controller : BaseOnlineController
     {
@@ -22,7 +22,7 @@ namespace KlonFUN.Controllers
         }
 
         [HttpGet]
-        [Route("lite/klonfun")]
+        [Route("lite/lme.klonfun")]
         async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, bool rjson = false, string href = null, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
@@ -38,13 +38,13 @@ namespace KlonFUN.Controllers
             if (checksearch)
             {
                 if (!IsCheckOnlineSearchEnabled())
-                    return OnError("klonfun", refresh_proxy: true);
+                    return OnError("lme.klonfun", refresh_proxy: true);
 
                 var checkResults = await invoke.Search(imdb_id, title, original_title);
                 if (checkResults != null && checkResults.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("klonfun", refresh_proxy: true);
+                return OnError("lme.klonfun", refresh_proxy: true);
             }
 
             string itemUrl = href;
@@ -52,14 +52,14 @@ namespace KlonFUN.Controllers
             {
                 var searchResults = await invoke.Search(imdb_id, title, original_title);
                 if (searchResults == null || searchResults.Count == 0)
-                    return OnError("klonfun", refresh_proxy: true);
+                    return OnError("lme.klonfun", refresh_proxy: true);
 
                 if (searchResults.Count > 1)
                 {
                     var similarTpl = new SimilarTpl(searchResults.Count);
                     foreach (SearchResult result in searchResults)
                     {
-                        string link = $"{host}/lite/klonfun?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(result.Url)}";
+                        string link = $"{host}/lite/lme.klonfun?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(result.Url)}";
                         similarTpl.Append(result.Title, result.Year > 0 ? result.Year.ToString() : string.Empty, string.Empty, link, result.Poster);
                     }
 
@@ -75,7 +75,7 @@ namespace KlonFUN.Controllers
             if (item == null || string.IsNullOrWhiteSpace(item.PlayerUrl))
             {
                 OnLog($"KlonFUN: не знайдено iframe-плеєр для {itemUrl}");
-                return OnError("klonfun", refresh_proxy: true);
+                return OnError("lme.klonfun", refresh_proxy: true);
             }
 
             string contentTitle = !string.IsNullOrWhiteSpace(title) ? title : item.Title;
@@ -89,7 +89,7 @@ namespace KlonFUN.Controllers
             {
                 var serialStructure = await invoke.GetSerialStructure(item.PlayerUrl);
                 if (serialStructure == null || serialStructure.Voices.Count == 0)
-                    return OnError("klonfun", refresh_proxy: true);
+                    return OnError("lme.klonfun", refresh_proxy: true);
 
                 if (s == -1)
                 {
@@ -120,12 +120,12 @@ namespace KlonFUN.Controllers
                     }
 
                     if (seasons.Count == 0)
-                        return OnError("klonfun", refresh_proxy: true);
+                        return OnError("lme.klonfun", refresh_proxy: true);
 
                     var seasonTpl = new SeasonTpl(seasons.Count);
                     foreach (int seasonNumber in seasons)
                     {
-                        string link = $"{host}/lite/klonfun?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={seasonNumber}&href={HttpUtility.UrlEncode(itemUrl)}";
+                        string link = $"{host}/lite/lme.klonfun?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={seasonNumber}&href={HttpUtility.UrlEncode(itemUrl)}";
                         if (!string.IsNullOrWhiteSpace(t))
                             link += $"&t={HttpUtility.UrlEncode(t)}";
 
@@ -142,7 +142,7 @@ namespace KlonFUN.Controllers
                     .ToList();
 
                 if (voicesForSeason.Count == 0)
-                    return OnError("klonfun", refresh_proxy: true);
+                    return OnError("lme.klonfun", refresh_proxy: true);
 
                 var selectedVoiceForSeason = voicesForSeason
                     .FirstOrDefault(v => !string.IsNullOrWhiteSpace(t) && v.Key.Equals(t, StringComparison.OrdinalIgnoreCase))
@@ -151,12 +151,12 @@ namespace KlonFUN.Controllers
                 var voiceTpl = new VoiceTpl(voicesForSeason.Count);
                 foreach (var voice in voicesForSeason)
                 {
-                    string voiceLink = $"{host}/lite/klonfun?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&t={HttpUtility.UrlEncode(voice.Key)}&href={HttpUtility.UrlEncode(itemUrl)}";
+                    string voiceLink = $"{host}/lite/lme.klonfun?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&t={HttpUtility.UrlEncode(voice.Key)}&href={HttpUtility.UrlEncode(itemUrl)}";
                     voiceTpl.Append(voice.DisplayName, voice.Key.Equals(selectedVoiceForSeason.Key, StringComparison.OrdinalIgnoreCase), voiceLink);
                 }
 
                 if (!selectedVoiceForSeason.Seasons.TryGetValue(s, out List<SerialEpisode> episodes) || episodes.Count == 0)
-                    return OnError("klonfun", refresh_proxy: true);
+                    return OnError("lme.klonfun", refresh_proxy: true);
 
                 var episodeTpl = new EpisodeTpl(episodes.Count);
                 foreach (SerialEpisode episode in episodes.OrderBy(e => e.Number))
@@ -179,7 +179,7 @@ namespace KlonFUN.Controllers
             {
                 var streams = await invoke.GetMovieStreams(item.PlayerUrl);
                 if (streams == null || streams.Count == 0)
-                    return OnError("klonfun", refresh_proxy: true);
+                    return OnError("lme.klonfun", refresh_proxy: true);
 
                 var movieTpl = new MovieTpl(contentTitle, contentOriginalTitle, streams.Count);
                 for (int i = 0; i < streams.Count; i++)

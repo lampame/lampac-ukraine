@@ -15,11 +15,11 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace UafilmME
+namespace LME.UafilmME
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 1.0;
+        public static double Version => 1.1;
 
         public static OnlinesSettings UafilmME;
         public static bool ApnHostProvided;
@@ -35,7 +35,7 @@ namespace UafilmME
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            UafilmME = new OnlinesSettings("UafilmME", "https://uafilm.me", streamproxy: false, useproxy: false)
+            UafilmME = new OnlinesSettings("LME.UafilmME", "https://uafilm.me", streamproxy: false, useproxy: false)
             {
                 displayname = "UAFilmME",
                 displayindex = 0,
@@ -50,7 +50,7 @@ namespace UafilmME
 
             var defaults = JObject.FromObject(UafilmME);
             defaults["enabled"] = true;
-            var conf = ModuleInvoke.Init("UafilmME", defaults);
+            var conf = ModuleInvoke.Init("LME.UafilmME", defaults);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");
             conf.Remove("apn_host");
@@ -69,7 +69,7 @@ namespace UafilmME
                 UafilmME.apn = null;
             }
 
-            RegisterWithSearch("uafilmme");
+            RegisterWithSearch("lme.uafilmme");
         }
 
         private static void RegisterWithSearch(string plugin)

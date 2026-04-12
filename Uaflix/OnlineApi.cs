@@ -6,7 +6,7 @@ using Shared.Models.Module.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Uaflix
+namespace LME.Uaflix
 {
     public class OnlineApi : IModuleOnline
     {
@@ -26,7 +26,7 @@ namespace Uaflix
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "uaflix"));
+                online.Add(new ModuleOnlineItem(init, "lme.uaflix"));
             }
 
             return online;

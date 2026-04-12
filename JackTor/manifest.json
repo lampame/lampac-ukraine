@@ -1,3 +1,6 @@
 {
-  "enable": true
+  "enable": true,
+  "version": 3,
+  "initspace": "LME.JackTor.ModInit",
+  "online": "LME.JackTor.OnlineApi"
 }

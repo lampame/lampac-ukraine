@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace NMoonAnime.Models
+namespace LME.NMoonAnime.Models
 {
     public class NMoonAnimeSearchResponse
     {

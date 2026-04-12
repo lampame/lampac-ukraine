@@ -6,13 +6,13 @@ using System.Threading.Tasks;
 using System.Web;
 using System.Net;
 using System.Text.RegularExpressions;
-using Mikai.Models;
+using LME.Mikai.Models;
 using Shared;
 using Shared.Engine;
 using Shared.Models;
 using Shared.Models.Online.Settings;
 
-namespace Mikai
+namespace LME.Mikai
 {
     public class MikaiInvoke
     {
