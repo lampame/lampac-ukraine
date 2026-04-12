@@ -356,12 +356,6 @@ namespace LME.JackTor.Controllers
                 if (init.torrs == null || init.torrs.Length == 0)
                     return OnError("lme_jacktor", refresh_proxy: true);
 
-                string key = $"lme_jacktor:ts4:{rid}:{requestInfo.IP}";, init.base_auth.login, init.base_auth.passwd, addheaders: init.base_auth.headers);
-                }
-
-                if (init.torrs == null || init.torrs.Length == 0)
-                    return OnError("lme_jacktor", refresh_proxy: true);
-
                 string key = $"lme_jacktor:ts4:{rid}:{requestInfo.IP}";
                 if (!hybridCache.TryGetValue(key, out string torrentHost))
                 {
