@@ -26,7 +26,7 @@ namespace LME.Uaflix
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "lme.uaflix"));
+                online.Add(new ModuleOnlineItem(init, "lme_uaflix"));
             }
 
             return online;

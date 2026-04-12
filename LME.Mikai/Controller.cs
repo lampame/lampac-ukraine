@@ -23,7 +23,7 @@ namespace LME.Mikai.Controllers
         }
 
         [HttpGet]
-        [Route("lite/lme.mikai")]
+        [Route("lite/lme_mikai")]
         public async Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
@@ -38,34 +38,34 @@ namespace LME.Mikai.Controllers
             if (checksearch)
             {
                 if (!IsCheckOnlineSearchEnabled())
-                    return OnError("lme.mikai", refresh_proxy: true);
+                    return OnError("lme_mikai", refresh_proxy: true);
 
                 var checkResults = await invoke.Search(title, original_title, year);
                 if (checkResults != null && checkResults.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("lme.mikai", refresh_proxy: true);
+                return OnError("lme_mikai", refresh_proxy: true);
             }
 
             OnLog($"Mikai Index: title={title}, original_title={original_title}, serial={serial}, s={s}, t={t}, year={year}");
 
             var searchResults = await invoke.Search(title, original_title, year);
             if (searchResults == null || searchResults.Count == 0)
-                return OnError("lme.mikai", refresh_proxy: true);
+                return OnError("lme_mikai", refresh_proxy: true);
 
             var selected = searchResults.FirstOrDefault();
             if (selected == null)
-                return OnError("lme.mikai", refresh_proxy: true);
+                return OnError("lme_mikai", refresh_proxy: true);
 
             var details = await invoke.GetDetails(selected.Id);
             if (details == null || details.Players == null || details.Players.Count == 0)
-                return OnError("lme.mikai", refresh_proxy: true);
+                return OnError("lme_mikai", refresh_proxy: true);
 
             bool isSerial = serial == 1 || (serial == -1 && !string.Equals(details.Format, "movie", StringComparison.OrdinalIgnoreCase));
             var seasonDetails = await CollectSeasonDetails(details, invoke);
             var voices = BuildVoices(seasonDetails);
             if (voices.Count == 0)
-                return OnError("lme.mikai", refresh_proxy: true);
+                return OnError("lme_mikai", refresh_proxy: true);
 
             string displayTitle = title ?? details.Details?.Names?.Name ?? original_title;
 
@@ -82,14 +82,14 @@ namespace LME.Mikai.Controllers
                         .ToList();
 
                 if (seasonNumbers.Count == 0)
-                    return OnError("lme.mikai", refresh_proxy: true);
+                    return OnError("lme_mikai", refresh_proxy: true);
 
                 if (s == -1)
                 {
                     var seasonTpl = new SeasonTpl(seasonNumbers.Count);
                     foreach (var seasonNumber in seasonNumbers)
                     {
-                        string link = $"{host}/lite/lme.mikai?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={seasonNumber}";
+                        string link = $"{host}/lite/lme_mikai?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={seasonNumber}";
                         if (restrictByVoice)
                             link += $"&t={HttpUtility.UrlEncode(t)}";
                         seasonTpl.Append($"{seasonNumber}", link, seasonNumber.ToString());
@@ -105,7 +105,7 @@ namespace LME.Mikai.Controllers
                     .ToList();
 
                 if (!voicesForSeason.Any())
-                    return OnError("lme.mikai", refresh_proxy: true);
+                    return OnError("lme_mikai", refresh_proxy: true);
 
                 if (string.IsNullOrEmpty(t))
                     t = voicesForSeason[0].Key;
@@ -119,7 +119,7 @@ namespace LME.Mikai.Controllers
                 {
                     var targetSeasonSet = GetSeasonSet(voice.Value);
                     bool sameSeasonSet = targetSeasonSet.SetEquals(selectedSeasonSet);
-                    string voiceLink = $"{host}/lite/lme.mikai?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1";
+                    string voiceLink = $"{host}/lite/lme_mikai?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1";
                     if (sameSeasonSet)
                         voiceLink += $"&s={s}&t={HttpUtility.UrlEncode(voice.Key)}";
                     else
@@ -129,7 +129,7 @@ namespace LME.Mikai.Controllers
 
                 if (!voices.ContainsKey(t) || !voices[t].Seasons.ContainsKey(s))
                 {
-                    string redirectUrl = $"{host}/lite/lme.mikai?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s=-1&t={HttpUtility.UrlEncode(t)}";
+                    string redirectUrl = $"{host}/lite/lme_mikai?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s=-1&t={HttpUtility.UrlEncode(t)}";
                     return Redirect(redirectUrl);
                 }
 
@@ -144,7 +144,7 @@ namespace LME.Mikai.Controllers
 
                     if (NeedsResolve(voices[t].ProviderName, streamLink))
                     {
-                        string callUrl = $"{host}/lite/lme.mikai/play?url={HttpUtility.UrlEncode(streamLink)}&title={HttpUtility.UrlEncode(displayTitle)}&serial=1";
+                        string callUrl = $"{host}/lite/lme_mikai/play?url={HttpUtility.UrlEncode(streamLink)}&title={HttpUtility.UrlEncode(displayTitle)}&serial=1";
                         episodeTpl.Append(episodeName, displayTitle, s.ToString(), ep.Number.ToString(), accsArgs(callUrl), "call");
                     }
                     else
@@ -178,14 +178,14 @@ namespace LME.Mikai.Controllers
                             foreach (var ashdiStream in ashdiStreams)
                             {
                                 string optionName = $"{voice.DisplayName} {ashdiStream.title}";
-                                string ashdiCallUrl = $"{host}/lite/lme.mikai/play?url={HttpUtility.UrlEncode(ashdiStream.link)}&title={HttpUtility.UrlEncode(displayTitle)}";
+                                string ashdiCallUrl = $"{host}/lite/lme_mikai/play?url={HttpUtility.UrlEncode(ashdiStream.link)}&title={HttpUtility.UrlEncode(displayTitle)}";
                                 movieTpl.Append(optionName, accsArgs(ashdiCallUrl), "call");
                             }
                             continue;
                         }
                     }
 
-                    string callUrl = $"{host}/lite/lme.mikai/play?url={HttpUtility.UrlEncode(episode.Url)}&title={HttpUtility.UrlEncode(displayTitle)}";
+                    string callUrl = $"{host}/lite/lme_mikai/play?url={HttpUtility.UrlEncode(episode.Url)}&title={HttpUtility.UrlEncode(displayTitle)}";
                     movieTpl.Append(voice.DisplayName, accsArgs(callUrl), "call");
                 }
                 else
@@ -196,14 +196,14 @@ namespace LME.Mikai.Controllers
             }
 
             if (movieTpl.data == null || movieTpl.data.Count == 0)
-                return OnError("lme.mikai", refresh_proxy: true);
+                return OnError("lme_mikai", refresh_proxy: true);
 
             return rjson
                 ? Content(movieTpl.ToJson(), "application/json; charset=utf-8")
                 : Content(movieTpl.ToHtml(), "text/html; charset=utf-8");
         }
 
-        [HttpGet("lite/lme.mikai/play")]
+        [HttpGet("lite/lme_mikai/play")]
         public async Task<ActionResult> Play(string url, string title = null, int serial = 0)
         {
             await UpdateService.ConnectAsync(host);
@@ -214,14 +214,14 @@ namespace LME.Mikai.Controllers
 
             TryEnableMagicApn(init);
             if (string.IsNullOrEmpty(url))
-                return OnError("lme.mikai", refresh_proxy: true);
+                return OnError("lme_mikai", refresh_proxy: true);
 
             var invoke = new MikaiInvoke(init, hybridCache, OnLog, _proxyManager, httpHydra);
             OnLog($"Mikai Play: url={url}, serial={serial}");
 
             string streamLink = await invoke.ResolveVideoUrl(url, serial == 1);
             if (string.IsNullOrEmpty(streamLink))
-                return OnError("lme.mikai", refresh_proxy: true);
+                return OnError("lme_mikai", refresh_proxy: true);
 
             List<HeadersModel> streamHeaders = null;
             bool forceProxy = false;

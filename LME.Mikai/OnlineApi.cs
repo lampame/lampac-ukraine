@@ -30,7 +30,7 @@ namespace LME.Mikai
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "lme.mikai"));
+                online.Add(new ModuleOnlineItem(init, "lme_mikai"));
             }
 
             return online;

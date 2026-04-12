@@ -76,7 +76,7 @@ namespace LME.StarLight
             }
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("lme.starlight");
+            RegisterWithSearch("lme_starlight");
         }
 
         private static void RegisterWithSearch(string plugin)

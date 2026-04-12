@@ -41,7 +41,7 @@ namespace LME.KlonFUN
             EventListener.UpdateInitFile += UpdateConfig;
 
             // Додаємо підтримку "уточнити пошук".
-            RegisterWithSearch("lme.klonfun");
+            RegisterWithSearch("lme_klonfun");
         }
 
         private void UpdateConfig()

@@ -26,7 +26,7 @@ namespace LME.Makhno
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "lme.makhno"));
+                online.Add(new ModuleOnlineItem(init, "lme_makhno"));
             }
 
             return online;

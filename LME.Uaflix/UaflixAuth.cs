@@ -44,7 +44,7 @@ namespace LME.Uaflix
             }
             catch
             {
-                _onLog("lme.uaflix: Auth: некоректний host у конфігурації");
+                _onLog("lme_uaflix: Auth: некоректний host у конфігурації");
                 return null;
             }
 
@@ -83,7 +83,7 @@ namespace LME.Uaflix
             if (!CanUseCredentials)
                 return null;
 
-            string loginThrottleKey = $"lme.uaflix:login:{_init.host}:{_init.login}";
+            string loginThrottleKey = $"lme_uaflix:login:{_init.host}:{_init.login}";
             if (!forceRefresh && _memoryCache.TryGetValue(loginThrottleKey, out _))
                 return null;
 
@@ -141,7 +141,7 @@ namespace LME.Uaflix
 
                 if (response.response == null)
                 {
-                    _onLog("lme.uaflix: Auth: логін не вдався, немає HTTP-відповіді");
+                    _onLog("lme_uaflix: Auth: логін не вдався, немає HTTP-відповіді");
                     return (false, null, null);
                 }
 
@@ -176,16 +176,16 @@ namespace LME.Uaflix
 
                 if (hasAuthError || !hasSession || !hasDleAuthCookie)
                 {
-                    _onLog($"lme.uaflix: Auth: авторизація неуспішна, status={(int)response.response.StatusCode}");
+                    _onLog($"lme_uaflix: Auth: авторизація неуспішна, status={(int)response.response.StatusCode}");
                     return (false, null, null);
                 }
 
-                _onLog("lme.uaflix: Auth: авторизація успішна");
+                _onLog("lme_uaflix: Auth: авторизація успішна");
                 return (true, cookie, container);
             }
             catch (Exception ex)
             {
-                _onLog($"lme.uaflix: Auth: помилка авторизації - {ex.Message}");
+                _onLog($"lme_uaflix: Auth: помилка авторизації - {ex.Message}");
                 return (false, null, null);
             }
         }

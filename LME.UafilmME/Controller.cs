@@ -23,7 +23,7 @@ namespace LME.UafilmME.Controllers
         }
 
         [HttpGet]
-        [Route("lite/lme.uafilmme")]
+        [Route("lite/lme_uafilmme")]
         async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, bool rjson = false, string href = null, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
@@ -37,13 +37,13 @@ namespace LME.UafilmME.Controllers
             if (checksearch)
             {
                 if (!IsCheckOnlineSearchEnabled())
-                    return OnError("lme.uafilmme", refresh_proxy: true);
+                    return OnError("lme_uafilmme", refresh_proxy: true);
 
                 var searchResults = await invoke.Search(title, original_title, year);
                 if (searchResults != null && searchResults.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("lme.uafilmme", refresh_proxy: true);
+                return OnError("lme_uafilmme", refresh_proxy: true);
             }
 
             long titleId = 0;
@@ -54,8 +54,8 @@ namespace LME.UafilmME.Controllers
                 var searchResults = await invoke.Search(title, original_title, year);
                 if (searchResults == null || searchResults.Count == 0)
                 {
-                    OnLog("lme.uafilmme: пошук нічого не повернув.");
-                    return OnError("lme.uafilmme", refresh_proxy: true);
+                    OnLog("lme_uafilmme: пошук нічого не повернув.");
+                    return OnError("lme_uafilmme", refresh_proxy: true);
                 }
 
                 var best = invoke.SelectBestSearchResult(searchResults, id, imdb_id, title, original_title, year, serial);
@@ -72,11 +72,11 @@ namespace LME.UafilmME.Controllers
                     {
                         string details = item.IsSeries ? "Серіал" : "Фільм";
                         string itemYear = item.Year > 1900 ? item.Year.ToString() : string.Empty;
-                        string link = $"{host}/lite/lme.uafilmme?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={item.Id}";
+                        string link = $"{host}/lite/lme_uafilmme?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={item.Id}";
                         similarTpl.Append(item.Name, itemYear, details, link, item.Poster);
                     }
 
-                    OnLog($"lme.uafilmme: кілька схожих збігів, повертаю SimilarTpl ({ordered.Count}).");
+                    OnLog($"lme_uafilmme: кілька схожих збігів, повертаю SimilarTpl ({ordered.Count}).");
                     return rjson
                         ? Content(similarTpl.ToJson(), "application/json; charset=utf-8")
                         : Content(similarTpl.ToHtml(), "text/html; charset=utf-8");
@@ -87,8 +87,8 @@ namespace LME.UafilmME.Controllers
 
             if (titleId <= 0)
             {
-                OnLog("lme.uafilmme: не вдалося визначити title_id.");
-                return OnError("lme.uafilmme", refresh_proxy: true);
+                OnLog("lme_uafilmme: не вдалося визначити title_id.");
+                return OnError("lme_uafilmme", refresh_proxy: true);
             }
 
             if (serial == 1)
@@ -98,8 +98,8 @@ namespace LME.UafilmME.Controllers
                     var seasons = await invoke.GetAllSeasons(titleId);
                     if (seasons == null || seasons.Count == 0)
                     {
-                        OnLog($"lme.uafilmme: сезони не знайдено для title_id={titleId}.");
-                        return OnError("lme.uafilmme", refresh_proxy: true);
+                        OnLog($"lme_uafilmme: сезони не знайдено для title_id={titleId}.");
+                        return OnError("lme_uafilmme", refresh_proxy: true);
                     }
 
                     var seasonTpl = new SeasonTpl(seasons.Count);
@@ -109,7 +109,7 @@ namespace LME.UafilmME.Controllers
                             ? $"Сезон {season.Number} ({season.EpisodesCount} еп.)"
                             : $"Сезон {season.Number}";
 
-                        string link = $"{host}/lite/lme.uafilmme?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={season.Number}&href={titleId}";
+                        string link = $"{host}/lite/lme_uafilmme?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={season.Number}&href={titleId}";
                         seasonTpl.Append(seasonName, link, season.Number.ToString());
                     }
 
@@ -120,15 +120,15 @@ namespace LME.UafilmME.Controllers
 
                 if (s <= 0)
                 {
-                    OnLog($"lme.uafilmme: некоректний номер сезону s={s}.");
-                    return OnError("lme.uafilmme", refresh_proxy: true);
+                    OnLog($"lme_uafilmme: некоректний номер сезону s={s}.");
+                    return OnError("lme_uafilmme", refresh_proxy: true);
                 }
 
                 var episodes = await invoke.GetSeasonEpisodes(titleId, s);
                 if (episodes == null || episodes.Count == 0)
                 {
-                    OnLog($"lme.uafilmme: епізоди не знайдено для title_id={titleId}, season={s}.");
-                    return OnError("lme.uafilmme", refresh_proxy: true);
+                    OnLog($"lme_uafilmme: епізоди не знайдено для title_id={titleId}, season={s}.");
+                    return OnError("lme_uafilmme", refresh_proxy: true);
                 }
 
                 var episodeTpl = new EpisodeTpl();
@@ -145,7 +145,7 @@ namespace LME.UafilmME.Controllers
                         ? episode.Name
                         : $"Епізод {episodeNumber}";
 
-                    string callUrl = $"{host}/lite/lme.uafilmme/play?video_id={episode.PrimaryVideoId}&title_id={titleId}&s={s}&e={episodeNumber}&title={HttpUtility.UrlEncode(title ?? original_title)}";
+                    string callUrl = $"{host}/lite/lme_uafilmme/play?video_id={episode.PrimaryVideoId}&title_id={titleId}&s={s}&e={episodeNumber}&title={HttpUtility.UrlEncode(title ?? original_title)}";
                     episodeTpl.Append(episodeName, title ?? original_title, s.ToString(), episodeNumber.ToString("D2"), accsArgs(callUrl), "call");
 
                     fallbackEpisodeNumber = Math.Max(fallbackEpisodeNumber, episodeNumber + 1);
@@ -154,8 +154,8 @@ namespace LME.UafilmME.Controllers
 
                 if (appended == 0)
                 {
-                    OnLog($"lme.uafilmme: у сезоні {s} немає епізодів з playable video_id.");
-                    return OnError("lme.uafilmme", refresh_proxy: true);
+                    OnLog($"lme_uafilmme: у сезоні {s} немає епізодів з playable video_id.");
+                    return OnError("lme_uafilmme", refresh_proxy: true);
                 }
 
                 return rjson
@@ -167,8 +167,8 @@ namespace LME.UafilmME.Controllers
                 var videos = await invoke.GetMovieVideos(titleId);
                 if (videos == null || videos.Count == 0)
                 {
-                    OnLog($"lme.uafilmme: не знайдено відео для фільму title_id={titleId}.");
-                    return OnError("lme.uafilmme", refresh_proxy: true);
+                    OnLog($"lme_uafilmme: не знайдено відео для фільму title_id={titleId}.");
+                    return OnError("lme_uafilmme", refresh_proxy: true);
                 }
 
                 var movieTpl = new MovieTpl(title, original_title, videos.Count);
@@ -176,7 +176,7 @@ namespace LME.UafilmME.Controllers
                 foreach (var video in videos)
                 {
                     string label = BuildVideoLabel(video, index);
-                    string callUrl = $"{host}/lite/lme.uafilmme/play?video_id={video.Id}&title_id={titleId}&title={HttpUtility.UrlEncode(title ?? original_title)}";
+                    string callUrl = $"{host}/lite/lme_uafilmme/play?video_id={video.Id}&title_id={titleId}&title={HttpUtility.UrlEncode(title ?? original_title)}";
                     movieTpl.Append(label, accsArgs(callUrl), "call");
                     index++;
                 }
@@ -188,13 +188,13 @@ namespace LME.UafilmME.Controllers
         }
 
         [HttpGet]
-        [Route("lite/lme.uafilmme/play")]
+        [Route("lite/lme_uafilmme/play")]
         async public Task<ActionResult> Play(long video_id, long title_id = 0, int s = 0, int e = 0, string title = null)
         {
             await UpdateService.ConnectAsync(host);
 
             if (video_id <= 0)
-                return OnError("lme.uafilmme", refresh_proxy: true);
+                return OnError("lme_uafilmme", refresh_proxy: true);
 
             var init = loadKit(ModInit.UafilmME);
             if (!init.enable)
@@ -205,8 +205,8 @@ namespace LME.UafilmME.Controllers
             var videos = invoke.CollectPlayableVideos(watch);
             if (videos == null || videos.Count == 0)
             {
-                OnLog($"lme.uafilmme Play: watch/{video_id} не повернув playable stream.");
-                return OnError("lme.uafilmme", refresh_proxy: true);
+                OnLog($"lme_uafilmme Play: watch/{video_id} не повернув playable stream.");
+                return OnError("lme_uafilmme", refresh_proxy: true);
             }
 
             var headers = new List<HeadersModel>()
@@ -229,8 +229,8 @@ namespace LME.UafilmME.Controllers
             var first = streamQuality.Firts();
             if (string.IsNullOrWhiteSpace(first.link))
             {
-                OnLog($"lme.uafilmme Play: не вдалося зібрати streamquality для video_id={video_id}.");
-                return OnError("lme.uafilmme", refresh_proxy: true);
+                OnLog($"lme_uafilmme Play: не вдалося зібрати streamquality для video_id={video_id}.");
+                return OnError("lme_uafilmme", refresh_proxy: true);
             }
 
             string videoTitle = !string.IsNullOrWhiteSpace(title)

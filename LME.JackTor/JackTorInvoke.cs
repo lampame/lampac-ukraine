@@ -45,7 +45,7 @@ namespace LME.JackTor
 
         public async Task<List<JackTorParsedResult>> Search(string title, string originalTitle, int year, int serial, string originalLanguage)
         {
-            string memKey = $"lme.jacktor:search:{serial}:{year}:{(title ?? string.Empty).Trim().ToLowerInvariant()}:{(originalTitle ?? string.Empty).Trim().ToLowerInvariant()}";
+            string memKey = $"lme_jacktor:search:{serial}:{year}:{(title ?? string.Empty).Trim().ToLowerInvariant()}:{(originalTitle ?? string.Empty).Trim().ToLowerInvariant()}";
             if (_hybridCache.TryGetValue(memKey, out List<JackTorParsedResult> cached))
                 return cached;
 
@@ -83,7 +83,7 @@ namespace LME.JackTor
 
         public bool TryGetSource(string rid, out JackTorSourceCache source)
         {
-            return _hybridCache.TryGetValue($"lme.jacktor:source:{rid}", out source);
+            return _hybridCache.TryGetValue($"lme_jacktor:source:{rid}", out source);
         }
 
         private async Task<List<JackettResult>> SearchRaw(string query, int categoryId)
@@ -731,7 +731,7 @@ namespace LME.JackTor
                     Seasons = item.Seasons
                 };
 
-                _hybridCache.Set($"lme.jacktor:source:{item.Rid}", cacheItem, expires);
+                _hybridCache.Set($"lme_jacktor:source:{item.Rid}", cacheItem, expires);
             }
         }
     }

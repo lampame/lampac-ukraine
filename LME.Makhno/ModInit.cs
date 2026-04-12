@@ -84,7 +84,7 @@ namespace LME.Makhno
             }
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("lme.makhno");
+            RegisterWithSearch("lme_makhno");
         }
 
         private static void RegisterWithSearch(string plugin)

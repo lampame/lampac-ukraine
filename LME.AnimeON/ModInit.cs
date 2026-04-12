@@ -85,7 +85,7 @@ namespace LME.AnimeON
             }
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("lme.animeon");
+            RegisterWithSearch("lme_animeon");
         }
 
         private static void RegisterWithSearch(string plugin)

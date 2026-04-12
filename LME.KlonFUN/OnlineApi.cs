@@ -26,7 +26,7 @@ namespace LME.KlonFUN
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "lme.klonfun"));
+                online.Add(new ModuleOnlineItem(init, "lme_klonfun"));
             }
 
             return online;

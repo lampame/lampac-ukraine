@@ -30,7 +30,7 @@ namespace LME.StarLight
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "lme.starlight"));
+                online.Add(new ModuleOnlineItem(init, "lme_starlight"));
             }
 
             return online;

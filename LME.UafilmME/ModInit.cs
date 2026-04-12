@@ -69,7 +69,7 @@ namespace LME.UafilmME
                 UafilmME.apn = null;
             }
 
-            RegisterWithSearch("lme.uafilmme");
+            RegisterWithSearch("lme_uafilmme");
         }
 
         private static void RegisterWithSearch(string plugin)

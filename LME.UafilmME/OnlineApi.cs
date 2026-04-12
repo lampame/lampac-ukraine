@@ -24,7 +24,7 @@ namespace LME.UafilmME
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "lme.uafilmme"));
+                online.Add(new ModuleOnlineItem(init, "lme_uafilmme"));
             }
 
             return online;

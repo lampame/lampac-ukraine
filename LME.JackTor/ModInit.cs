@@ -78,7 +78,7 @@ namespace LME.JackTor
                 JackTor.host = JackTor.jackett;
 
             // Показувати «уточнити пошук».
-            RegisterWithSearch("lme.jacktor");
+            RegisterWithSearch("lme_jacktor");
         }
 
         private static void RegisterWithSearch(string plugin)

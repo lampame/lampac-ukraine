@@ -33,7 +33,7 @@ namespace LME.Bamboo
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "lme.bamboo"));
+                online.Add(new ModuleOnlineItem(init, "lme_bamboo"));
             }
 
             return online;

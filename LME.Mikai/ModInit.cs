@@ -86,7 +86,7 @@ namespace LME.Mikai
             }
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("lme.mikai");
+            RegisterWithSearch("lme_mikai");
         }
 
         private static void RegisterWithSearch(string plugin)

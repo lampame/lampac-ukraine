@@ -30,7 +30,7 @@ namespace LME.AnimeON
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "lme.animeon"));
+                online.Add(new ModuleOnlineItem(init, "lme_animeon"));
             }
 
             return online;

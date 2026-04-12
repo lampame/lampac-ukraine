@@ -30,7 +30,7 @@ namespace LME.Unimay
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "lme.unimay"));
+                online.Add(new ModuleOnlineItem(init, "lme_unimay"));
             }
 
             return online;

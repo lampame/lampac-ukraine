@@ -85,7 +85,7 @@ namespace LME.Uaflix
             }
 
             // Показувати «уточнити пошук».
-            RegisterWithSearch("lme.uaflix");
+            RegisterWithSearch("lme_uaflix");
         }
 
         private static void RegisterWithSearch(string plugin)

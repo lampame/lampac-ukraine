@@ -76,7 +76,7 @@ namespace LME.Bamboo
             }
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("lme.bamboo");
+            RegisterWithSearch("lme_bamboo");
         }
 
         private static void RegisterWithSearch(string plugin)

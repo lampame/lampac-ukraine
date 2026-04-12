@@ -26,7 +26,7 @@ namespace LME.JackTor.Controllers
         }
 
         [HttpGet]
-        [Route("lite/lme.jacktor")]
+        [Route("lite/lme_jacktor")]
         async public Task<ActionResult> Index(
             long id,
             string imdb_id,
@@ -57,20 +57,20 @@ namespace LME.JackTor.Controllers
             if (checksearch)
             {
                 if (!IsCheckOnlineSearchEnabled())
-                    return OnError("lme.jacktor", refresh_proxy: true);
+                    return OnError("lme_jacktor", refresh_proxy: true);
 
                 var check = await invoke.Search(title, original_title, year, serial, original_language);
                 if (check.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("lme.jacktor", refresh_proxy: true);
+                return OnError("lme_jacktor", refresh_proxy: true);
             }
 
             var torrents = await invoke.Search(title, original_title, year, serial, original_language);
             if (torrents == null || torrents.Count == 0)
             {
                 string debugInfo = $"title={title}\noriginal_title={original_title}\nyear={year}\nserial={serial}\njackett={MaskSensitiveUrl(init.jackett)}\nmin_sid={init.min_sid}\nmin_peers={init.min_peers}";
-                return OnError("lme.jacktor", refresh_proxy: true, weblog: debugInfo);
+                return OnError("lme_jacktor", refresh_proxy: true, weblog: debugInfo);
             }
 
             if (serial == 1)
@@ -97,7 +97,7 @@ namespace LME.JackTor.Controllers
                     {
                         seasonTpl.Append(
                             $"{season} сезон",
-                            $"{host}/lite/lme.jacktor?rjson={rjson}&title={enTitle}&original_title={enOriginal}&year={year}&original_language={original_language}&serial=1&s={season}",
+                            $"{host}/lite/lme_jacktor?rjson={rjson}&title={enTitle}&original_title={enOriginal}&year={year}&original_language={original_language}&serial=1&s={season}",
                             season);
                     }
 
@@ -126,7 +126,7 @@ namespace LME.JackTor.Controllers
                         : $"{seasonLabel} • {torrent.Voice}";
 
                     string qualityInfo = $"{torrent.Tracker} / {torrent.QualityLabel} / {torrent.MediaInfo} / ↑{torrent.Seeders}";
-                    string releaseLink = accsArgs($"{host}/lite/lme.jacktor/serial/{torrent.Rid}?rjson={rjson}&title={enTitle}&original_title={enOriginal}&s={targetSeason}");
+                    string releaseLink = accsArgs($"{host}/lite/lme_jacktor/serial/{torrent.Rid}?rjson={rjson}&title={enTitle}&original_title={enOriginal}&s={targetSeason}");
 
                     similarTpl.Append(releaseName, null, qualityInfo, releaseLink);
                 }
@@ -146,7 +146,7 @@ namespace LME.JackTor.Controllers
                         : torrent.Voice;
 
                     string voiceName = $"{torrent.QualityLabel} / {torrent.MediaInfo} / ↑{torrent.Seeders}";
-                    string streamLink = accsArgs($"{host}/lite/lme.jacktor/s{torrent.Rid}");
+                    string streamLink = accsArgs($"{host}/lite/lme_jacktor/s{torrent.Rid}");
 
                     movieTpl.Append(
                         voice,
@@ -162,7 +162,7 @@ namespace LME.JackTor.Controllers
         }
 
         [HttpGet]
-        [Route("lite/lme.jacktor/serial/{rid}")]
+        [Route("lite/lme_jacktor/serial/{rid}")]
         async public ValueTask<ActionResult> Serial(string rid, string account_email, string title, string original_title, int s = 1, bool rjson = false)
         {
             var init = loadKit(ModInit.Settings);
@@ -174,9 +174,9 @@ namespace LME.JackTor.Controllers
 
             var invoke = new JackTorInvoke(init, hybridCache, OnLog, proxyManager);
             if (!invoke.TryGetSource(rid, out JackTorSourceCache source))
-                return OnError("lme.jacktor", refresh_proxy: true);
+                return OnError("lme_jacktor", refresh_proxy: true);
 
-            string memKey = $"lme.jacktor:serial:{rid}";
+            string memKey = $"lme_jacktor:serial:{rid}";
 
             return await InvkSemaphore(memKey, null, async () =>
             {
@@ -184,7 +184,7 @@ namespace LME.JackTor.Controllers
                 {
                     var ts = ResolveProbeTorrentServer(init, account_email);
                     if (string.IsNullOrWhiteSpace(ts.host))
-                        return OnError("lme.jacktor", refresh_proxy: true);
+                        return OnError("lme_jacktor", refresh_proxy: true);
 
                     string hashResponse = await httpHydra.Post(
                         $"{ts.host}/torrents",
@@ -194,7 +194,7 @@ namespace LME.JackTor.Controllers
 
                     string hash = ExtractHash(hashResponse);
                     if (string.IsNullOrWhiteSpace(hash))
-                        return OnError("lme.jacktor", refresh_proxy: true);
+                        return OnError("lme_jacktor", refresh_proxy: true);
 
                     Stat stat = null;
                     DateTime deadline = DateTime.Now.AddSeconds(20);
@@ -213,7 +213,7 @@ namespace LME.JackTor.Controllers
                         if (DateTime.Now > deadline)
                         {
                             _ = httpHydra.Post($"{ts.host}/torrents", BuildRemovePayload(hash), statusCodeOK: false, newheaders: ts.headers);
-                            return OnError("lme.jacktor", refresh_proxy: true);
+                            return OnError("lme_jacktor", refresh_proxy: true);
                         }
 
                         await Task.Delay(250);
@@ -226,7 +226,7 @@ namespace LME.JackTor.Controllers
                 }
 
                 if (fileStats == null || fileStats.Length == 0)
-                    return OnError("lme.jacktor", refresh_proxy: true);
+                    return OnError("lme_jacktor", refresh_proxy: true);
 
                 var episodeTpl = new EpisodeTpl();
                 int appended = 0;
@@ -241,13 +241,13 @@ namespace LME.JackTor.Controllers
                         title ?? original_title,
                         s.ToString(),
                         file.Id.ToString(),
-                        accsArgs($"{host}/lite/lme.jacktor/s{rid}?tsid={file.Id}"));
+                        accsArgs($"{host}/lite/lme_jacktor/s{rid}?tsid={file.Id}"));
 
                     appended++;
                 }
 
                 if (appended == 0)
-                    return OnError("lme.jacktor", refresh_proxy: true);
+                    return OnError("lme_jacktor", refresh_proxy: true);
 
                 return rjson
                     ? Content(episodeTpl.ToJson(), "application/json; charset=utf-8")
@@ -256,7 +256,7 @@ namespace LME.JackTor.Controllers
         }
 
         [HttpGet]
-        [Route("lite/lme.jacktor/s{rid}")]
+        [Route("lite/lme_jacktor/s{rid}")]
         async public ValueTask<ActionResult> Stream(string rid, int tsid = -1, string account_email = null)
         {
             var init = loadKit(ModInit.Settings);
@@ -268,14 +268,14 @@ namespace LME.JackTor.Controllers
 
             var invoke = new JackTorInvoke(init, hybridCache, OnLog, proxyManager);
             if (!invoke.TryGetSource(rid, out JackTorSourceCache source))
-                return OnError("lme.jacktor", refresh_proxy: true);
+                return OnError("lme_jacktor", refresh_proxy: true);
 
             int index = tsid != -1 ? tsid : 1;
             string country = requestInfo.Country;
 
             async ValueTask<ActionResult> AuthStream(string tsHost, string login, string passwd, string uhost = null, Dictionary<string, string> addheaders = null)
             {
-                string memKey = $"lme.jacktor:auth_stream:{rid}:{uhost ?? tsHost}";
+                string memKey = $"lme_jacktor:auth_stream:{rid}:{uhost ?? tsHost}";
                 if (!hybridCache.TryGetValue(memKey, out string hash))
                 {
                     login = (login ?? string.Empty).Replace("{account_email}", account_email ?? string.Empty);
@@ -291,7 +291,7 @@ namespace LME.JackTor.Controllers
 
                     hash = ExtractHash(response);
                     if (string.IsNullOrWhiteSpace(hash))
-                        return OnError("lme.jacktor", refresh_proxy: true);
+                        return OnError("lme_jacktor", refresh_proxy: true);
 
                     hybridCache.Set(memKey, hash, DateTime.Now.AddMinutes(1));
                 }
@@ -315,7 +315,7 @@ namespace LME.JackTor.Controllers
 
             if (init.auth_torrs != null && init.auth_torrs.Count > 0)
             {
-                string tsKey = $"lme.jacktor:ts2:{rid}:{requestInfo.IP}";
+                string tsKey = $"lme_jacktor:ts2:{rid}:{requestInfo.IP}";
                 if (!hybridCache.TryGetValue(tsKey, out PidTorAuthTS ts))
                 {
                     var servers = init.auth_torrs.Where(i => i.enable).ToList();
@@ -328,7 +328,7 @@ namespace LME.JackTor.Controllers
                     }
 
                     if (servers.Count == 0)
-                        return OnError("lme.jacktor", refresh_proxy: true);
+                        return OnError("lme_jacktor", refresh_proxy: true);
 
                     ts = servers[Random.Shared.Next(0, servers.Count)];
                     hybridCache.Set(tsKey, ts, DateTime.Now.AddHours(4));
@@ -341,9 +341,9 @@ namespace LME.JackTor.Controllers
                 if (init.base_auth != null && init.base_auth.enable)
                 {
                     if (init.torrs == null || init.torrs.Length == 0)
-                        return OnError("lme.jacktor", refresh_proxy: true);
+                        return OnError("lme_jacktor", refresh_proxy: true);
 
-                    string tsKey = $"lme.jacktor:ts3:{rid}:{requestInfo.IP}";
+                    string tsKey = $"lme_jacktor:ts3:{rid}:{requestInfo.IP}";
                     if (!hybridCache.TryGetValue(tsKey, out string tsHost))
                     {
                         tsHost = init.torrs[Random.Shared.Next(0, init.torrs.Length)];
@@ -354,9 +354,15 @@ namespace LME.JackTor.Controllers
                 }
 
                 if (init.torrs == null || init.torrs.Length == 0)
-                    return OnError("lme.jacktor", refresh_proxy: true);
+                    return OnError("lme_jacktor", refresh_proxy: true);
 
-                string key = $"lme.jacktor:ts4:{rid}:{requestInfo.IP}";
+                string key = $"lme_jacktor:ts4:{rid}:{requestInfo.IP}";, init.base_auth.login, init.base_auth.passwd, addheaders: init.base_auth.headers);
+                }
+
+                if (init.torrs == null || init.torrs.Length == 0)
+                    return OnError("lme_jacktor", refresh_proxy: true);
+
+                string key = $"lme_jacktor:ts4:{rid}:{requestInfo.IP}";
                 if (!hybridCache.TryGetValue(key, out string torrentHost))
                 {
                     torrentHost = init.torrs[Random.Shared.Next(0, init.torrs.Length)];

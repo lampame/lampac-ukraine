@@ -30,7 +30,7 @@ namespace LME.NMoonAnime
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "lme.nmoonanime"));
+                online.Add(new ModuleOnlineItem(init, "lme_nmoonanime"));
             }
 
             return online;

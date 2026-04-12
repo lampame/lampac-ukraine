@@ -22,7 +22,7 @@ namespace LME.Unimay.Controllers
         }
 
         [HttpGet]
-        [Route("lite/lme.unimay")]
+        [Route("lite/lme_unimay")]
         async public ValueTask<ActionResult> Index(string title, string original_title, string code, int serial = -1, int s = -1, int e = -1, bool play = false, bool rjson = false, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
@@ -36,13 +36,13 @@ namespace LME.Unimay.Controllers
             if (checksearch)
             {
                 if (!IsCheckOnlineSearchEnabled())
-                    return OnError("lme.unimay");
+                    return OnError("lme_unimay");
 
                 var searchResults = await invoke.Search(title, original_title, serial);
                 if (searchResults?.Content != null && searchResults.Content.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
-                return OnError("lme.unimay");
+                return OnError("lme_unimay");
             }
 
             if (!string.IsNullOrEmpty(code))
@@ -59,7 +59,7 @@ namespace LME.Unimay.Controllers
 
         async ValueTask<ActionResult> Search(UnimayInvoke invoke, OnlinesSettings init, string title, string original_title, int serial, bool rjson)
         {
-            string memKey = $"lme.unimay:search:{title}:{original_title}:{serial}";
+            string memKey = $"lme_unimay:search:{title}:{original_title}:{serial}";
 
             return await InvkSemaphore(memKey, async () =>
             {
@@ -81,7 +81,7 @@ namespace LME.Unimay.Controllers
 
         async ValueTask<ActionResult> Release(UnimayInvoke invoke, OnlinesSettings init, string code, string title, string original_title, int serial, int s, int e, bool play, bool rjson)
         {
-            string memKey = $"lme.unimay:release:{code}";
+            string memKey = $"lme_unimay:release:{code}";
 
             return await InvkSemaphore(memKey, async () =>
             {
@@ -200,7 +200,7 @@ namespace LME.Unimay.Controllers
 
         private static void OnLog(string message)
         {
-            System.Console.WriteLine($"lme.unimay: {message}");
+            System.Console.WriteLine($"lme_unimay: {message}");
         }
     }
 }

@@ -28,7 +28,7 @@ namespace LME.Uaflix.Controllers
         }
         
         [HttpGet]
-        [Route("lite/lme.uaflix")]
+        [Route("lite/lme_uaflix")]
         async public Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string t, int s = -1, int e = -1, bool play = false, bool rjson = false, string href = null, bool checksearch = false)
         {
             await UpdateService.ConnectAsync(host);
@@ -38,10 +38,10 @@ namespace LME.Uaflix.Controllers
 
             var init = this.init;
             TryEnableMagicApn(init);
-            OnLog($"lme.uaflix: === UAFLIX INDEX START ===");
-            OnLog($"lme.uaflix: Index: title={title}, serial={serial}, s={s}, play={play}, href={href}, checksearch={checksearch}");
-            OnLog($"lme.uaflix: Index: kinopoisk_id={kinopoisk_id}, imdb_id={imdb_id}, id={id}");
-            OnLog($"lme.uaflix: Index: year={year}, source={source}, t={t}, e={e}, rjson={rjson}");
+            OnLog($"lme_uaflix: === UAFLIX INDEX START ===");
+            OnLog($"lme_uaflix: Index: title={title}, serial={serial}, s={s}, play={play}, href={href}, checksearch={checksearch}");
+            OnLog($"lme_uaflix: Index: kinopoisk_id={kinopoisk_id}, imdb_id={imdb_id}, id={id}");
+            OnLog($"lme_uaflix: Index: year={year}, source={source}, t={t}, e={e}, rjson={rjson}");
 
             var auth = new UaflixAuth(init, memoryCache, OnLog, proxyManager);
             var invoke = new UaflixInvoke(init, hybridCache, OnLog, proxyManager, auth, httpHydra);
@@ -50,7 +50,7 @@ namespace LME.Uaflix.Controllers
             if (checksearch)
             {
                 if (!IsCheckOnlineSearchEnabled())
-                    return OnError("lme.uaflix", refresh_proxy: true);
+                    return OnError("lme_uaflix", refresh_proxy: true);
 
                 try
                 {
@@ -64,13 +64,13 @@ namespace LME.Uaflix.Controllers
 
                     OnLog("checksearch: Контент не знайдено");
                     OnLog("=== RETURN: checksearch OnError ===");
-                    return OnError("lme.uaflix", refresh_proxy: true);
+                    return OnError("lme_uaflix", refresh_proxy: true);
                 }
                 catch (Exception ex)
                 {
                     OnLog($"checksearch: помилка - {ex.Message}");
                     OnLog("=== RETURN: checksearch exception OnError ===");
-                    return OnError("lme.uaflix", refresh_proxy: true);
+                    return OnError("lme_uaflix", refresh_proxy: true);
                 }
             }
 
@@ -81,7 +81,7 @@ namespace LME.Uaflix.Controllers
                 if (string.IsNullOrWhiteSpace(urlToParse))
                 {
                     OnLog("=== RETURN: play missing url OnError ===");
-                    return OnError("lme.uaflix", refresh_proxy: true);
+                    return OnError("lme_uaflix", refresh_proxy: true);
                 }
                 
                 var playResult = await invoke.ParseEpisode(urlToParse);
@@ -92,9 +92,9 @@ namespace LME.Uaflix.Controllers
                 }
                 
                 OnLog("=== RETURN: play no streams ===");
-                return OnError("lme.uaflix", refresh_proxy: true);
+                return OnError("lme_uaflix", refresh_proxy: true);
             }
-            
+
             // Якщо є episode_url але немає play=true, це виклик для отримання інформації про стрім (для method: 'call')
             string episodeUrl = Request.Query["episode_url"];
             if (!string.IsNullOrEmpty(episodeUrl))
@@ -108,9 +108,9 @@ namespace LME.Uaflix.Controllers
                     OnLog($"=== RETURN: call method JSON for episode_url ===");
                     return UpdateService.Validate(Content(jsonResult, "application/json; charset=utf-8"));
                 }
-                
+
                 OnLog("=== RETURN: call method no streams ===");
-                return OnError("lme.uaflix", refresh_proxy: true);
+                return OnError("lme_uaflix", refresh_proxy: true);
             }
 
             string filmUrl = href;
@@ -122,7 +122,7 @@ namespace LME.Uaflix.Controllers
                 {
                     OnLog("No search results found");
                     OnLog("=== RETURN: no search results OnError ===");
-                    return OnError("lme.uaflix", refresh_proxy: true);
+                    return OnError("lme_uaflix", refresh_proxy: true);
                 }
 
                 var selectedResult = invoke.SelectBestSearchResult(searchResults, title, original_title, year);
@@ -143,7 +143,7 @@ namespace LME.Uaflix.Controllers
                     var similar_tpl = new SimilarTpl(orderedResults.Count);
                     foreach (var res in orderedResults)
                     {
-                        string link = $"{host}/lite/lme.uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(res.Url)}";
+                        string link = $"{host}/lite/lme_uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(res.Url)}";
                         string y = res.Year > 0 ? res.Year.ToString() : string.Empty;
                         string details = res.Category switch
                         {
@@ -176,13 +176,13 @@ namespace LME.Uaflix.Controllers
                     {
                         OnLog("No seasons found in season index");
                         OnLog("=== RETURN: no seasons OnError ===");
-                        return OnError("lme.uaflix", refresh_proxy: true);
+                        return OnError("lme_uaflix", refresh_proxy: true);
                     }
 
                     var season_tpl = new SeasonTpl(seasons.Count);
                     foreach (int season in seasons)
                     {
-                        string link = $"{host}/lite/lme.uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={season}&href={HttpUtility.UrlEncode(filmUrl)}";
+                        string link = $"{host}/lite/lme_uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={season}&href={HttpUtility.UrlEncode(filmUrl)}";
                         if (!string.IsNullOrWhiteSpace(t))
                             link += $"&t={HttpUtility.UrlEncode(t)}";
 
@@ -204,7 +204,7 @@ namespace LME.Uaflix.Controllers
                     {
                         OnLog($"No voices found for season {s}");
                         OnLog("=== RETURN: no voices for season OnError ===");
-                        return OnError("lme.uaflix", refresh_proxy: true);
+                        return OnError("lme_uaflix", refresh_proxy: true);
                     }
                     var voicesForSeason = structure.Voices
                         .Select(v => new { DisplayName = v.Key, Info = v.Value })
@@ -214,7 +214,7 @@ namespace LME.Uaflix.Controllers
                     {
                         OnLog($"No voices found for season {s}");
                         OnLog("=== RETURN: no voices for season OnError ===");
-                        return OnError("lme.uaflix", refresh_proxy: true);
+                        return OnError("lme_uaflix", refresh_proxy: true);
                     }
 
                     // Автоматично вибираємо першу озвучку якщо не вказана
@@ -249,7 +249,7 @@ namespace LME.Uaflix.Controllers
                     var voice_tpl = new VoiceTpl();
                     foreach (var voice in voicesForSeason)
                     {
-                        string voiceLink = $"{host}/lite/lme.uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&href={HttpUtility.UrlEncode(filmUrl)}";
+                        string voiceLink = $"{host}/lite/lme_uaflix?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&href={HttpUtility.UrlEncode(filmUrl)}";
                         voiceLink += $"&s={s}&t={HttpUtility.UrlEncode(voice.DisplayName)}";
 
                         bool isActive = voice.DisplayName == t;
@@ -276,7 +276,7 @@ namespace LME.Uaflix.Controllers
                         {
                             // Для zetvideo-vod та ashdi-vod використовуємо URL епізоду для виклику
                             // Потрібно передати URL епізоду в інший параметр, щоб не плутати з play=true
-                            string callUrl = $"{host}/lite/lme.uaflix?episode_url={HttpUtility.UrlEncode(ep.File)}&imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&s={s}&e={ep.Number}";
+                            string callUrl = $"{host}/lite/lme_uaflix?episode_url={HttpUtility.UrlEncode(ep.File)}&imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&s={s}&e={ep.Number}";
                             episode_tpl.Append(
                                 name: episodeTitle,
                                 title: title,
@@ -307,7 +307,7 @@ namespace LME.Uaflix.Controllers
                     {
                         OnLog($"No valid episodes after filtering for season {s}, voice {t}");
                         OnLog("=== RETURN: no valid episodes OnError ===");
-                        return OnError("lme.uaflix", refresh_proxy: true);
+                        return OnError("lme_uaflix", refresh_proxy: true);
                     }
 
                     OnLog($"Created EpisodeTpl with {appendedEpisodes} episodes");
@@ -329,7 +329,7 @@ namespace LME.Uaflix.Controllers
                 // Fallback: якщо жоден з умов не виконався
                 OnLog($"Fallback: s={s}, t={t}");
                 OnLog("=== RETURN: fallback OnError ===");
-                return OnError("lme.uaflix", refresh_proxy: true);
+                return OnError("lme_uaflix", refresh_proxy: true);
             }
             else // Фільм
             {
@@ -337,7 +337,7 @@ namespace LME.Uaflix.Controllers
                 if (playResult?.streams == null || playResult.streams.Count == 0)
                 {
                     OnLog("=== RETURN: movie no streams ===");
-                    return OnError("lme.uaflix", refresh_proxy: true);
+                    return OnError("lme_uaflix", refresh_proxy: true);
                 }
 
                 var tpl = new MovieTpl(title, original_title, playResult.streams.Count);
@@ -358,7 +358,7 @@ namespace LME.Uaflix.Controllers
                 if (tpl.data == null || tpl.data.Count == 0)
                 {
                     OnLog("=== RETURN: movie template empty ===");
-                    return OnError("lme.uaflix", refresh_proxy: true);
+                    return OnError("lme_uaflix", refresh_proxy: true);
                 }
 
                 OnLog("=== RETURN: movie template ===");
@@ -401,7 +401,7 @@ namespace LME.Uaflix.Controllers
                 return;
 
             ApnHelper.ApplyInitConf(true, ModInit.MagicApnAshdiHost, init);
-            OnLog($"lme.uaflix: увімкнено magic_apn для Ashdi (player={player ?? "unknown"}).");
+            OnLog($"lme_uaflix: увімкнено magic_apn для Ashdi (player={player ?? "unknown"}).");
         }
 
         private static string StripLampacArgs(string url)

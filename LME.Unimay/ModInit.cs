@@ -54,7 +54,7 @@ namespace LME.Unimay
             Unimay = ModuleInvoke.Init("LME.Unimay", defaults).ToObject<OnlinesSettings>();
 
             // Виводити "уточнити пошук"
-            RegisterWithSearch("lme.unimay");
+            RegisterWithSearch("lme_unimay");
         }
 
         private static void RegisterWithSearch(string plugin)

@@ -71,7 +71,7 @@ namespace LME.NMoonAnime
                 NMoonAnime.apn = null;
             }
 
-            RegisterWithSearch("lme.nmoonanime");
+            RegisterWithSearch("lme_nmoonanime");
         }
 
         private static void RegisterWithSearch(string plugin)

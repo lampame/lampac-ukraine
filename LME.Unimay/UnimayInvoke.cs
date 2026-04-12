@@ -30,7 +30,7 @@ namespace LME.Unimay
 
         public async Task<SearchResponse> Search(string title, string original_title, int serial)
         {
-            string memKey = $"lme.unimay:search:{title}:{original_title}:{serial}";
+            string memKey = $"lme_unimay:search:{title}:{original_title}:{serial}";
             if (_hybridCache.TryGetValue(memKey, out SearchResponse searchResults))
                 return searchResults;
 
@@ -61,7 +61,7 @@ namespace LME.Unimay
 
         public async Task<ReleaseResponse> Release(string code)
         {
-            string memKey = $"lme.unimay:release:{code}";
+            string memKey = $"lme_unimay:release:{code}";
             if (_hybridCache.TryGetValue(memKey, out ReleaseResponse releaseDetail))
                 return releaseDetail;
 
@@ -104,7 +104,7 @@ namespace LME.Unimay
                 }
 
                 string itemTitle = item.Names?.Ukr ?? item.Names?.Eng ?? item.Title;
-                string releaseUrl = $"{host}/lite/lme.unimay?code={item.Code}&title={System.Web.HttpUtility.UrlEncode(itemTitle)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial={serial}";
+                string releaseUrl = $"{host}/lite/lme_unimay?code={item.Code}&title={System.Web.HttpUtility.UrlEncode(itemTitle)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial={serial}";
                 results.Add((itemTitle, item.Year, item.Type, releaseUrl));
             }
 
@@ -117,7 +117,7 @@ namespace LME.Unimay
                 return (null, null);
 
             var movieEpisode = releaseDetail.Playlist[0];
-            string movieLink = $"{host}/lite/lme.unimay?code={releaseDetail.Code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=0&play=true";
+            string movieLink = $"{host}/lite/lme_unimay?code={releaseDetail.Code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=0&play=true";
             string movieTitle = movieEpisode.Title ?? title;
 
             return (movieTitle, movieLink);
@@ -125,7 +125,7 @@ namespace LME.Unimay
 
         public (string seasonName, string seasonUrl, string seasonId) GetSeasonInfo(string host, string code, string title, string original_title)
         {
-            string seasonUrl = $"{host}/lite/lme.unimay?code={code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=1&s=1";
+            string seasonUrl = $"{host}/lite/lme_unimay?code={code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=1&s=1";
             return ("Сезон 1", seasonUrl, "1");
         }
 
@@ -139,7 +139,7 @@ namespace LME.Unimay
             foreach (var ep in releaseDetail.Playlist.Where(ep => ep.Number >= 1 && ep.Number <= 24).OrderBy(ep => ep.Number))
             {
                 string epTitle = ep.Title ?? $"Епізод {ep.Number}";
-                string epLink = $"{host}/lite/lme.unimay?code={releaseDetail.Code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=1&s=1&e={ep.Number}&play=true";
+                string epLink = $"{host}/lite/lme_unimay?code={releaseDetail.Code}&title={System.Web.HttpUtility.UrlEncode(title)}&original_title={System.Web.HttpUtility.UrlEncode(original_title ?? "")}&serial=1&s=1&e={ep.Number}&play=true";
                 episodes.Add((epTitle, epLink));
             }
 

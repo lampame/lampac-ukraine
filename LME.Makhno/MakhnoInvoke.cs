@@ -57,7 +57,7 @@ namespace LME.Makhno
             }
             catch (Exception ex)
             {
-                _onLog($"lme.makhno wormhole error: {ex.Message}");
+                _onLog($"lme_makhno wormhole error: {ex.Message}");
                 return null;
             }
         }
@@ -84,7 +84,7 @@ namespace LME.Makhno
                 if (ApnHelper.IsAshdiUrl(sourceUrl) && ApnHelper.IsEnabled(_init) && string.IsNullOrWhiteSpace(_init.webcorshost))
                     requestUrl = ApnHelper.WrapUrl(_init, sourceUrl);
 
-                _onLog($"lme.makhno getting player data from: {requestUrl}");
+                _onLog($"lme_makhno getting player data from: {requestUrl}");
 
                 var response = await HttpGet(requestUrl, headers);
                 if (string.IsNullOrEmpty(response))
@@ -133,14 +133,14 @@ namespace LME.Makhno
 
                 string jsonData = ExtractPlayerJson(html);
                 if (jsonData == null)
-                    _onLog("lme.makhno ParsePlayerData: file array not found");
+                    _onLog("lme_makhno ParsePlayerData: file array not found");
                 else
-                    _onLog($"lme.makhno ParsePlayerData: file array length={jsonData.Length}");
+                    _onLog($"lme_makhno ParsePlayerData: file array length={jsonData.Length}");
                 if (!string.IsNullOrEmpty(jsonData))
                 {
                     var voices = ParseVoicesJson(jsonData);
                     var movies = ParseMovieVariantsJson(jsonData);
-                    _onLog($"lme.makhno ParsePlayerData: voices={voices?.Count ?? 0}");
+                    _onLog($"lme_makhno ParsePlayerData: voices={voices?.Count ?? 0}");
                     return new PlayerData
                     {
                         File = movies.FirstOrDefault()?.File,
@@ -153,7 +153,7 @@ namespace LME.Makhno
                 var m3u8Match = Regex.Match(html, @"(https?://[^""'\s>]+\.m3u8[^""'\s>]*)", RegexOptions.IgnoreCase);
                 if (m3u8Match.Success)
                 {
-                    _onLog("lme.makhno ParsePlayerData: fallback m3u8 match");
+                    _onLog("lme_makhno ParsePlayerData: fallback m3u8 match");
                     return new PlayerData
                     {
                         File = m3u8Match.Groups[1].Value,
@@ -174,7 +174,7 @@ namespace LME.Makhno
                 var sourceMatch = Regex.Match(html, @"<source[^>]*src=[""']([^""']+)[""']", RegexOptions.IgnoreCase);
                 if (sourceMatch.Success)
                 {
-                    _onLog("lme.makhno ParsePlayerData: fallback source match");
+                    _onLog("lme_makhno ParsePlayerData: fallback source match");
                     return new PlayerData
                     {
                         File = sourceMatch.Groups[1].Value,
@@ -196,7 +196,7 @@ namespace LME.Makhno
             }
             catch (Exception ex)
             {
-                _onLog($"lme.makhno ParsePlayerData error: {ex.Message}");
+                _onLog($"lme_makhno ParsePlayerData error: {ex.Message}");
                 return null;
             }
         }
@@ -263,7 +263,7 @@ namespace LME.Makhno
             }
             catch (Exception ex)
             {
-                _onLog($"lme.makhno ParseVoicesJson error: {ex.Message}");
+                _onLog($"lme_makhno ParseVoicesJson error: {ex.Message}");
                 return new List<Voice>();
             }
         }
@@ -298,7 +298,7 @@ namespace LME.Makhno
             }
             catch (Exception ex)
             {
-                _onLog($"lme.makhno ParseMovieVariantsJson error: {ex.Message}");
+                _onLog($"lme_makhno ParseMovieVariantsJson error: {ex.Message}");
                 return new List<MovieVariant>();
             }
         }

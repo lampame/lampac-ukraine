@@ -26,7 +26,7 @@ namespace LME.JackTor
                 if (UpdateService.IsDisconnected())
                     init.overridehost = null;
 
-                online.Add(new ModuleOnlineItem(init, "lme.jacktor"));
+                online.Add(new ModuleOnlineItem(init, "lme_jacktor"));
             }
 
             return online;
