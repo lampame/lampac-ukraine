@@ -16,3 +16,4 @@ bin
 obj
 .vscode/settings.json
 .qwen
+log

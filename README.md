@@ -1,19 +1,23 @@
 # Ukraine online source for Lampac NextGen
 
+> **Important:** All modules use the prefix `LME.` (Lampac Modules Extended) to avoid conflicts with Lampac's built-in modules.
+> Text names, namespaces, keys in `init.conf`, and routes all use the prefix `LME.`.
+
 ## Sources
 ### TVShows and Movies
 
-- [x] UAFlix
-- [x] Makhno 
-- [x] StarLight
-- [x] KlonFUN
+- [x] LME.Uaflix
+- [x] LME.Makhno
+- [x] LME.StarLight
+- [x] LME.KlonFUN
+- [x] LME.UafilmME
 
 ### Anime and Dorama
-- [x] AnimeON
-- [x] BambooUA
-- [x] Unimay
-- [x] Mikai 
-- [x] NMoonAnime
+- [x] LME.AnimeON
+- [x] LME.Bamboo
+- [x] LME.Unimay
+- [x] LME.Mikai
+- [x] LME.NMoonAnime
 
 ## Installation
 
@@ -26,7 +30,7 @@
    - If Lampac is installed system-wide, move the modules to the `module` directory.
    - If Lampac is running in Docker, mount the volume:
      ```bash
-     -v /path/to/your/cloned/repo/Uaflix:/home/module/Uaflix
+     -v /path/to/your/cloned/repo/LME.Uaflix:/home/module/LME.Uaflix
      ```
 
 ## Auto installation
@@ -36,18 +40,20 @@ If Lampac version 148.1 and newer
 Create or update the module/repository.yaml file
 
 ```YAML
-- repository: https://github.com/lampame/lampac-ukraine
+- repository: https://github.com/lampac-ukraine/lampac-ukraine
   branch: main
   modules:
-    - AnimeON
-    - Unimay
-    - Mikai
-    - NMoonAnime
-    - Uaflix
-    - Bamboo
-    - Makhno
-    - StarLight
-    - KlonFUN
+    - LME.AnimeON
+    - LME.Unimay
+    - LME.Mikai
+    - LME.NMoonAnime
+    - LME.Uaflix
+    - LME.Bamboo
+    - LME.Makhno
+    - LME.StarLight
+    - LME.KlonFUN
+    - LME.UafilmME
+    - LME.JackTor
 ```
 
 branch - optional, default main
@@ -56,8 +62,11 @@ modules - optional, if not specified, all modules from the repository will be in
 
 ## Init support
 
+> **Note:** The key in `init.conf` must match the module name (`LME.XXX`), **not** the provider name.
+> For example, for Uaflix, use `“LME.Uaflix”`, not `“Uaflix”`.
+
 ```json
-"Uaflix": {
+"LME.Uaflix": {
     "enable": true,
     "domain": "https://uaflix.net",
     "displayname": "Uaflix",
@@ -85,13 +94,13 @@ modules - optional, if not specified, all modules from the repository will be in
 Parameter compatibility:
 - `webcorshost` + `useproxy`: work together (parsing via CORS host, and network output can go through a proxy with `useproxy`).
 - `webcorshost` does not conflict with `streamproxy`: CORS is used for parsing, `streamproxy` is used for streaming.
-- `magic_apn.ashdi` використовується тільки для Ashdi-посилань і лише коли значення непорожнє.
-- `webcorshost` не конфліктує з `magic_apn`: CORS використовується для парсингу, `magic_apn` — для Ashdi-стрімінгу.
+- `magic_apn.ashdi` is used only for Ashdi links and only when the value is not empty.
+- `webcorshost` does not conflict with `magic_apn`: CORS is used for parsing, while `magic_apn` is used for Ashdi streaming.
 
 ## JackTor config example (`init.conf`)
 
 ```json
-"JackTor": {
+"LME.JackTor": {
   "enable": true,
   "displayname": "JackTor",
   "displayindex": 0,
@@ -156,16 +165,6 @@ Key parameters at a glance:
 - `quality_allow`, `hdr_mode`, `codec_allow`, `audio_pref`: quality/codec/language prioritization.
 - `torrs`, `auth_torrs`, `base_auth`: TorrServer nodes used for playback.
 - `filter` / `filter_ignore`: regex filters for release title and voice labels.
-
-## APN support
-
-Sources with APN support:
-- AnimeON
-- Uaflix
-- Mikai
-- Makhno
-- KlonFUN
-- NMoonAnime
 
 ## Source/player availability check script
 
