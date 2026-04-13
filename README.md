@@ -19,8 +19,9 @@
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/lampac-ukraine/lampac-ukraine.git .
+   git clone -b legacy https://github.com/lampac-ukraine/lampac-ukraine.git .
    ```
+or Download manual https://github.com/lampame/lampac-ukraine/archive/refs/heads/legacy.zip
 
 2. Move the modules to the correct directory:
    - If Lampac is installed system-wide, move the modules to the `module` directory.
