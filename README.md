@@ -37,7 +37,7 @@ Create or update the module/repository.yaml file
 
 ```YAML
 - repository: https://github.com/lampame/lampac-ukraine
-  branch: main
+  branch: legacy
   modules:
     - AnimeON
     - Unimay
