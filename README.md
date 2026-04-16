@@ -19,7 +19,7 @@
 
 1. Clone the repository:
    ```bash
-   git clone -b legacy https://github.com/lampac-ukraine/lampac-ukraine.git .
+   git clone -b legacy https://github.com/lampame/lampac-ukraine.git .
    ```
 or Download manual https://github.com/lampame/lampac-ukraine/archive/refs/heads/legacy.zip
 
