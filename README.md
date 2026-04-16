@@ -30,7 +30,7 @@
    - If Lampac is installed system-wide, move the modules to the `module` directory.
    - If Lampac is running in Docker, mount the volume:
      ```bash
-     -v /path/to/your/cloned/repo/LME.Uaflix:/home/module/LME.Uaflix
+     -v /path/to/your/cloned/repo/LME.Uaflix:/lampac/module/LME.Uaflix
      ```
 
 ## Auto installation
