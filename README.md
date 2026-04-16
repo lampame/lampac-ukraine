@@ -23,7 +23,7 @@
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/lampac-ukraine/lampac-ukraine.git .
+   git clone https://github.com/lampame/lampac-ukraine.git .
    ```
 
 2. Move the modules to the correct directory:
@@ -40,7 +40,7 @@ If Lampac version 148.1 and newer
 Create or update the module/repository.yaml file
 
 ```YAML
-- repository: https://github.com/lampac-ukraine/lampac-ukraine
+- repository: https://github.com/lampame/lampac-ukraine
   branch: main
   modules:
     - LME.AnimeON
