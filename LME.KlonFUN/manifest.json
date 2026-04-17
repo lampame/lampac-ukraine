@@ -1,5 +1,11 @@
 {
   "enable": true,
   "initspace": "LME.KlonFUN.ModInit",
-  "online": "LME.KlonFUN.OnlineApi"
+  "online": "LME.KlonFUN.OnlineApi",
+  "syntaxPaths": [
+    "../LME.Shared/GlobalUsings.cs",
+    "../LME.Shared/Online/OnlineRegistry.cs",
+    "../LME.Shared/Update/ModuleUpdateService.cs",
+    "../LME.Shared/Apn/ApnHelper.cs"
+  ]
 }

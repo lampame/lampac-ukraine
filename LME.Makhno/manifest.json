@@ -1,5 +1,11 @@
 {
   "enable": true,
   "initspace": "LME.Makhno.ModInit",
-  "online": "LME.Makhno.OnlineApi"
+  "online": "LME.Makhno.OnlineApi",
+  "syntaxPaths": [
+    "../LME.Shared/GlobalUsings.cs",
+    "../LME.Shared/Online/OnlineRegistry.cs",
+    "../LME.Shared/Update/ModuleUpdateService.cs",
+    "../LME.Shared/Apn/ApnHelper.cs"
+  ]
 }

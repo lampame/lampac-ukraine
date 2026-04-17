@@ -2,5 +2,11 @@
   "enable": true,
   "version": 3,
   "initspace": "LME.JackTor.ModInit",
-  "online": "LME.JackTor.OnlineApi"
+  "online": "LME.JackTor.OnlineApi",
+  "syntaxPaths": [
+    "../LME.Shared/GlobalUsings.cs",
+    "../LME.Shared/Online/OnlineRegistry.cs",
+    "../LME.Shared/Update/ModuleUpdateService.cs",
+    "../LME.Shared/Apn/ApnHelper.cs"
+  ]
 }
