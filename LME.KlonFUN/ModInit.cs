@@ -41,7 +41,7 @@ namespace LME.KlonFUN
             EventListener.UpdateInitFile += UpdateConfig;
 
             // Додаємо підтримку "уточнити пошук".
-            RegisterWithSearch("lme_klonfun");
+            OnlineRegistry.RegisterWithSearch("lme_klonfun");
         }
 
         private void UpdateConfig()
@@ -88,26 +88,6 @@ namespace LME.KlonFUN
             }
         }
 
-        private static void RegisterWithSearch(string plugin)
-        {
-            try
-            {
-                if (CoreInit.conf.online.with_search == null)
-                    return;
-
-                foreach (var item in CoreInit.conf.online.with_search)
-                {
-                    if (string.Equals(item, plugin, StringComparison.OrdinalIgnoreCase))
-                        return;
-                }
-
-                CoreInit.conf.online.with_search.Add(plugin);
-            }
-            catch
-            {
-            }
-        }
-
         public void Dispose()
         {
             EventListener.UpdateInitFile -= UpdateConfig;
@@ -116,121 +96,17 @@ namespace LME.KlonFUN
 
     public static class UpdateService
     {
-        private static readonly string _connectUrl = "https://lmcuk.lme.isroot.in/stats";
+        private static readonly ModuleUpdateService _service = new(
+            () => ModInit.Settings?.plugin,
+            () => ModInit.Version);
 
-        private static ConnectResponse? Connect = null;
-        private static DateTime? _connectTime = null;
-        private static DateTime? _disconnectTime = null;
-
-        private static readonly TimeSpan _resetInterval = TimeSpan.FromHours(4);
-        private static Timer? _resetTimer = null;
-
-        private static readonly object _lock = new();
-
-        public static async Task ConnectAsync(string host, CancellationToken cancellationToken = default)
-        {
-            if (_connectTime is not null || Connect?.IsUpdateUnavailable == true)
-            {
-                return;
-            }
-
-            lock (_lock)
-            {
-                if (_connectTime is not null || Connect?.IsUpdateUnavailable == true)
-                {
-                    return;
-                }
-
-                _connectTime = DateTime.UtcNow;
-            }
-
-            try
-            {
-                using var handler = new SocketsHttpHandler
-                {
-                    SslOptions = new SslClientAuthenticationOptions
-                    {
-                        RemoteCertificateValidationCallback = (_, _, _, _) => true,
-                        EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
-                    }
-                };
-
-                using var client = new HttpClient(handler);
-                client.Timeout = TimeSpan.FromSeconds(15);
-
-                var request = new
-                {
-                    Host = host,
-                    Module = ModInit.Settings.plugin,
-                    Version = ModInit.Version,
-                };
-
-                var requestJson = JsonConvert.SerializeObject(request, Formatting.None);
-                var requestContent = new StringContent(requestJson, Encoding.UTF8, MediaTypeNames.Application.Json);
-
-                var response = await client
-                    .PostAsync(_connectUrl, requestContent, cancellationToken)
-                    .ConfigureAwait(false);
-
-                response.EnsureSuccessStatusCode();
-
-                if (response.Content.Headers.ContentLength > 0)
-                {
-                    var responseText = await response.Content
-                        .ReadAsStringAsync(cancellationToken)
-                        .ConfigureAwait(false);
-
-                    Connect = JsonConvert.DeserializeObject<ConnectResponse>(responseText);
-                }
-
-                lock (_lock)
-                {
-                    _resetTimer?.Dispose();
-                    _resetTimer = null;
-
-                    if (Connect?.IsUpdateUnavailable != true)
-                    {
-                        _resetTimer = new Timer(ResetConnectTime, null, _resetInterval, Timeout.InfiniteTimeSpan);
-                    }
-                    else
-                    {
-                        _disconnectTime = Connect?.IsNoiseEnabled == true
-                            ? DateTime.UtcNow.AddHours(Random.Shared.Next(1, 4))
-                            : DateTime.UtcNow;
-                    }
-                }
-            }
-            catch
-            {
-                ResetConnectTime(null);
-            }
-        }
-
-        private static void ResetConnectTime(object? state)
-        {
-            lock (_lock)
-            {
-                _connectTime = null;
-                Connect = null;
-
-                _resetTimer?.Dispose();
-                _resetTimer = null;
-            }
-        }
+        public static Task ConnectAsync(string host, CancellationToken cancellationToken = default)
+            => _service.ConnectAsync(host, cancellationToken);
 
         public static bool IsDisconnected()
-        {
-            return _disconnectTime is not null
-                && DateTime.UtcNow >= _disconnectTime;
-        }
+            => _service.IsDisconnected();
 
         public static ActionResult Validate(ActionResult result)
-        {
-            return IsDisconnected()
-                ? throw new JsonReaderException($"Disconnect error: {Guid.CreateVersion7()}")
-                : result;
-        }
+            => _service.Validate(result);
     }
-
-    public record ConnectResponse(bool IsUpdateUnavailable, bool IsNoiseEnabled);
 }

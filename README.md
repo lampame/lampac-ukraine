@@ -1,48 +1,57 @@
-# Ukraine online source for Lampac NextGen
+# Lampac Ukraine Modules (`LME.*`)
 
-> **Important:** All modules use the prefix `LME.` (Lampac Modules Extended) to avoid conflicts with Lampac's built-in modules.
-> Text names, namespaces, keys in `init.conf`, and routes all use the prefix `LME.`.
+Набір українських онлайн-модулів для Lampac NextGen.
+Усі модулі використовують префікс `LME.` (Lampac Modules Extended), щоб уникати конфліктів із вбудованими модулями Lampac.
 
-## Sources
-### TVShows and Movies
+## Навігація
 
-- [x] LME.Uaflix
-- [x] LME.Makhno
-- [x] LME.StarLight
-- [x] LME.KlonFUN
-- [x] LME.UafilmME
+- [Українська](#ua)
+- [English](#en)
 
-### Anime and Dorama
-- [x] LME.AnimeON
-- [x] LME.Bamboo
-- [x] LME.Unimay
-- [x] LME.Mikai
-- [x] LME.NMoonAnime
+## <a id="ua"></a>Українська
 
-## Installation
+### Доступні модулі
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/lampame/lampac-ukraine.git .
-   ```
+**Фільми та серіали**
+- `LME.Uaflix`
+- `LME.Makhno`
+- `LME.StarLight`
+- `LME.KlonFUN`
+- `LME.UafilmME`
+- `LME.JackTor`
 
-2. Move the modules to the correct directory:
-   - If Lampac is installed system-wide, move the modules to the `module` directory.
-   - If Lampac is running in Docker, mount the volume:
-     ```bash
-     -v /path/to/your/cloned/repo/LME.Uaflix:/lampac/module/LME.Uaflix
-     ```
+**Аніме та дорами**
+- `LME.AnimeON`
+- `LME.Bamboo`
+- `LME.Unimay`
+- `LME.Mikai`
+- `LME.NMoonAnime`
 
-## Auto installation
+### Ручне встановлення
 
-If Lampac version 148.1 and newer
+1. Клонуйте репозиторій:
+```bash
+git clone https://github.com/lampame/lampac-ukraine.git .
+```
 
-Create or update the module/repository.yaml file
+2. Скопіюйте потрібні теки модулів у директорію `module` вашого Lampac.
 
-```YAML
+3. Для Docker приклад монтування:
+```bash
+-v /path/to/lampac-ukraine/LME.Uaflix:/lampac/module/LME.Uaflix
+```
+
+### Автовстановлення через `repository.yaml`
+
+Працює у Lampac `148.1+`.
+
+Створіть або оновіть `module/repository.yaml`:
+
+```yaml
 - repository: https://github.com/lampame/lampac-ukraine
   branch: main
   modules:
+    - LME.Shared
     - LME.AnimeON
     - LME.Unimay
     - LME.Mikai
@@ -56,48 +65,50 @@ Create or update the module/repository.yaml file
     - LME.JackTor
 ```
 
-branch - optional, default main
+Важливо:
+- `branch` — необов'язково, за замовчуванням `main`.
+- `modules` — необов'язково; якщо не вказано, встановляться всі модулі з репозиторію.
+- Якщо ви вказуєте конкретний список `modules`, додавайте `LME.Shared`, бо інші модулі підключають спільні файли через `syntaxPaths`.
 
-modules - optional, if not specified, all modules from the repository will be installed
+### Налаштування в `init.conf`
 
-## Init support
+Ключ має збігатися з назвою модуля (`LME.XXX`), а не з назвою провайдера.
 
-> **Note:** The key in `init.conf` must match the module name (`LME.XXX`), **not** the provider name.
-> For example, for Uaflix, use `“LME.Uaflix”`, not `“Uaflix”`.
+Приклад для `LME.Uaflix`:
 
 ```json
 "LME.Uaflix": {
-    "enable": true,
-    "domain": "https://uaflix.net",
-    "displayname": "Uaflix",
-    "login": null,
-    "passwd": null,
-    "cookie": null,
-    "webcorshost": null,
-    "streamproxy": false,
-    "useproxy": false,
-    "proxy": {
-      "useAuth": true,
-      "username": "FooBAR",
-      "password": "Strong_password",
-      "list": [
-        "socks5://adress:port"
-      ]
-    },
-    "displayindex": 1,
-    "magic_apn": {
-      "ashdi": "https://tut.im/proxy.php?url={encodeurl}"
-    }
+  "enable": true,
+  "domain": "https://uaflix.net",
+  "displayname": "Uaflix",
+  "login": null,
+  "passwd": null,
+  "cookie": null,
+  "webcorshost": null,
+  "streamproxy": false,
+  "useproxy": false,
+  "proxy": {
+    "useAuth": true,
+    "username": "FooBAR",
+    "password": "Strong_password",
+    "list": [
+      "socks5://adress:port"
+    ]
+  },
+  "displayindex": 1,
+  "magic_apn": {
+    "ashdi": "https://tut.im/proxy.php?url={encodeurl}"
   }
+}
 ```
 
-Parameter compatibility:
-- `webcorshost` + `useproxy`: work together (parsing via CORS host, and network output can go through a proxy with `useproxy`).
-- `webcorshost` does not conflict with `streamproxy`: CORS is used for parsing, `streamproxy` is used for streaming.
-- `magic_apn.ashdi` is used only for Ashdi links and only when the value is not empty.
-- `webcorshost` does not conflict with `magic_apn`: CORS is used for parsing, while `magic_apn` is used for Ashdi streaming.
+Сумісність параметрів:
+- `webcorshost` + `useproxy`: працюють разом (парсинг через CORS-хост, мережевий вихід може йти через проксі).
+- `webcorshost` + `streamproxy`: не конфліктують (CORS для парсингу, `streamproxy` для потоків).
+- `magic_apn.ashdi` використовується лише для Ashdi-посилань і лише коли значення не порожнє.
+- `webcorshost` + `magic_apn`: не конфліктують.
 
-## JackTor config example (`init.conf`)
+### Приклад конфігурації `LME.JackTor`
 
 ```json
 "LME.JackTor": {
@@ -159,19 +170,98 @@ Parameter compatibility:
 }
 ```
 
-Key parameters at a glance:
-- `jackett` + `apikey`: your Jackett host and API key.
-- `min_sid` / `min_peers` / `max_size` / `max_serial_size`: base torrent filters.
-- `quality_allow`, `hdr_mode`, `codec_allow`, `audio_pref`: quality/codec/language prioritization.
-- `torrs`, `auth_torrs`, `base_auth`: TorrServer nodes used for playback.
-- `filter` / `filter_ignore`: regex filters for release title and voice labels.
+Ключові параметри:
+- `jackett` + `apikey`: хост Jackett та API-ключ.
+- `min_sid` / `min_peers` / `max_size` / `max_serial_size`: базові фільтри торрентів.
+- `quality_allow`, `hdr_mode`, `codec_allow`, `audio_pref`: пріоритезація якості, кодека та мов.
+- `torrs`, `auth_torrs`, `base_auth`: вузли TorrServer для відтворення.
+- `filter` / `filter_ignore`: regex-фільтри для релізів та озвучок.
 
-## Source/player availability check script
+### Скрипт перевірки доступності джерел
 
 ```bash
 wget -O check.sh https://raw.githubusercontent.com/lampame/lampac-ukraine/main/check.sh && sh check.sh
 ```
 
-## Donate
+### Підтримка
+
+Підтримати автора: https://lampame.donatik.me
+
+---
+
+## <a id="en"></a>English
+
+### Available modules
+
+**TV shows and movies**
+- `LME.Uaflix`
+- `LME.Makhno`
+- `LME.StarLight`
+- `LME.KlonFUN`
+- `LME.UafilmME`
+- `LME.JackTor`
+
+**Anime and dorama**
+- `LME.AnimeON`
+- `LME.Bamboo`
+- `LME.Unimay`
+- `LME.Mikai`
+- `LME.NMoonAnime`
+
+### Manual installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/lampame/lampac-ukraine.git .
+```
+
+2. Copy required module folders into Lampac `module` directory.
+
+3. Docker mount example:
+```bash
+-v /path/to/lampac-ukraine/LME.Uaflix:/lampac/module/LME.Uaflix
+```
+
+### Auto installation via `repository.yaml`
+
+Requires Lampac `148.1+`.
+
+Create or update `module/repository.yaml`:
+
+```yaml
+- repository: https://github.com/lampame/lampac-ukraine
+  branch: main
+  modules:
+    - LME.Shared
+    - LME.AnimeON
+    - LME.Unimay
+    - LME.Mikai
+    - LME.NMoonAnime
+    - LME.Uaflix
+    - LME.Bamboo
+    - LME.Makhno
+    - LME.StarLight
+    - LME.KlonFUN
+    - LME.UafilmME
+    - LME.JackTor
+```
+
+Notes:
+- `branch` is optional, default is `main`.
+- `modules` is optional; if omitted, all repository modules are installed.
+- If you specify an explicit module list, include `LME.Shared` because other modules use shared files through `syntaxPaths`.
+
+### `init.conf` key rule
+
+Use module name (`LME.XXX`) as a key, not provider name.
+Example: `LME.Uaflix` instead of `Uaflix`.
+
+### Source/player availability check script
+
+```bash
+wget -O check.sh https://raw.githubusercontent.com/lampame/lampac-ukraine/main/check.sh && sh check.sh
+```
+
+### Support
 
 Support the author: https://lampame.donatik.me

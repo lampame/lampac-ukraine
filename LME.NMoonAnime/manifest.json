@@ -2,5 +2,11 @@
   "enable": true,
   "version": 3,
   "initspace": "LME.NMoonAnime.ModInit",
-  "online": "LME.NMoonAnime.OnlineApi"
+  "online": "LME.NMoonAnime.OnlineApi",
+  "syntaxPaths": [
+    "../LME.Shared/GlobalUsings.cs",
+    "../LME.Shared/Online/OnlineRegistry.cs",
+    "../LME.Shared/Update/ModuleUpdateService.cs",
+    "../LME.Shared/Apn/ApnHelper.cs"
+  ]
 }

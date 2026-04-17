@@ -17,12 +17,24 @@ namespace Shared.Engine
             if (conf == null)
                 return false;
 
-            if (!conf.TryGetValue("apn", out var apnToken) || apnToken?.Type != JTokenType.Boolean)
+            if (!conf.TryGetValue("apn", out var apnToken) || apnToken == null)
                 return false;
 
-            enabled = apnToken.Value<bool>();
-            host = conf.Value<string>("apn_host");
-            return true;
+            if (apnToken.Type == JTokenType.Boolean)
+            {
+                enabled = apnToken.Value<bool>();
+                host = NormalizeHost(conf.Value<string>("apn_host"));
+                return true;
+            }
+
+            if (apnToken.Type == JTokenType.String)
+            {
+                host = NormalizeHost(apnToken.Value<string>());
+                enabled = host != null;
+                return true;
+            }
+
+            return false;
         }
 
         public static string TryGetMagicAshdiHost(JObject conf)
@@ -42,7 +54,7 @@ namespace Shared.Engine
             return NormalizeHost(((JObject)magicToken).Value<string>("ashdi"));
         }
 
-        public static void ApplyInitConf(bool enabled, string host, BaseSettings init)
+        public static void ApplyInitConf(bool enabled, string host, BaseSettings init, bool useDefaultHostWhenEmpty = false)
         {
             if (init == null)
                 return;
@@ -55,6 +67,9 @@ namespace Shared.Engine
             }
 
             host = NormalizeHost(host);
+            if (host == null && useDefaultHostWhenEmpty)
+                host = DefaultHost;
+
             if (host == null)
             {
                 init.apnstream = false;
@@ -76,8 +91,8 @@ namespace Shared.Engine
 
         public static bool IsAshdiUrl(string url)
         {
-            return !string.IsNullOrEmpty(url)
-                && url.IndexOf("ashdi.vip", StringComparison.OrdinalIgnoreCase) >= 0;
+            return !string.IsNullOrEmpty(url) &&
+                   url.IndexOf("ashdi.vip", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         public static string WrapUrl(BaseSettings init, string url)
