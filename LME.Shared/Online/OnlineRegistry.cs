@@ -1,7 +1,7 @@
 using Shared;
 using System;
 
-namespace LME.Shared.Online
+namespace LME.Common.Online
 {
     public static class OnlineRegistry
     {

@@ -10,7 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace LME.Shared.Update
+namespace LME.Common.Update
 {
     public sealed class ModuleUpdateService
     {
