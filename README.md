@@ -97,7 +97,7 @@ git clone https://github.com/lampame/lampac-ukraine.git .
   },
   "displayindex": 1,
   "magic_apn": {
-    "ashdi": "https://tut.im/proxy.php?url={encodeurl}"
+    "ashdi": "https://proxy.com/proxy.php?url={encodeurl}"
   }
 }
 ```
@@ -105,8 +105,35 @@ git clone https://github.com/lampame/lampac-ukraine.git .
 Сумісність параметрів:
 - `webcorshost` + `useproxy`: працюють разом (парсинг через CORS-хост, мережевий вихід може йти через проксі).
 - `webcorshost` + `streamproxy`: не конфліктують (CORS для парсингу, `streamproxy` для потоків).
+- `apn` + `apn_host`: звичайний APN для всіх стрім-посилань модуля.
 - `magic_apn.ashdi` використовується лише для Ashdi-посилань і лише коли значення не порожнє.
 - `webcorshost` + `magic_apn`: не конфліктують.
+
+### Звичайний APN (`apn`)
+
+Підтримувані формати в `init.conf`:
+
+```json
+"LME.UafilmME": {
+  "enable": true,
+  "apn": true,
+  "apn_host": "https://proxy.com/proxy.php?url={encodeurl}"
+}
+```
+
+Альтернатива коротким записом:
+
+```json
+"LME.UafilmME": {
+  "enable": true,
+  "apn": "https://proxy.com/proxy.php?url={encodeurl}"
+}
+```
+
+Нотатки:
+- Якщо `apn: false`, APN вимикається.
+- Якщо `apn: true`, береться `apn_host` (для `Bamboo`, `NMoonAnime`, `StarLight`, `UafilmME` за порожнього `apn_host` підставляється дефолтний хост).
+- Якщо задані і `apn`, і `magic_apn`, вони можуть працювати разом: `magic_apn` втручається тільки для Ashdi-посилань.
 
 ### Приклад конфігурації `LME.JackTor`
 
@@ -255,6 +282,67 @@ Notes:
 
 Use module name (`LME.XXX`) as a key, not provider name.
 Example: `LME.Uaflix` instead of `Uaflix`.
+
+Example for `LME.Uaflix`:
+
+```json
+"LME.Uaflix": {
+  "enable": true,
+  "domain": "https://uaflix.net",
+  "displayname": "Uaflix",
+  "login": null,
+  "passwd": null,
+  "cookie": null,
+  "webcorshost": null,
+  "streamproxy": false,
+  "useproxy": false,
+  "proxy": {
+    "useAuth": true,
+    "username": "FooBAR",
+    "password": "Strong_password",
+    "list": [
+      "socks5://adress:port"
+    ]
+  },
+  "displayindex": 1,
+  "magic_apn": {
+    "ashdi": "https://proxy.com/proxy.php?url={encodeurl}"
+  }
+}
+```
+
+Parameter compatibility:
+- `webcorshost` + `useproxy`: can be used together.
+- `webcorshost` + `streamproxy`: no conflict.
+- `apn` + `apn_host`: regular APN for all stream links in the module.
+- `magic_apn.ashdi` is used only for Ashdi links and only when non-empty.
+- `webcorshost` + `magic_apn`: no conflict.
+
+### Regular APN (`apn`)
+
+Supported formats in `init.conf`:
+
+```json
+"LME.UafilmME": {
+  "enable": true,
+  "apn": true,
+  "apn_host": "https://proxy.com/proxy.php?url={encodeurl}"
+}
+```
+
+Short form:
+
+```json
+"LME.UafilmME": {
+  "enable": true,
+  "apn": "https://proxy.com/proxy.php?url={encodeurl}"
+}
+```
+
+Notes:
+- If `apn: false`, APN is disabled.
+- If `apn: true`, `apn_host` is used (for `Bamboo`, `NMoonAnime`, `StarLight`, `UafilmME`, default host is used when `apn_host` is empty).
+- If both `apn` and `magic_apn` are set, they can work together: `magic_apn` applies only to Ashdi links.
 
 ### Source/player availability check script
 
