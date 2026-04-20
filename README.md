@@ -353,3 +353,5 @@ wget -O check.sh https://raw.githubusercontent.com/lampame/lampac-ukraine/main/c
 ### Support
 
 Support the author: https://lampame.donatik.me
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lampame/lampac-ukraine)
