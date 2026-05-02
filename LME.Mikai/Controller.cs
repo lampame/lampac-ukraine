@@ -185,8 +185,7 @@ namespace LME.Mikai.Controllers
                             }
                         }
 
-                            continue;
-                        }
+                        continue;
                     }
 
                     string callUrl = $"{host}/lite/lme_mikai/play?url={HttpUtility.UrlEncode(episode.Url)}&title={HttpUtility.UrlEncode(displayTitle)}";
