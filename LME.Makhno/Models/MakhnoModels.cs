@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Shared.Models.Templates;
 
 namespace LME.Makhno.Models
 {
@@ -9,6 +10,7 @@ namespace LME.Makhno.Models
         public List<Voice> Voices { get; set; }
         public List<Season> Seasons { get; set; }
         public List<MovieVariant> Movies { get; set; }
+        public SubtitleTpl Subtitles { get; set; }
     }
 
     public class Voice
@@ -30,6 +32,7 @@ namespace LME.Makhno.Models
         public string Id { get; set; }
         public string Poster { get; set; }
         public string Subtitle { get; set; }
+        public SubtitleTpl Subtitles { get; set; }
     }
 
     public class MovieVariant
@@ -37,5 +40,6 @@ namespace LME.Makhno.Models
         public string Title { get; set; }
         public string File { get; set; }
         public string Quality { get; set; }
+        public SubtitleTpl Subtitles { get; set; }
     }
 }

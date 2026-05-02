@@ -206,7 +206,8 @@ namespace LME.KlonFUN
                         streams.Add(new MovieStream
                         {
                             Title = voiceTitle,
-                            Link = link
+                            Link = link,
+                            Subtitles = ApnHelper.ParseSubtitles(item.Value<string>("subtitle"))
                         });
 
                         index++;
@@ -221,7 +222,8 @@ namespace LME.KlonFUN
                         streams.Add(new MovieStream
                         {
                             Title = FormatMovieTitle("Основне джерело", directMatch.Groups["url"].Value, 1),
-                            Link = directMatch.Groups["url"].Value
+                            Link = directMatch.Groups["url"].Value,
+                            Subtitles = ApnHelper.ParseSubtitles(ApnHelper.ExtractPlayerSubtitle(playerHtml))
                         });
                     }
                 }
@@ -310,7 +312,8 @@ namespace LME.KlonFUN
                             {
                                 Number = episodeNumber,
                                 Title = string.IsNullOrWhiteSpace(episodeTitle) ? $"Серія {episodeNumber}" : episodeTitle,
-                                Link = link
+                                Link = link,
+                                Subtitles = ApnHelper.ParseSubtitles(episodeObj.Value<string>("subtitle"))
                             });
 
                             episodeFallback++;

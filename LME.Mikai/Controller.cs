@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Web;
 using Microsoft.AspNetCore.Mvc;
@@ -177,10 +178,13 @@ namespace LME.Mikai.Controllers
                         {
                             foreach (var ashdiStream in ashdiStreams)
                             {
-                                string optionName = $"{voice.DisplayName} {ashdiStream.title}";
-                                string ashdiCallUrl = $"{host}/lite/lme_mikai/play?url={HttpUtility.UrlEncode(ashdiStream.link)}&title={HttpUtility.UrlEncode(displayTitle)}";
+                                string optionName = $"{voice.DisplayName} {ashdiStream.Title}";
+                                string subtitlesParam = ashdiStream.Subtitles != null ? $"&subtitles={HttpUtility.UrlEncode(JsonSerializer.Serialize(ashdiStream.Subtitles.ToObject()))}" : string.Empty;
+                                string ashdiCallUrl = $"{host}/lite/lme_mikai/play?url={HttpUtility.UrlEncode(ashdiStream.Link)}&title={HttpUtility.UrlEncode(displayTitle)}{subtitlesParam}";
                                 movieTpl.Append(optionName, accsArgs(ashdiCallUrl), "call");
                             }
+                        }
+
                             continue;
                         }
                     }
@@ -204,7 +208,7 @@ namespace LME.Mikai.Controllers
         }
 
         [HttpGet("lite/lme_mikai/play")]
-        public async Task<ActionResult> Play(string url, string title = null, int serial = 0)
+        public async Task<ActionResult> Play(string url, string title = null, int serial = 0, string subtitles = null)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -235,9 +239,24 @@ namespace LME.Mikai.Controllers
                 forceProxy = true;
             }
 
+            SubtitleTpl subtitleTpl = null;
+            if (!string.IsNullOrEmpty(subtitles))
+            {
+                try
+                {
+                    var subtitleDtos = JsonSerializer.Deserialize<List<SubtitleDto>>(subtitles);
+                    if (subtitleDtos != null && subtitleDtos.Count > 0)
+                    {
+                        subtitleTpl = new SubtitleTpl(subtitleDtos.Count);
+                        foreach (var sub in subtitleDtos)
+                            subtitleTpl.Append(sub.label, sub.url);
+                    }
+                }
+                catch { }
+            }
+
             string streamUrl = BuildStreamUrl(init, streamLink, streamHeaders, forceProxy);
-            string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? string.Empty}\"}}";
-            return UpdateService.Validate(Content(jsonResult, "application/json; charset=utf-8"));
+            return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, title ?? string.Empty, subtitles: subtitleTpl), "application/json; charset=utf-8"));
         }
 
         private async Task<List<MikaiAnime>> CollectSeasonDetails(MikaiAnime details, MikaiInvoke invoke)

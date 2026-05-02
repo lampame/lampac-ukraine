@@ -114,18 +114,22 @@ namespace LME.Makhno
                 {
                     string file = fileMatch.Groups[1].Value;
                     var posterMatch = Regex.Match(html, @"poster:[""']([^""']+)[""']", RegexOptions.IgnoreCase);
+                    var subtitles = ApnHelper.ParseSubtitles(ApnHelper.ExtractPlayerSubtitle(html));
+
                     return new PlayerData
                     {
                         File = file,
                         Poster = posterMatch.Success ? posterMatch.Groups[1].Value : null,
                         Voices = new List<Voice>(),
+                        Subtitles = subtitles,
                         Movies = new List<MovieVariant>()
                         {
                             new MovieVariant
                             {
                                 File = file,
                                 Quality = DetectQualityTag(file) ?? "auto",
-                                Title = BuildMovieTitle("Основне джерело", file, 1)
+                                Title = BuildMovieTitle("Основне джерело", file, 1),
+                                Subtitles = subtitles
                             }
                         }
                     };
@@ -238,7 +242,8 @@ namespace LME.Makhno
                                         Title = episode["title"]?.ToString(),
                                         File = episode["file"]?.ToString(),
                                         Poster = episode["poster"]?.ToString(),
-                                        Subtitle = episode["subtitle"]?.ToString()
+                                        Subtitle = episode["subtitle"]?.ToString(),
+                                        Subtitles = ApnHelper.ParseSubtitles(episode["subtitle"]?.ToString())
                                     });
                                 }
                             }
@@ -289,7 +294,8 @@ namespace LME.Makhno
                     {
                         File = file,
                         Quality = DetectQualityTag($"{rawTitle} {file}") ?? "auto",
-                        Title = BuildMovieTitle(rawTitle, file, index)
+                        Title = BuildMovieTitle(rawTitle, file, index),
+                        Subtitles = ApnHelper.ParseSubtitles(item["subtitle"]?.ToString())
                     });
                     index++;
                 }

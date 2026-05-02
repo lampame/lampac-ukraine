@@ -107,7 +107,7 @@ namespace LME.Makhno
                     if (play)
                         return UpdateService.Validate(Redirect(streamUrl));
 
-                    return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, episodeTitle), "application/json; charset=utf-8"));
+                    return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, episodeTitle, subtitles: episode.Subtitles), "application/json; charset=utf-8"));
                 }
             }
 
@@ -150,7 +150,7 @@ namespace LME.Makhno
             if (play)
                 return UpdateService.Validate(Redirect(streamUrl));
 
-            return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, title ?? original_title), "application/json; charset=utf-8"));
+            return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, title ?? original_title, subtitles: playerData.Subtitles ?? playerData.Movies?.FirstOrDefault(m => m.File == playerData.File)?.Subtitles), "application/json; charset=utf-8"));
         }
 
         private async Task<ActionResult> HandleMovie(string playUrl, string imdb_id, string title, string original_title, int year, bool rjson, MakhnoInvoke invoke)
@@ -171,7 +171,8 @@ namespace LME.Makhno
                 {
                     File = playerData.File,
                     Title = "Основне джерело",
-                    Quality = "auto"
+                    Quality = "auto",
+                    Subtitles = playerData.Subtitles
                 });
             }
 
@@ -189,7 +190,7 @@ namespace LME.Makhno
                     ? stream.Title
                     : $"Варіант {index}";
 
-                tpl.Append(label, BuildStreamUrl(init, stream.File));
+                tpl.Append(label, BuildStreamUrl(init, stream.File), subtitles: stream.Subtitles);
                 index++;
             }
 
@@ -390,13 +391,15 @@ namespace LME.Makhno
                         if (!string.IsNullOrEmpty(episode.File))
                         {
                             string streamUrl = BuildStreamUrl(init, episode.File);
-                            episode_tpl.Append(
-                                episode.Title,
-                                title ?? original_title,
-                                requestedSeason.ToString(),
-                                (i + 1).ToString("D2"),
-                                streamUrl
-                            );
+                                episode_tpl.Append(
+                                    episode.Title,
+                                    title ?? original_title,
+                                    requestedSeason.ToString(),
+                                    (i + 1).ToString("D2"),
+                                    streamUrl,
+                                    subtitles: episode.Subtitles
+                                );
+
                         }
                     }
                 }

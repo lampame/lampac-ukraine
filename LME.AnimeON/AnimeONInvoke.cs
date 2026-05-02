@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Shared;
 using Shared.Models.Online.Settings;
 using Shared.Models;
+using Shared.Models.Templates;
 using System.Text.Json;
 using System.Linq;
 using System.Text;
@@ -14,6 +15,13 @@ using Shared.Engine;
 
 namespace LME.AnimeON
 {
+    public class AshdiStream
+    {
+        public string Title { get; set; }
+        public string Link { get; set; }
+        public SubtitleTpl Subtitles { get; set; }
+    }
+
     public class AnimeONInvoke
     {
         private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase);
@@ -192,12 +200,12 @@ namespace LME.AnimeON
         public async Task<string> ParseAshdiPage(string url, bool disableAshdiMultivoiceForVod = false)
         {
             var streams = await ParseAshdiPageStreams(url, disableAshdiMultivoiceForVod);
-            return streams?.FirstOrDefault().link;
+            return streams?.FirstOrDefault()?.Link;
         }
 
-        public async Task<List<(string title, string link)>> ParseAshdiPageStreams(string url, bool disableAshdiMultivoiceForVod = false)
+        public async Task<List<AshdiStream>> ParseAshdiPageStreams(string url, bool disableAshdiMultivoiceForVod = false)
         {
-            var streams = new List<(string title, string link)>();
+            var streams = new List<AshdiStream>();
             try
             {
                 var headers = new List<HeadersModel>()
@@ -234,7 +242,12 @@ namespace LME.AnimeON
                                 continue;
 
                             string rawTitle = item.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : null;
-                            streams.Add((BuildDisplayTitle(rawTitle, file, index), file));
+                            streams.Add(new AshdiStream
+                            {
+                                Title = BuildDisplayTitle(rawTitle, file, index),
+                                Link = file,
+                                Subtitles = ApnHelper.ParseSubtitles(item.TryGetProperty("subtitle", out var subtitleProp) ? subtitleProp.GetString() : null)
+                            });
                             index++;
                         }
 
@@ -247,7 +260,12 @@ namespace LME.AnimeON
                 if (match.Success)
                 {
                     string file = match.Groups[1].Value;
-                    streams.Add((BuildDisplayTitle("Основне джерело", file, 1), file));
+                    streams.Add(new AshdiStream
+                    {
+                        Title = BuildDisplayTitle("Основне джерело", file, 1),
+                        Link = file,
+                        Subtitles = ApnHelper.ParseSubtitles(ApnHelper.ExtractPlayerSubtitle(html))
+                    });
                 }
             }
             catch (Exception ex)

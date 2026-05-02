@@ -166,7 +166,7 @@ namespace LME.KlonFUN.Controllers
                         : $"Серія {episode.Number}";
 
                     string streamUrl = BuildStreamUrl(init, episode.Link);
-                    episodeTpl.Append(episodeTitle, contentTitle, s.ToString(), episode.Number.ToString("D2"), streamUrl);
+                    episodeTpl.Append(episodeTitle, contentTitle, s.ToString(), episode.Number.ToString("D2"), streamUrl, subtitles: episode.Subtitles);
                 }
 
                 episodeTpl.Append(voiceTpl);
@@ -190,7 +190,7 @@ namespace LME.KlonFUN.Controllers
                         : $"Варіант {i + 1}";
 
                     string streamUrl = BuildStreamUrl(init, stream.Link);
-                    movieTpl.Append(label, streamUrl);
+                    movieTpl.Append(label, streamUrl, subtitles: stream.Subtitles);
                 }
 
                 return rjson

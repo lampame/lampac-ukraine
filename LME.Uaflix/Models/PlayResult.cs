@@ -15,5 +15,6 @@ namespace LME.Uaflix.Models
         public string link { get; set; }
         public string quality { get; set; }
         public string title { get; set; }
+        public SubtitleTpl? subtitles { get; set; }
     }
 }

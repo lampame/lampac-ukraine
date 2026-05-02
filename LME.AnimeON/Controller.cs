@@ -247,14 +247,17 @@ namespace LME.AnimeON.Controllers
                         if (streamLink.Contains("ashdi.vip/vod", StringComparison.OrdinalIgnoreCase))
                         {
                             var ashdiStreams = await invoke.ParseAshdiPageStreams(streamLink);
-                            if (ashdiStreams != null && ashdiStreams.Count > 0)
+                        if (ashdiStreams != null && ashdiStreams.Count > 0)
+                        {
+                            foreach (var ashdiStream in ashdiStreams)
                             {
-                                foreach (var ashdiStream in ashdiStreams)
-                                {
-                                    string optionName = $"{translationName} {ashdiStream.title}";
-                                    string callUrl = $"{host}/lite/lme_animeon/play?url={HttpUtility.UrlEncode(ashdiStream.link)}";
-                                    tpl.Append(optionName, accsArgs(callUrl), "call");
-                                }
+                                string optionName = $"{translationName} {ashdiStream.Title}";
+                                string subtitlesParam = ashdiStream.Subtitles != null ? $"&subtitles={HttpUtility.UrlEncode(JsonSerializer.Serialize(ashdiStream.Subtitles.ToObject()))}" : string.Empty;
+                                string callUrl = $"{host}/lite/lme_animeon/play?url={HttpUtility.UrlEncode(ashdiStream.Link)}{subtitlesParam}";
+                                movieTpl.Append(optionName, accsArgs(callUrl), "call");
+                            }
+                        }
+
                                 continue;
                             }
                         }
@@ -375,7 +378,7 @@ namespace LME.AnimeON.Controllers
         }
 
         [HttpGet("lite/lme_animeon/play")]
-        public async Task<ActionResult> Play(string url, int episode_id = 0, string title = null, int serial = 0)
+        public async Task<ActionResult> Play(string url, int episode_id = 0, string title = null, int serial = 0, string subtitles = null)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -421,10 +424,25 @@ namespace LME.AnimeON.Controllers
                 forceProxy = true;
             }
 
+            SubtitleTpl subtitleTpl = null;
+            if (!string.IsNullOrEmpty(subtitles))
+            {
+                try
+                {
+                    var subtitleDtos = JsonSerializer.Deserialize<List<SubtitleDto>>(subtitles);
+                    if (subtitleDtos != null && subtitleDtos.Count > 0)
+                    {
+                        subtitleTpl = new SubtitleTpl(subtitleDtos.Count);
+                        foreach (var sub in subtitleDtos)
+                            subtitleTpl.Append(sub.label, sub.url);
+                    }
+                }
+                catch { }
+            }
+
             string streamUrl = BuildStreamUrl(init, streamLink, streamHeaders, forceProxy);
-            string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? string.Empty}\"}}";
             OnLog("AnimeON Play: return call JSON");
-            return UpdateService.Validate(Content(jsonResult, "application/json; charset=utf-8"));
+            return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, title ?? string.Empty, subtitles: subtitleTpl), "application/json; charset=utf-8"));
         }
 
         private static string StripLampacArgs(string url)

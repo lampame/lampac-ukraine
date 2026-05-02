@@ -582,7 +582,8 @@ namespace LME.Uaflix
                             {
                                 link = fileUrl,
                                 quality = DetectQualityTag($"{rawTitle} {fileUrl}") ?? "auto",
-                                title = BuildDisplayTitle(rawTitle, fileUrl, index)
+                                title = BuildDisplayTitle(rawTitle, fileUrl, index),
+                                subtitles = ApnHelper.ParseSubtitles(item?["subtitle"]?.ToString())
                             });
                             index++;
                         }
@@ -605,7 +606,8 @@ namespace LME.Uaflix
                 {
                     link = fallbackFile,
                     quality = DetectQualityTag(fallbackFile) ?? "auto",
-                    title = BuildDisplayTitle(ExtractVoiceFromUrl(fallbackFile), fallbackFile, 1)
+                    title = BuildDisplayTitle(ExtractVoiceFromUrl(fallbackFile), fallbackFile, 1),
+                    subtitles = ApnHelper.ParseSubtitles(ApnHelper.ExtractPlayerSubtitle(html))
                 });
 
                 return result;
@@ -2050,19 +2052,7 @@ namespace LME.Uaflix
             string url = $"https://ashdi.vip/vod/{id}";
             var html = await GetHtml(AshdiRequestUrl(url), new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", "https://ashdi.vip/") });
             string subtitle = new Regex("subtitle(\")?:\"([^\"]+)\"").Match(html).Groups[2].Value;
-            if (!string.IsNullOrEmpty(subtitle))
-            {
-                var match = new Regex("\\[([^\\]]+)\\](https?://[^\\,]+)").Match(subtitle);
-                var st = new Shared.Models.Templates.SubtitleTpl();
-                while (match.Success)
-                {
-                    st.Append(match.Groups[1].Value, match.Groups[2].Value);
-                    match = match.NextMatch();
-                }
-                if (st.data != null && st.data.Count > 0)
-                    return st;
-            }
-            return null;
+            return ApnHelper.ParseSubtitles(subtitle);
         }
 
         private static string WithAshdiMultivoice(string url)

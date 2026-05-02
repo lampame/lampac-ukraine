@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Shared.Models.Templates;
 
 namespace LME.KlonFUN.Models
 {
@@ -47,6 +48,7 @@ namespace LME.KlonFUN.Models
     {
         public string Title { get; set; }
         public string Link { get; set; }
+        public SubtitleTpl Subtitles { get; set; }
     }
 
     public class SerialEpisode
@@ -54,6 +56,7 @@ namespace LME.KlonFUN.Models
         public int Number { get; set; }
         public string Title { get; set; }
         public string Link { get; set; }
+        public SubtitleTpl Subtitles { get; set; }
     }
 
     public class SerialVoice

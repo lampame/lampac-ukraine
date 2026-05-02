@@ -104,9 +104,10 @@ namespace LME.Uaflix.Controllers
                 {
                     // Повертаємо JSON з інформацією про стрім для методу 'play'
                     string streamUrl = BuildStreamUrl(init, playResult.streams.First().link);
-                    string jsonResult = $"{{\"method\":\"play\",\"url\":\"{streamUrl}\",\"title\":\"{title ?? original_title}\"}}";
+                    var subtitles = playResult.subtitles ?? playResult.streams.FirstOrDefault(s => s.subtitles != null)?.subtitles;
+                    
                     OnLog($"=== RETURN: call method JSON for episode_url ===");
-                    return UpdateService.Validate(Content(jsonResult, "application/json; charset=utf-8"));
+                    return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, title ?? original_title, subtitles: subtitles), "application/json; charset=utf-8"));
                 }
 
                 OnLog("=== RETURN: call method no streams ===");
@@ -284,7 +285,8 @@ namespace LME.Uaflix.Controllers
                                 e: ep.Number.ToString(),
                                 link: accsArgs(callUrl),
                                 method: "call",
-                                streamlink: accsArgs($"{callUrl}&play=true")
+                                streamlink: accsArgs($"{callUrl}&play=true"),
+                                subtitles: ApnHelper.ParseSubtitles(ep.Subtitle)
                             );
                         }
                         else
@@ -296,7 +298,8 @@ namespace LME.Uaflix.Controllers
                                 title: title,
                                 s: s.ToString(),
                                 e: ep.Number.ToString(),
-                                link: playUrl
+                                link: playUrl,
+                                subtitles: ApnHelper.ParseSubtitles(ep.Subtitle)
                             );
                         }
 
@@ -351,7 +354,7 @@ namespace LME.Uaflix.Controllers
                         ? stream.title
                         : $"Варіант {index}";
 
-                    tpl.Append(label, BuildStreamUrl(init, stream.link));
+                    tpl.Append(label, BuildStreamUrl(init, stream.link), subtitles: stream.subtitles ?? playResult.subtitles);
                     index++;
                 }
 

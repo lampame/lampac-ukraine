@@ -1,6 +1,9 @@
 using Newtonsoft.Json.Linq;
 using Shared.Models.Base;
+using Shared.Models.Templates;
 using System;
+using System.Net;
+using System.Text.RegularExpressions;
 using System.Web;
 
 namespace Shared.Engine
@@ -8,6 +11,8 @@ namespace Shared.Engine
     public static class ApnHelper
     {
         public const string DefaultHost = "https://tut.im/proxy.php?url={encodeurl}";
+
+        private static readonly Regex SubtitleLineRegex = new Regex(@"\[([^\]]+)\]([^,]+)", RegexOptions.Compiled);
 
         public static bool TryGetInitConf(JObject conf, out bool enabled, out string host)
         {
@@ -118,6 +123,40 @@ namespace Shared.Engine
                 return host.Replace("{uri}", url);
 
             return $"{host.TrimEnd('/')}/{url}";
+        }
+
+        public static SubtitleTpl ParseSubtitles(string subtitleValue)
+        {
+            if (string.IsNullOrWhiteSpace(subtitleValue))
+                return null;
+
+            var subtitles = new SubtitleTpl();
+            string normalized = WebUtility.HtmlDecode(subtitleValue)
+                .Replace("\\/", "/")
+                .Replace("\\'", "'")
+                .Replace("\\\"", "\"");
+
+            foreach (Match match in SubtitleLineRegex.Matches(normalized))
+            {
+                string label = WebUtility.HtmlDecode(match.Groups[1].Value).Trim();
+                string url = WebUtility.HtmlDecode(match.Groups[2].Value).Trim();
+                if (!string.IsNullOrWhiteSpace(label) && !string.IsNullOrWhiteSpace(url))
+                    subtitles.Append(label, url);
+            }
+
+            return subtitles.IsEmpty ? null : subtitles;
+        }
+
+        public static string ExtractPlayerSubtitle(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+                return null;
+
+            var match = Regex.Match(html, @"subtitle\s*:\s*['""]([^'""']+)['""]", RegexOptions.IgnoreCase);
+            if (!match.Success)
+                match = Regex.Match(html, @"subtitle['""]?\s*:\s*['""]([^'""']+)['""]", RegexOptions.IgnoreCase);
+
+            return match.Success ? match.Groups[1].Value : null;
         }
 
         private static string NormalizeHost(string host)
