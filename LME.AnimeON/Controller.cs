@@ -247,19 +247,18 @@ namespace LME.AnimeON.Controllers
                         if (streamLink.Contains("ashdi.vip/vod", StringComparison.OrdinalIgnoreCase))
                         {
                             var ashdiStreams = await invoke.ParseAshdiPageStreams(streamLink);
-                        if (ashdiStreams != null && ashdiStreams.Count > 0)
-                        {
-                            foreach (var ashdiStream in ashdiStreams)
+                            if (ashdiStreams != null && ashdiStreams.Count > 0)
                             {
-                                string optionName = $"{translationName} {ashdiStream.Title}";
-                                string subtitlesParam = ashdiStream.Subtitles != null ? $"&subtitles={HttpUtility.UrlEncode(JsonSerializer.Serialize(ashdiStream.Subtitles.ToObject()))}" : string.Empty;
-                                string callUrl = $"{host}/lite/lme_animeon/play?url={HttpUtility.UrlEncode(ashdiStream.Link)}{subtitlesParam}";
-                                movieTpl.Append(optionName, accsArgs(callUrl), "call");
+                                foreach (var ashdiStream in ashdiStreams)
+                                {
+                                    string optionName = $"{translationName} {ashdiStream.Title}";
+                                    string subtitlesParam = ashdiStream.Subtitles != null ? $"&subtitles={HttpUtility.UrlEncode(JsonSerializer.Serialize(ashdiStream.Subtitles.ToObject()))}" : string.Empty;
+                                    string callUrl = $"{host}/lite/lme_animeon/play?url={HttpUtility.UrlEncode(ashdiStream.Link)}{subtitlesParam}";
+                                    tpl.Append(optionName, accsArgs(callUrl), "call");
+                                }
                             }
-                        }
 
-                                continue;
-                            }
+                            continue;
                         }
 
                         if (needsResolve || streamLink.Contains("moonanime.art/iframe/") || streamLink.Contains("ashdi.vip/vod"))
