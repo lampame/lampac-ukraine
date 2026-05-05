@@ -1,16 +1,12 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <OutputType>library</OutputType>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
-
   <ItemGroup>
     <Reference Include="Shared">
       <HintPath>..\..\Shared.dll</HintPath>
     </Reference>
-    <ProjectReference Include="..\LME.Shared\LME.Shared.csproj" />
   </ItemGroup>
-
 </Project>

@@ -10,6 +10,7 @@
     <Reference Include="Shared">  
       <HintPath>..\..\Shared.dll</HintPath>  
     </Reference>  
+    <ProjectReference Include="..\LME.Shared\LME.Shared.csproj" />
   </ItemGroup>  
   
 </Project>

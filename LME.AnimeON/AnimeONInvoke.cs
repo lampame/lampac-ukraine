@@ -6,11 +6,14 @@ using Shared.Models.Online.Settings;
 using Shared.Models;
 using Shared.Models.Templates;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Linq;
 using System.Text;
 using System.Net;
 using System.Text.RegularExpressions;
 using LME.AnimeON.Models;
+using LME.Shared;
+using LME.Shared.Models;
 using Shared.Engine;
 
 namespace LME.AnimeON
@@ -183,11 +186,12 @@ namespace LME.AnimeON
                 if (string.IsNullOrEmpty(html))
                     return null;
 
-                var match = System.Text.RegularExpressions.Regex.Match(html, @"file:\s*""([^""]+\.m3u8)""");
-                if (match.Success)
-                {
-                    return match.Groups[1].Value;
-                }
+                var payload = PlayerJsDecoder.ExtractPlayerPayload(html);
+                if (payload?.FilePayload == null)
+                    return null;
+
+                var streamUrls = ExtractStreamUrls(payload.FilePayload);
+                return streamUrls?.FirstOrDefault();
             }
             catch (Exception ex)
             {
@@ -195,6 +199,61 @@ namespace LME.AnimeON
             }
 
             return null;
+        }
+
+        private List<string> ExtractStreamUrls(object filePayload)
+        {
+            var urls = new List<string>();
+            if (filePayload == null)
+                return urls;
+
+            // Обробка string значення
+            if (filePayload is string strPayload)
+            {
+                urls.Add(strPayload);
+                return urls;
+            }
+
+            // Обробка JsonValue
+            if (filePayload is JsonValue jsonValue && jsonValue.TryGetValue<string>(out string strValue))
+            {
+                urls.Add(strValue);
+                return urls;
+            }
+
+            // Обробка JsonObject — витягти 'file' поле
+            if (filePayload is JsonObject objPayload)
+            {
+                if (objPayload.TryGetPropertyValue("file", out JsonNode fileNode))
+                {
+                    string fileStr = fileNode?.ToString();
+                    if (!string.IsNullOrEmpty(fileStr))
+                        urls.Add(fileStr);
+                }
+                return urls;
+            }
+
+            // Обробка JsonArray
+            if (filePayload is JsonArray arrayPayload)
+            {
+                foreach (var item in arrayPayload)
+                {
+                    if (item is JsonObject itemObj && itemObj.TryGetPropertyValue("file", out JsonNode fileProp))
+                    {
+                        string fileStr = fileProp?.ToString();
+                        if (!string.IsNullOrEmpty(fileStr))
+                            urls.Add(fileStr);
+                    }
+                    else if (item is JsonValue itemValue && itemValue.TryGetValue<string>(out string itemStr))
+                    {
+                        if (!string.IsNullOrEmpty(itemStr))
+                            urls.Add(itemStr);
+                    }
+                }
+                return urls;
+            }
+
+            return urls;
         }
 
         public async Task<string> ParseAshdiPage(string url, bool disableAshdiMultivoiceForVod = false)
