@@ -26,7 +26,7 @@ namespace LME.AnimeON
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 4.1;
+        public static double Version => 4.2;
 
         public static OnlinesSettings AnimeON;
         public static bool ApnHostProvided;

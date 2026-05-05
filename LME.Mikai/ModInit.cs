@@ -25,7 +25,7 @@ namespace LME.Mikai
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 4.1;
+        public static double Version => 4.2;
 
         public static OnlinesSettings Mikai;
         public static bool ApnHostProvided;
