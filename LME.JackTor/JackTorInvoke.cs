@@ -334,9 +334,12 @@ namespace LME.JackTor
                 if (!IsCodecAllowed(codec))
                     continue;
 
-                int extractedYear = ExtractYear(searchable);
-                if (year > 1900 && extractedYear > 1900 && Math.Abs(extractedYear - year) > yearTolerance)
-                    continue;
+                if (serial != 1)
+                {
+                    int extractedYear = ExtractYear(searchable);
+                    if (year > 1900 && extractedYear > 1900 && Math.Abs(extractedYear - year) > yearTolerance)
+                        continue;
+                }
 
                 int[] seasons = ParseSeasons(searchable);
                 bool serialHint = IsSerialHint(searchable);
