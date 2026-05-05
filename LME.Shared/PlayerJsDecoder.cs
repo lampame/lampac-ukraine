@@ -6,9 +6,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using LME.Common.Playerjs.Models;
 
-namespace LME.Common.Playerjs
+namespace Shared.Engine
 {
     public static class PlayerJsDecoder
     {
@@ -451,5 +450,12 @@ namespace LME.Common.Playerjs
 
             return text;
         }
+    }
+
+    public sealed class PlayerPayload
+    {
+        public string Title { get; set; }
+
+        public object FilePayload { get; set; }
     }
 }

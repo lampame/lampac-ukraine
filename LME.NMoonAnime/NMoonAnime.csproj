@@ -10,8 +10,6 @@
     <Reference Include="Shared">
       <HintPath>..\..\Shared.dll</HintPath>
     </Reference>
-    <Compile Include="..\LME.Shared\PlayerJsDecoder.cs" Link="Shared\PlayerJsDecoder.cs" />
-    <Compile Include="..\LME.Shared\Models\PlayerPayload.cs" Link="Shared\Models\PlayerPayload.cs" />
   </ItemGroup>
 
 </Project>
