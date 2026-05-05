@@ -95,9 +95,15 @@ namespace LME.JackTor.Controllers
                     var seasonTpl = new SeasonTpl(quality: quality);
                     foreach (int season in seasons)
                     {
+                        int seasonYear = torrents
+                            .Where(i => i.Seasons != null && i.Seasons.Contains(season) && i.ExtractedYear > 1900)
+                            .Select(i => i.ExtractedYear)
+                            .DefaultIfEmpty(year)
+                            .Min();
+
                         seasonTpl.Append(
                             $"{season} сезон",
-                            $"{host}/lite/lme_jacktor?rjson={rjson}&title={enTitle}&original_title={enOriginal}&year={year}&original_language={original_language}&serial=1&s={season}",
+                            $"{host}/lite/lme_jacktor?rjson={rjson}&title={enTitle}&original_title={enOriginal}&year={seasonYear}&original_language={original_language}&serial=1&s={season}",
                             season);
                     }
 
