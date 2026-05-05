@@ -7,7 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-namespace Shared.Engine
+namespace LME.Common.Playerjs
 {
     public static class PlayerJsDecoder
     {
