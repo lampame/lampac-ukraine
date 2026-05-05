@@ -12,8 +12,7 @@ using System.Text;
 using System.Net;
 using System.Text.RegularExpressions;
 using LME.AnimeON.Models;
-using LME.Shared;
-using LME.Shared.Models;
+using LME.Common.Playerjs;
 using Shared.Engine;
 
 namespace LME.AnimeON

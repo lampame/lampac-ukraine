@@ -6,9 +6,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using LME.Shared.Models;
+using LME.Common.Playerjs.Models;
 
-namespace LME.Shared
+namespace LME.Common.Playerjs
 {
     public static class PlayerJsDecoder
     {

@@ -1,4 +1,4 @@
-namespace LME.Shared.Models
+namespace LME.Common.Playerjs.Models
 {
     public sealed class PlayerPayload
     {

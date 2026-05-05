@@ -109,7 +109,7 @@ namespace LME.NMoonAnime.Controllers
             if (!streamQuality.Any())
                 return OnError("lme_nmoonanime", refresh_proxy: true);
 
-            var first = streamQuality.First();
+            var first = streamQuality.Firts();
             string json = VideoTpl.ToJson("play", first.link, title ?? string.Empty, streamquality: streamQuality);
             return UpdateService.Validate(Content(json, "application/json; charset=utf-8"));
         }
