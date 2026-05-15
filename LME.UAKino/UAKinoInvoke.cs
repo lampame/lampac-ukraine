@@ -237,7 +237,30 @@ namespace LME.UAKino
                     }
                 }
 
-                // Складний масив — не парсимо, повертаємо як є
+                // Складний масив — знаходимо file:'[' і витягуємо збалансований JSON
+                int arrayStart = FindAshdiJsonArray(html);
+                if (arrayStart >= 0)
+                {
+                    string jsonArray = ExtractBalancedBrackets(html, arrayStart);
+                    if (!string.IsNullOrEmpty(jsonArray))
+                    {
+                        try
+                        {
+                            using var arr = JsonDocument.Parse(jsonArray);
+                            if (arr.RootElement.ValueKind == JsonValueKind.Array && arr.RootElement.GetArrayLength() > 0)
+                            {
+                                string firstFile = arr.RootElement[0].GetProperty("file").GetString();
+                                if (!string.IsNullOrEmpty(firstFile))
+                                {
+                                    _onLog?.Invoke($"UAKino resolved Ashdi (array): {firstFile}");
+                                    return firstFile;
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
                 return vodUrl;
             }
             catch (Exception ex)
@@ -245,6 +268,73 @@ namespace LME.UAKino
                 _onLog?.Invoke($"UAKino resolve Ashdi error: {ex.Message}");
                 return vodUrl;
             }
+        }
+
+        /// <summary>
+        /// Знайти позицію JSON масиву `[{...}]` після `file:'`
+        /// </summary>
+        private static int FindAshdiJsonArray(string html)
+        {
+            int idx = html.IndexOf("file:'[", StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+                idx = html.IndexOf("file:\"[", StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+                return -1;
+
+            int bracket = html.IndexOf('[', idx);
+            return bracket;
+        }
+
+        /// <summary>
+        /// Витягнути збалансований вміст між [ ] з урахуванням вкладеності та рядків
+        /// </summary>
+        private static string ExtractBalancedBrackets(string text, int startIndex)
+        {
+            if (startIndex < 0 || startIndex >= text.Length || text[startIndex] != '[')
+                return null;
+
+            int depth = 0;
+            bool inString = false;
+            char quote = '\0';
+
+            for (int i = startIndex; i < text.Length; i++)
+            {
+                char ch = text[i];
+
+                if (inString)
+                {
+                    if (ch == '\\')
+                    {
+                        i++; // пропускаємо екранований символ
+                        continue;
+                    }
+                    if (ch == quote)
+                        inString = false;
+                    continue;
+                }
+
+                if (ch == '"' || ch == '\'')
+                {
+                    inString = true;
+                    quote = ch;
+                    continue;
+                }
+
+                if (ch == '[')
+                {
+                    depth++;
+                    continue;
+                }
+
+                if (ch == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                        return text.Substring(startIndex, i - startIndex + 1);
+                }
+            }
+
+            return null;
         }
 
         /// <summary>
