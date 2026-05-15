@@ -15,9 +15,10 @@ namespace LME.StreamData
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 1.0;
+        public static double Version => 1.5;
 
         public static OnlinesSettings StreamDataSettings;
+        public static bool ApnHostProvided;
 
         public static OnlinesSettings Settings
         {
@@ -52,7 +53,7 @@ namespace LME.StreamData
             StreamDataSettings = conf.ToObject<OnlinesSettings>();
             if (hasApn)
                 ApnHelper.ApplyInitConf(apnEnabled, apnHost, StreamDataSettings, useDefaultHostWhenEmpty: true);
-
+            ApnHostProvided = hasApn && apnEnabled && !string.IsNullOrWhiteSpace(apnHost);
             if (hasApn && apnEnabled)
             {
                 StreamDataSettings.streamproxy = false;
