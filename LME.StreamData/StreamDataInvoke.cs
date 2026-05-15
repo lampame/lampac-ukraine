@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System.Web;
 using LME.StreamData.Models;
 using Newtonsoft.Json;
 using Shared;
@@ -139,25 +138,6 @@ namespace LME.StreamData
                 return _httpHydra.Get(url, newheaders: headers);
 
             return Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
-        }
-
-        /// <summary>
-        /// Витягнути назву хоста з URL для відображення джерела
-        /// </summary>
-        public static string ExtractHostname(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return "невідомо";
-
-            try
-            {
-                var uri = new Uri(url);
-                return uri.Host;
-            }
-            catch
-            {
-                return "невідомо";
-            }
         }
 
         public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)

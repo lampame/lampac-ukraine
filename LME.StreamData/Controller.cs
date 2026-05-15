@@ -53,7 +53,7 @@ namespace LME.StreamData.Controllers
             // play — повернути стрім для конкретного епізоду (call метод)
             if (play)
             {
-                return await HandlePlay(invoke, init, id, s, e, title, original_title);
+                return await HandlePlay(invoke, init, id, s, e, title, original_title, t);
             }
 
             // Фільм
@@ -87,8 +87,7 @@ namespace LME.StreamData.Controllers
                 if (string.IsNullOrWhiteSpace(streamUrl))
                     continue;
 
-                string hostname = StreamDataInvoke.ExtractHostname(streamUrl);
-                string label = streamUrls.Count > 1 ? $"Джерело {index} ({hostname})" : hostname;
+                string label = $"Джерело #{index}";
                 string processedUrl = BuildStreamUrl(init, streamUrl);
                 tpl.Append(label, processedUrl, subtitles: subs);
                 index++;
@@ -104,7 +103,7 @@ namespace LME.StreamData.Controllers
         }
 
         /// <summary>
-        /// Обробка серіалу: eps структура → сезони → епізоди → play
+        /// Обробка серіалу: eps → сезони → епізоди з voice-вкладками (джерела)
         /// </summary>
         private async Task<ActionResult> HandleSerial(StreamDataInvoke invoke, OnlinesSettings init, long tmdbId, string title, string originalTitle, int s, int e, string t, bool rjson)
         {
@@ -122,10 +121,15 @@ namespace LME.StreamData.Controllers
             if (seasons.Count == 0)
                 return OnError("lme_streamdata", refresh_proxy: true);
 
-            // Якщо сезон не вибрано — показуємо список сезонів
+            // Кількість джерел (CDN) з першого запиту
+            var sources = response.data?.stream_urls?.Where(u => !string.IsNullOrWhiteSpace(u)).ToList() ?? new List<string>();
+            int sourceCount = Math.Max(1, sources.Count);
+
+            var displayTitle = !string.IsNullOrEmpty(title) ? title : (!string.IsNullOrEmpty(originalTitle) ? originalTitle : response.data.title);
+
+            // Список сезонів
             if (s <= 0)
             {
-                var displayTitle = !string.IsNullOrEmpty(title) ? title : (!string.IsNullOrEmpty(originalTitle) ? originalTitle : response.data.title);
                 var seasonTpl = new SeasonTpl(seasons.Count);
                 foreach (var season in seasons)
                 {
@@ -139,47 +143,52 @@ namespace LME.StreamData.Controllers
                 );
             }
 
-            // Якщо вибрано сезон але не вибрано епізод — показуємо епізоди
+            // Список епізодів з voice-вкладками для вибору джерела
             string seasonKey = s.ToString();
             if (!eps.ContainsKey(seasonKey) || eps[seasonKey] == null || eps[seasonKey].Count == 0)
                 return OnError("lme_streamdata", refresh_proxy: true);
 
-            if (e <= 0)
+            var episodeNumbers = eps[seasonKey]
+                .Select(ep => int.TryParse(ep, out int en) ? en : 0)
+                .Where(en => en > 0)
+                .OrderBy(en => en)
+                .ToList();
+
+            if (episodeNumbers.Count == 0)
+                return OnError("lme_streamdata", refresh_proxy: true);
+
+            // Voice-вкладки: кожне джерело як окрема "озвучка"
+            string selectedSource = string.IsNullOrEmpty(t) ? "1" : t;
+            int selectedIndex = int.TryParse(selectedSource, out int si) && si >= 1 && si <= sourceCount ? si : 1;
+
+            var voiceTpl = new VoiceTpl();
+            for (int i = 1; i <= sourceCount; i++)
             {
-                var episodes = eps[seasonKey]
-                    .Select(ep => int.TryParse(ep, out int en) ? en : 0)
-                    .Where(en => en > 0)
-                    .OrderBy(en => en)
-                    .ToList();
-
-                if (episodes.Count == 0)
-                    return OnError("lme_streamdata", refresh_proxy: true);
-
-                var displayTitle = !string.IsNullOrEmpty(title) ? title : (!string.IsNullOrEmpty(originalTitle) ? originalTitle : response.data.title);
-                var episodeTpl = new EpisodeTpl(episodes.Count);
-
-                foreach (var episode in episodes)
-                {
-                    string episodeName = $"Епізод {episode}";
-                    string callUrl = $"{host}/lite/lme_streamdata?id={tmdbId}&serial=1&s={s}&e={episode}&play=true&title={HttpUtility.UrlEncode(displayTitle)}&original_title={HttpUtility.UrlEncode(originalTitle)}";
-                    episodeTpl.Append(episodeName, displayTitle, s.ToString(), episode.ToString("D2"), accsArgs(callUrl), "call");
-                }
-
-                return Content(
-                    rjson ? episodeTpl.ToJson() : episodeTpl.ToHtml(),
-                    rjson ? "application/json; charset=utf-8" : "text/html; charset=utf-8"
-                );
+                string voiceLink = $"{host}/lite/lme_streamdata?id={tmdbId}&serial=1&s={s}&t={i}&title={HttpUtility.UrlEncode(displayTitle)}&original_title={HttpUtility.UrlEncode(originalTitle)}";
+                voiceTpl.Append($"Джерело #{i}", i == selectedIndex, voiceLink);
             }
 
-            // Якщо є play=true з s та e — це вже оброблено вище в play-гілці
-            // Сюди не дійдемо, але на всяк випадок:
-            return OnError("lme_streamdata", refresh_proxy: true);
+            // Епізоди з посиланнями на вибране джерело
+            var episodeTpl = new EpisodeTpl(episodeNumbers.Count);
+            foreach (var epNum in episodeNumbers)
+            {
+                string episodeName = $"Епізод {epNum}";
+                string callUrl = $"{host}/lite/lme_streamdata?id={tmdbId}&serial=1&s={s}&e={epNum}&play=true&t={selectedSource}&title={HttpUtility.UrlEncode(displayTitle)}&original_title={HttpUtility.UrlEncode(originalTitle)}";
+                episodeTpl.Append(episodeName, displayTitle, s.ToString(), epNum.ToString("D2"), accsArgs(callUrl), "call");
+            }
+
+            episodeTpl.Append(voiceTpl);
+
+            return Content(
+                rjson ? episodeTpl.ToJson() : episodeTpl.ToHtml(),
+                rjson ? "application/json; charset=utf-8" : "text/html; charset=utf-8"
+            );
         }
 
         /// <summary>
-        /// Обробка play-запиту: API з season/episode → JSON зі стрімом
+        /// Обробка play-запиту: API з season/episode → JSON з вибраним джерелом
         /// </summary>
-        private async Task<ActionResult> HandlePlay(StreamDataInvoke invoke, OnlinesSettings init, long tmdbId, int season, int episode, string title, string originalTitle)
+        private async Task<ActionResult> HandlePlay(StreamDataInvoke invoke, OnlinesSettings init, long tmdbId, int season, int episode, string title, string originalTitle, string t)
         {
             if (tmdbId <= 0 || season <= 0 || episode <= 0)
                 return OnError("lme_streamdata", refresh_proxy: true);
@@ -188,13 +197,16 @@ namespace LME.StreamData.Controllers
             if (response?.data?.stream_urls == null || response.data.stream_urls.Count == 0)
                 return OnError("lme_streamdata", refresh_proxy: true);
 
-            var firstUrl = response.data.stream_urls.FirstOrDefault(u => !string.IsNullOrWhiteSpace(u));
-            if (string.IsNullOrEmpty(firstUrl))
+            var streamUrls = response.data.stream_urls.Where(u => !string.IsNullOrWhiteSpace(u)).ToList();
+            if (streamUrls.Count == 0)
                 return OnError("lme_streamdata", refresh_proxy: true);
+
+            // Вибираємо джерело за індексом з voice-вкладки t (1-based)
+            int sourceIndex = int.TryParse(t, out int si) && si >= 1 && si <= streamUrls.Count ? si - 1 : 0;
+            string streamUrl = BuildStreamUrl(init, streamUrls[sourceIndex]);
 
             var subs = CollectSubtitles(response);
             string displayTitle = !string.IsNullOrEmpty(title) ? title : (!string.IsNullOrEmpty(originalTitle) ? originalTitle : response.data.title);
-            string streamUrl = BuildStreamUrl(init, firstUrl);
 
             return UpdateService.Validate(Content(
                 VideoTpl.ToJson("play", streamUrl, displayTitle, subtitles: subs),
