@@ -237,18 +237,7 @@ namespace LME.UAKino
                     }
                 }
 
-                // Складний плеєр — пробуємо PlayerJsDecoder
-                try
-                {
-                    var playerPayload = LME.Common.Playerjs.PlayerJsDecoder.ExtractPlayerPayload(html);
-                    if (playerPayload?.FilePayload is string strUrl && !string.IsNullOrEmpty(strUrl))
-                    {
-                        _onLog?.Invoke($"UAKino resolved Ashdi (PlayerJsDecoder): {strUrl}");
-                        return strUrl;
-                    }
-                }
-                catch { }
-
+                // Складний масив — не парсимо, повертаємо як є
                 return vodUrl;
             }
             catch (Exception ex)

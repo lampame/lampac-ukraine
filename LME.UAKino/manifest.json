@@ -7,7 +7,6 @@
     "../LME.Shared/GlobalUsings.cs",
     "../LME.Shared/Online/OnlineRegistry.cs",
     "../LME.Shared/Update/ModuleUpdateService.cs",
-    "../LME.Shared/Apn/ApnHelper.cs",
-    "../LME.Shared/Playerjs/PlayerJsDecoder.cs"
+    "../LME.Shared/Apn/ApnHelper.cs"
   ]
 }
