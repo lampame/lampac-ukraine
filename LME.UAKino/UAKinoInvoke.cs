@@ -461,7 +461,8 @@ namespace LME.UAKino
 
             // Парсимо голоси (озвучки) з вкладки playlists-lists
             var voiceItems = playerDiv.SelectNodes(".//div[@class='playlists-lists']//ul/li");
-            if (voiceItems != null)
+            bool hasVoiceTabs = voiceItems != null && voiceItems.Count > 0;
+            if (hasVoiceTabs)
             {
                 foreach (var li in voiceItems)
                 {
@@ -496,14 +497,35 @@ namespace LME.UAKino
 
                     VoiceGroup targetVoice = null;
 
-                    if (!string.IsNullOrEmpty(dataId))
-                        targetVoice = voices.FirstOrDefault(v => v.DataId == dataId);
-
-                    if (targetVoice == null && !string.IsNullOrEmpty(voiceAttr))
+                    if (!hasVoiceTabs)
+                    {
+                        // Фільм: вкладок голосів нема — кожен li це окремий стрім (версія)
+                        // Групуємо за data-voice або створюємо нову групу
+                        string groupName = !string.IsNullOrEmpty(voiceAttr) ? voiceAttr : text;
                         targetVoice = voices.FirstOrDefault(v =>
-                            v.Name.Equals(voiceAttr, StringComparison.OrdinalIgnoreCase));
+                            v.Name.Equals(groupName, StringComparison.OrdinalIgnoreCase));
+                        if (targetVoice == null)
+                        {
+                            targetVoice = new VoiceGroup
+                            {
+                                Name = groupName,
+                                DataId = dataId,
+                                Episodes = new List<EpisodeItem>()
+                            };
+                            voices.Add(targetVoice);
+                        }
+                    }
+                    else
+                    {
+                        if (!string.IsNullOrEmpty(dataId))
+                            targetVoice = voices.FirstOrDefault(v => v.DataId == dataId);
 
-                    targetVoice ??= voices.FirstOrDefault();
+                        if (targetVoice == null && !string.IsNullOrEmpty(voiceAttr))
+                            targetVoice = voices.FirstOrDefault(v =>
+                                v.Name.Equals(voiceAttr, StringComparison.OrdinalIgnoreCase));
+
+                        targetVoice ??= voices.FirstOrDefault();
+                    }
 
                     int? epNum = ExtractEpisodeNumber(text);
 
