@@ -39,7 +39,7 @@ namespace LME.UAKino
 
             string memKey = $"UAKino:search:{query}";
             if (_hybridCache.TryGetValue(memKey, out List<SearchResult> cached))
-                return FilterByYear(cached, year);
+                return cached;
 
             try
             {
@@ -73,11 +73,13 @@ namespace LME.UAKino
                 var htmlDoc = new HtmlDocument();
                 htmlDoc.LoadHtml(html);
 
-                var results = ParseSearchResults(htmlDoc);
+                var rawItems = ParseRawItems(htmlDoc);
+                var results = GroupByShow(rawItems);
+
                 if (results.Count > 0)
                     _hybridCache.Set(memKey, results, cacheTime(20));
 
-                return FilterByYear(results, year);
+                return results;
             }
             catch (Exception ex)
             {
@@ -152,12 +154,25 @@ namespace LME.UAKino
             return null;
         }
 
-        private List<SearchResult> ParseSearchResults(HtmlDocument doc)
+        // ===================== Парсинг результатів пошуку =====================
+
+        /// <summary>Сирий елемент з HTML пошуку, до групування</summary>
+        private class RawSearchItem
         {
-            var results = new List<SearchResult>();
+            public string Title { get; set; }
+            public string OriginalTitle { get; set; }
+            public string Url { get; set; }
+            public string Poster { get; set; }
+            public int? Year { get; set; }
+            public string NewsId { get; set; }
+        }
+
+        private List<RawSearchItem> ParseRawItems(HtmlDocument doc)
+        {
+            var items = new List<RawSearchItem>();
             var nodes = doc.DocumentNode.SelectNodes("//a[@class='search-result-link']");
             if (nodes == null)
-                return results;
+                return items;
 
             foreach (var node in nodes)
             {
@@ -186,9 +201,13 @@ namespace LME.UAKino
                             year = parsedYear;
                     }
 
+                    // Фільтр: пропускаємо новини/трейлери — без року та без оригінальної назви
+                    if (!IsRealContent(title, origTitle, year))
+                        continue;
+
                     string newsId = ExtractNewsId(href);
 
-                    results.Add(new SearchResult
+                    items.Add(new RawSearchItem
                     {
                         Title = title,
                         OriginalTitle = origTitle,
@@ -204,8 +223,120 @@ namespace LME.UAKino
                 }
             }
 
+            return items;
+        }
+
+        /// <summary>Фільтр: реальний контент (не новина/трейлер)</summary>
+        private static bool IsRealContent(string title, string origTitle, int? year)
+        {
+            // Є рік — контент
+            if (year.HasValue)
+                return true;
+
+            // Є оригінальна назва — контент
+            if (!string.IsNullOrEmpty(origTitle))
+                return true;
+
+            // Дуже довга назва без року — скоріше новина
+            if (!string.IsNullOrEmpty(title) && title.Length > 50)
+                return false;
+
+            return false;
+        }
+
+        /// <summary>Групування сирих елементів по назві шоу. Кожна група = один SearchResult зі списком сезонів</summary>
+        private List<SearchResult> GroupByShow(List<RawSearchItem> rawItems)
+        {
+            if (rawItems.Count == 0)
+                return new List<SearchResult>();
+
+            var groups = new Dictionary<string, List<RawSearchItem>>();
+
+            foreach (var item in rawItems)
+            {
+                string cleanTitle = CleanShowTitle(item.Title);
+                string key = $"{cleanTitle.ToLowerInvariant()}|{(item.OriginalTitle ?? "").ToLowerInvariant()}";
+
+                if (!groups.ContainsKey(key))
+                    groups[key] = new List<RawSearchItem>();
+
+                groups[key].Add(item);
+            }
+
+            var results = new List<SearchResult>();
+
+            foreach (var kvp in groups)
+            {
+                var items = kvp.Value;
+                var first = items[0];
+                string showTitle = CleanShowTitle(first.Title);
+
+                var sr = new SearchResult
+                {
+                    Title = showTitle,
+                    OriginalTitle = first.OriginalTitle,
+                    Poster = first.Poster
+                };
+
+                foreach (var item in items)
+                {
+                    int? seasonNum = ExtractSeasonNumber(item.Title);
+                    if (seasonNum.HasValue)
+                    {
+                        sr.Seasons.Add(new SeasonEntry
+                        {
+                            SeasonNumber = seasonNum.Value,
+                            NewsId = item.NewsId,
+                            Url = item.Url,
+                            Year = item.Year
+                        });
+                    }
+                    else
+                    {
+                        // Фільм або контент без сезону
+                        sr.Seasons.Add(new SeasonEntry
+                        {
+                            SeasonNumber = 1,
+                            NewsId = item.NewsId,
+                            Url = item.Url,
+                            Year = item.Year
+                        });
+                        sr.Year = item.Year;
+                    }
+                }
+
+                // Сортуємо сезони за номером
+                sr.Seasons = sr.Seasons.OrderBy(s => s.SeasonNumber).ToList();
+
+                results.Add(sr);
+            }
+
             return results;
         }
+
+        /// <summary>Витягти чисту назву шоу (без "N сезон" суфіксу)</summary>
+        private static string CleanShowTitle(string title)
+        {
+            if (string.IsNullOrEmpty(title))
+                return title;
+
+            return Regex.Replace(title, @"\s*\d+\s*сезон\s*$", "", RegexOptions.IgnoreCase).Trim();
+        }
+
+        /// <summary>Витягти номер сезону з назви</summary>
+        private static int? ExtractSeasonNumber(string title)
+        {
+            if (string.IsNullOrEmpty(title))
+                return null;
+
+            var match = Regex.Match(title, @"(\d+)\s*сезон", RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out int num))
+                return num;
+
+            return null;
+        }
+
+        // ===================== Парсинг плейлиста =====================
 
         private List<VoiceGroup> ParsePlaylistHtml(string html)
         {
@@ -217,7 +348,6 @@ namespace LME.UAKino
             var playerDiv = doc.DocumentNode.SelectSingleNode("//div[@class='playlists-player']");
             if (playerDiv == null)
             {
-                // спроба знайти епізоди без обгортки playlists-player
                 return ParseEpisodesFlat(doc.DocumentNode);
             }
 
@@ -229,7 +359,6 @@ namespace LME.UAKino
                 {
                     string dataId = li.GetAttributeValue("data-id", "");
                     string text = CleanText(li.InnerText);
-                    // Прибираємо "(X-Y)" з кінця назви озвучки
                     string voiceName = Regex.Replace(text, @"\s*\(\d+[\d,\s-]*\)\s*$", "").Trim();
                     if (string.IsNullOrEmpty(voiceName))
                         voiceName = text;
@@ -257,19 +386,15 @@ namespace LME.UAKino
                     string voiceAttr = li.GetAttributeValue("data-voice", "");
                     string text = CleanText(li.InnerText);
 
-                    // Визначаємо до якого voice групи належить
                     VoiceGroup targetVoice = null;
 
-                    // Спершу за data-id
                     if (!string.IsNullOrEmpty(dataId))
                         targetVoice = voices.FirstOrDefault(v => v.DataId == dataId);
 
-                    // Якщо не знайшли, то за data-voice (назвою)
                     if (targetVoice == null && !string.IsNullOrEmpty(voiceAttr))
                         targetVoice = voices.FirstOrDefault(v =>
                             v.Name.Equals(voiceAttr, StringComparison.OrdinalIgnoreCase));
 
-                    // Якщо досі не знайшли, беремо перший голос
                     targetVoice ??= voices.FirstOrDefault();
 
                     int? epNum = ExtractEpisodeNumber(text);
@@ -289,9 +414,6 @@ namespace LME.UAKino
             return voices;
         }
 
-        /// <summary>
-        /// Парсинг коли немає структури playlists-player (наприклад для фільмів)
-        /// </summary>
         private List<VoiceGroup> ParseEpisodesFlat(HtmlNode scope)
         {
             var voices = new List<VoiceGroup>();
@@ -309,7 +431,6 @@ namespace LME.UAKino
             foreach (var li in items)
             {
                 string fileUrl = li.GetAttributeValue("data-file", "");
-                string voiceAttr = li.GetAttributeValue("data-voice", "");
                 string text = CleanText(li.InnerText);
                 int? epNum = ExtractEpisodeNumber(text);
 
@@ -327,6 +448,8 @@ namespace LME.UAKino
             return voices;
         }
 
+        // ===================== Допоміжні методи =====================
+
         private static string BuildSearchQuery(string title, string original_title, string imdb_id)
         {
             if (!string.IsNullOrEmpty(imdb_id) && imdb_id.StartsWith("tt"))
@@ -339,18 +462,6 @@ namespace LME.UAKino
                 return original_title;
 
             return null;
-        }
-
-        private static List<SearchResult> FilterByYear(List<SearchResult> results, int year)
-        {
-            if (results == null || results.Count <= 1 || year <= 0)
-                return results;
-
-            var yearMatch = results.Where(r => r.Year == year).ToList();
-            if (yearMatch.Count > 0)
-                return yearMatch;
-
-            return results;
         }
 
         private string NormalizeUrl(string url)

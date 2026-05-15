@@ -6,10 +6,19 @@ namespace LME.UAKino.Models
     {
         public string Title { get; set; }
         public string OriginalTitle { get; set; }
-        public string Url { get; set; }
         public string Poster { get; set; }
+        /// <summary>Сезони серіалу. Для фільмів — один елемент без SeasonNumber</summary>
+        public List<SeasonEntry> Seasons { get; set; } = new();
+        /// <summary>Рік фільму (тільки для не-сезонних результатів)</summary>
         public int? Year { get; set; }
+    }
+
+    public class SeasonEntry
+    {
+        public int SeasonNumber { get; set; }
         public string NewsId { get; set; }
+        public string Url { get; set; }
+        public int? Year { get; set; }
     }
 
     public class VoiceGroup

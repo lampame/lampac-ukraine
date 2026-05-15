@@ -51,30 +51,46 @@ namespace LME.UAKino.Controllers
 
             if (string.IsNullOrEmpty(itemUrl))
             {
+                // === ПЕРШИЙ ЗАПИТ: пошук ===
                 var searchResults = await invoke.Search(title, original_title, year, imdb_id);
                 if (searchResults == null || searchResults.Count == 0)
                     return OnError("lme_uakino", refresh_proxy: true);
 
-                // Якщо кілька результатів — дозволяємо обрати
-                if (searchResults.Count > 1)
+                if (serial == 1)
                 {
-                    var similar_tpl = new SimilarTpl(searchResults.Count);
-                    foreach (var res in searchResults)
+                    // Серіал
+                    if (searchResults.Count == 1)
                     {
-                        string link = $"{host}/lite/lme_uakino?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(res.Url)}";
-                        similar_tpl.Append(res.Title, res.Year?.ToString() ?? "", res.OriginalTitle ?? "", link, res.Poster);
+                        var sr = searchResults[0];
+                        if (sr.Seasons.Count > 1 && s == -1)
+                        {
+                            // Кілька сезонів — показуємо SeasonTpl для вибору
+                            return HandleSeasonSelection(sr, id, imdb_id, kinopoisk_id, title, original_title, year, rjson);
+                        }
+                        // Один сезон — використовуємо його
+                        itemUrl = sr.Seasons[0].Url;
+                        newsId = sr.Seasons[0].NewsId;
                     }
-
-                    return rjson
-                        ? Content(similar_tpl.ToJson(), "application/json; charset=utf-8")
-                        : Content(similar_tpl.ToHtml(), "text/html; charset=utf-8");
+                    else
+                    {
+                        // Кілька різних шоу — обирає
+                        return ShowSimilarTpl(searchResults, id, imdb_id, kinopoisk_id, title, original_title, year, serial, rjson);
+                    }
                 }
-
-                itemUrl = searchResults[0].Url;
-                newsId = searchResults[0].NewsId;
+                else
+                {
+                    // Фільм
+                    if (searchResults.Count > 1)
+                    {
+                        return ShowSimilarTpl(searchResults, id, imdb_id, kinopoisk_id, title, original_title, year, serial, rjson);
+                    }
+                    itemUrl = searchResults[0].Seasons[0].Url;
+                    newsId = searchResults[0].Seasons[0].NewsId;
+                }
             }
             else
             {
+                // Повторний запит (з селектора сезонів або озвучок)
                 newsId = UAKinoInvoke.ExtractNewsId(itemUrl);
             }
 
@@ -87,7 +103,7 @@ namespace LME.UAKino.Controllers
 
             if (serial == 1)
             {
-                return HandleSerial(init, voices, title, original_title, year, imdb_id, kinopoisk_id, itemUrl, t, rjson);
+                return HandleSerial(init, voices, title, original_title, imdb_id, kinopoisk_id, itemUrl, s, t, rjson);
             }
             else
             {
@@ -95,7 +111,40 @@ namespace LME.UAKino.Controllers
             }
         }
 
-        private ActionResult HandleSerial(OnlinesSettings init, List<VoiceGroup> voices, string title, string original_title, int year, string imdb_id, long kinopoisk_id, string itemUrl, string t, bool rjson)
+        /// <summary>Вибір сезону для багатосезонного серіалу</summary>
+        private ActionResult HandleSeasonSelection(SearchResult sr, long id, string imdb_id, long kinopoisk_id, string title, string original_title, int year, bool rjson)
+        {
+            var season_tpl = new SeasonTpl(sr.Seasons.Count);
+            foreach (var season in sr.Seasons)
+            {
+                string link = $"{host}/lite/lme_uakino?id={id}&imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={season.SeasonNumber}&href={HttpUtility.UrlEncode(season.Url)}";
+                season_tpl.Append($"Сезон {season.SeasonNumber}", link, season.SeasonNumber.ToString());
+            }
+
+            return rjson
+                ? Content(season_tpl.ToJson(), "application/json; charset=utf-8")
+                : Content(season_tpl.ToHtml(), "text/html; charset=utf-8");
+        }
+
+        /// <summary>Вибір між різними шоу/фільмами</summary>
+        private ActionResult ShowSimilarTpl(List<SearchResult> searchResults, long id, string imdb_id, long kinopoisk_id, string title, string original_title, int year, int serial, bool rjson)
+        {
+            var similar_tpl = new SimilarTpl(searchResults.Count);
+            foreach (var res in searchResults)
+            {
+                string seasonUrl = res.Seasons.Count > 0 ? res.Seasons[0].Url : "";
+                string yearStr = res.Seasons.Count > 0 ? (res.Seasons[0].Year?.ToString() ?? "") : (res.Year?.ToString() ?? "");
+                string link = $"{host}/lite/lme_uakino?id={id}&imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(seasonUrl)}";
+                similar_tpl.Append(res.Title, yearStr, res.OriginalTitle ?? "", link, res.Poster);
+            }
+
+            return rjson
+                ? Content(similar_tpl.ToJson(), "application/json; charset=utf-8")
+                : Content(similar_tpl.ToHtml(), "text/html; charset=utf-8");
+        }
+
+        /// <summary>Серіал: озвучки + епізоди</summary>
+        private ActionResult HandleSerial(OnlinesSettings init, List<VoiceGroup> voices, string title, string original_title, string imdb_id, long kinopoisk_id, string itemUrl, int s, string t, bool rjson)
         {
             var voice_tpl = new VoiceTpl();
             var episode_tpl = new EpisodeTpl();
@@ -105,7 +154,7 @@ namespace LME.UAKino.Controllers
 
             foreach (var voice in voices)
             {
-                string voiceLink = $"{host}/lite/lme_uakino?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&t={voice.DataId}&href={HttpUtility.UrlEncode(itemUrl)}";
+                string voiceLink = $"{host}/lite/lme_uakino?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&serial=1&s={s}&t={voice.DataId}&href={HttpUtility.UrlEncode(itemUrl)}";
                 voice_tpl.Append(voice.Name, voice.DataId == t, voiceLink);
             }
 
@@ -128,6 +177,7 @@ namespace LME.UAKino.Controllers
                 : Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
         }
 
+        /// <summary>Фільм: список стрімів</summary>
         private ActionResult HandleMovie(OnlinesSettings init, List<VoiceGroup> voices, string title, string original_title, bool rjson)
         {
             var movie_tpl = new MovieTpl(title, original_title);
