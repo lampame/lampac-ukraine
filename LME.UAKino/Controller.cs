@@ -108,7 +108,8 @@ namespace LME.UAKino.Controllers
                     {
                         var voice_tpl = new VoiceTpl();
                         var episode_tpl = new EpisodeTpl();
-                        string streamUrl = BuildStreamUrl(init, fallbackUrl);
+                        string resolvedUrl = await invoke.ResolveAshdiVod(fallbackUrl);
+                        string streamUrl = BuildStreamUrl(init, resolvedUrl);
                         voice_tpl.Append("Озвучення", true, null);
                         episode_tpl.Append("Епізод 1", title ?? original_title, s >= 0 ? s.ToString() : "1", "01", streamUrl);
                         episode_tpl.Append(voice_tpl);
@@ -136,7 +137,7 @@ namespace LME.UAKino.Controllers
 
             if (serial == 1)
             {
-                return HandleSerial(init, voices, title, original_title, imdb_id, kinopoisk_id, itemUrl, s, t, rjson);
+                return await HandleSerial(init, voices, title, original_title, imdb_id, kinopoisk_id, itemUrl, s, t, rjson, invoke);
             }
             else
             {
@@ -177,7 +178,7 @@ namespace LME.UAKino.Controllers
         }
 
         /// <summary>Серіал: озвучки + епізоди</summary>
-        private ActionResult HandleSerial(OnlinesSettings init, List<VoiceGroup> voices, string title, string original_title, string imdb_id, long kinopoisk_id, string itemUrl, int s, string t, bool rjson)
+        private async Task<ActionResult> HandleSerial(OnlinesSettings init, List<VoiceGroup> voices, string title, string original_title, string imdb_id, long kinopoisk_id, string itemUrl, int s, string t, bool rjson, UAKinoInvoke invoke)
         {
             var voice_tpl = new VoiceTpl();
             var episode_tpl = new EpisodeTpl();
@@ -200,7 +201,8 @@ namespace LME.UAKino.Controllers
             {
                 int epNum = ep.EpisodeNumber ?? 1;
                 string epName = string.IsNullOrEmpty(ep.Title) ? $"Епізод {epNum}" : ep.Title;
-                string streamUrl = BuildStreamUrl(init, ep.FileUrl);
+                string fileUrl = await invoke.ResolveAshdiVod(ep.FileUrl);
+                string streamUrl = BuildStreamUrl(init, fileUrl);
                 episode_tpl.Append(epName, title ?? original_title, seasonStr, epNum.ToString("D2"), streamUrl);
             }
 
