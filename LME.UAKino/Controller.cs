@@ -118,10 +118,14 @@ namespace LME.UAKino.Controllers
                     }
                     else
                     {
-                        string resolvedUrl = await invoke.ResolveAshdiVod(fallbackUrl);
-                        string streamUrl = BuildStreamUrl(init, resolvedUrl);
-                        var movie_tpl = new MovieTpl(title, original_title);
-                        movie_tpl.Append("Фільм", streamUrl);
+                        var resolvedStreams = await invoke.ResolveAshdiVodAll(fallbackUrl);
+                        var movie_tpl = new MovieTpl(title, original_title, resolvedStreams.Count);
+                        foreach (var (file, label) in resolvedStreams)
+                        {
+                            string displayLabel = !string.IsNullOrEmpty(label) ? label : "Фільм";
+                            string streamUrl = BuildStreamUrl(init, file);
+                            movie_tpl.Append(displayLabel, streamUrl);
+                        }
                         return rjson
                             ? Content(movie_tpl.ToJson(), "application/json; charset=utf-8")
                             : Content(movie_tpl.ToHtml(), "text/html; charset=utf-8");

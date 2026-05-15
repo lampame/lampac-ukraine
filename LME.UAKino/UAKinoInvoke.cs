@@ -271,6 +271,78 @@ namespace LME.UAKino
         }
 
         /// <summary>
+        /// Резолв Ashdi VOD з ?multivoice: повертає ВСІ стріми з JSON масиву
+        /// </summary>
+        public async Task<List<(string file, string title)>> ResolveAshdiVodAll(string vodUrl)
+        {
+            var result = new List<(string file, string title)>();
+
+            if (string.IsNullOrEmpty(vodUrl) || !ApnHelper.IsAshdiUrl(vodUrl))
+            {
+                if (!string.IsNullOrEmpty(vodUrl))
+                    result.Add((vodUrl, null));
+                return result;
+            }
+
+            try
+            {
+                _onLog?.Invoke($"UAKino resolve Ashdi all: {vodUrl}");
+
+                var headers = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", Http.UserAgent),
+                    new HeadersModel("Referer", "https://ashdi.vip/")
+                };
+
+                string fetchUrl = vodUrl;
+                if (ApnHelper.IsEnabled(_init) && string.IsNullOrWhiteSpace(_init.webcorshost))
+                    fetchUrl = ApnHelper.WrapUrl(_init, fetchUrl);
+
+                string html = await HttpGet(fetchUrl, headers);
+                if (string.IsNullOrEmpty(html))
+                {
+                    result.Add((vodUrl, null));
+                    return result;
+                }
+
+                int arrayStart = FindAshdiJsonArray(html);
+                if (arrayStart >= 0)
+                {
+                    string jsonArray = ExtractBalancedBrackets(html, arrayStart);
+                    if (!string.IsNullOrEmpty(jsonArray))
+                    {
+                        try
+                        {
+                            using var arr = JsonDocument.Parse(jsonArray);
+                            if (arr.RootElement.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var item in arr.RootElement.EnumerateArray())
+                                {
+                                    string file = item.GetProperty("file").GetString();
+                                    string title = item.TryGetProperty("title", out var t) ? t.GetString() : null;
+                                    if (!string.IsNullOrEmpty(file))
+                                        result.Add((file, title?.Trim()));
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                if (result.Count == 0)
+                    result.Add((vodUrl, null));
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _onLog?.Invoke($"UAKino resolve Ashdi all error: {ex.Message}");
+                result.Add((vodUrl, null));
+                return result;
+            }
+        }
+
+        /// <summary>
         /// Знайти позицію JSON масиву `[{...}]` після `file:'`
         /// </summary>
         private static int FindAshdiJsonArray(string html)
