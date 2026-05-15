@@ -194,6 +194,71 @@ namespace LME.UAKino
         }
 
         /// <summary>
+        /// Резолв Ashdi VOD сторінки: отримати реальний .m3u8 стрім з Playerjs file:'...'
+        /// </summary>
+        public async Task<string> ResolveAshdiVod(string vodUrl)
+        {
+            if (string.IsNullOrEmpty(vodUrl) || !ApnHelper.IsAshdiUrl(vodUrl))
+                return vodUrl;
+
+            try
+            {
+                string fetchUrl = vodUrl;
+                if (!fetchUrl.Contains("multivoice"))
+                    fetchUrl += (fetchUrl.Contains("?") ? "&" : "?") + "multivoice";
+
+                _onLog?.Invoke($"UAKino resolve Ashdi: {fetchUrl}");
+
+                var headers = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", Http.UserAgent),
+                    new HeadersModel("Referer", "https://ashdi.vip/")
+                };
+
+                if (ApnHelper.IsEnabled(_init) && string.IsNullOrWhiteSpace(_init.webcorshost))
+                    fetchUrl = ApnHelper.WrapUrl(_init, fetchUrl);
+
+                string html = await HttpGet(fetchUrl, headers);
+                if (string.IsNullOrEmpty(html))
+                    return vodUrl;
+
+                // Спершу простий pattern file:'url'
+                var fileMatch = Regex.Match(html, @"file:\s*'([^']+)'", RegexOptions.IgnoreCase);
+                if (!fileMatch.Success)
+                    fileMatch = Regex.Match(html, @"file:\s*""([^""]+)""", RegexOptions.IgnoreCase);
+
+                if (fileMatch.Success)
+                {
+                    string resolvedUrl = fileMatch.Groups[1].Value;
+                    if (!string.IsNullOrEmpty(resolvedUrl) && !resolvedUrl.StartsWith("["))
+                    {
+                        _onLog?.Invoke($"UAKino resolved Ashdi: {resolvedUrl}");
+                        return resolvedUrl;
+                    }
+                }
+
+                // Складний плеєр — пробуємо PlayerJsDecoder
+                try
+                {
+                    var playerPayload = LME.Common.Playerjs.PlayerJsDecoder.ExtractPlayerPayload(html);
+                    if (playerPayload?.FilePayload is string strUrl && !string.IsNullOrEmpty(strUrl))
+                    {
+                        _onLog?.Invoke($"UAKino resolved Ashdi (PlayerJsDecoder): {strUrl}");
+                        return strUrl;
+                    }
+                }
+                catch { }
+
+                return vodUrl;
+            }
+            catch (Exception ex)
+            {
+                _onLog?.Invoke($"UAKino resolve Ashdi error: {ex.Message}");
+                return vodUrl;
+            }
+        }
+
+        /// <summary>
         /// Витягнути news_id з URL контенту
         /// </summary>
         public static string ExtractNewsId(string url)

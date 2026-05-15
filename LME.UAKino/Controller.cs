@@ -118,9 +118,8 @@ namespace LME.UAKino.Controllers
                     }
                     else
                     {
-                        if (ApnHelper.IsAshdiUrl(fallbackUrl) && !fallbackUrl.Contains("multivoice"))
-                            fallbackUrl += (fallbackUrl.Contains("?") ? "&" : "?") + "multivoice";
-                        string streamUrl = BuildStreamUrl(init, fallbackUrl);
+                        string resolvedUrl = await invoke.ResolveAshdiVod(fallbackUrl);
+                        string streamUrl = BuildStreamUrl(init, resolvedUrl);
                         var movie_tpl = new MovieTpl(title, original_title);
                         movie_tpl.Append("Фільм", streamUrl);
                         return rjson
@@ -137,7 +136,7 @@ namespace LME.UAKino.Controllers
             }
             else
             {
-                return HandleMovie(init, voices, title, original_title, rjson);
+                return await HandleMovie(init, voices, title, original_title, rjson, invoke);
             }
         }
 
@@ -192,12 +191,13 @@ namespace LME.UAKino.Controllers
             if (selected == null || selected.Episodes.Count == 0)
                 return OnError("lme_uakino", refresh_proxy: true);
 
+            string seasonStr = s >= 0 ? s.ToString() : "1";
             foreach (var ep in selected.Episodes.OrderBy(e => e.EpisodeNumber ?? int.MaxValue))
             {
                 int epNum = ep.EpisodeNumber ?? 1;
                 string epName = string.IsNullOrEmpty(ep.Title) ? $"Епізод {epNum}" : ep.Title;
                 string streamUrl = BuildStreamUrl(init, ep.FileUrl);
-                episode_tpl.Append(epName, title ?? original_title, "1", epNum.ToString("D2"), streamUrl);
+                episode_tpl.Append(epName, title ?? original_title, seasonStr, epNum.ToString("D2"), streamUrl);
             }
 
             episode_tpl.Append(voice_tpl);
@@ -208,8 +208,9 @@ namespace LME.UAKino.Controllers
         }
 
         /// <summary>Фільм: список стрімів</summary>
-        private ActionResult HandleMovie(OnlinesSettings init, List<VoiceGroup> voices, string title, string original_title, bool rjson)
+        private async Task<ActionResult> HandleMovie(OnlinesSettings init, List<VoiceGroup> voices, string title, string original_title, bool rjson, UAKinoInvoke invoke)
         {
+            var processed = new HashSet<string>();
             var movie_tpl = new MovieTpl(title, original_title);
 
             foreach (var voice in voices)
@@ -221,10 +222,13 @@ namespace LME.UAKino.Controllers
                         label = ep.Title;
 
                     string fileUrl = ep.FileUrl;
-                    if (ApnHelper.IsAshdiUrl(fileUrl) && !fileUrl.Contains("multivoice"))
-                        fileUrl += (fileUrl.Contains("?") ? "&" : "?") + "multivoice";
+                    // Резолвимо Ashdi VOD — отримуємо реальний .m3u8 стрім
+                    string resolvedUrl = await invoke.ResolveAshdiVod(fileUrl);
+                    // Дедуплікація: якщо той самий стрім — пропускаємо
+                    if (!processed.Add(resolvedUrl))
+                        continue;
 
-                    string streamUrl = BuildStreamUrl(init, fileUrl);
+                    string streamUrl = BuildStreamUrl(init, resolvedUrl);
                     movie_tpl.Append(label, streamUrl);
                 }
             }
