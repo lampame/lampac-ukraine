@@ -204,8 +204,8 @@ namespace LME.UAKino
             try
             {
                 string fetchUrl = vodUrl;
-                if (!fetchUrl.Contains("multivoice"))
-                    fetchUrl += (fetchUrl.Contains("?") ? "&" : "?") + "multivoice";
+                // Не додаємо ?multivoice — кожен VOD має свій унікальний стрім
+                // ?multivoice змішує всі голоси в один масив
 
                 _onLog?.Invoke($"UAKino resolve Ashdi: {fetchUrl}");
 
