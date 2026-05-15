@@ -288,13 +288,17 @@ namespace LME.UAKino
             {
                 _onLog?.Invoke($"UAKino resolve Ashdi all: {vodUrl}");
 
+                // Для ?multivoice — Ашді повертає всі стріми в одному масиві
+                string fetchUrl = vodUrl;
+                if (!fetchUrl.Contains("multivoice"))
+                    fetchUrl += (fetchUrl.Contains("?") ? "&" : "?") + "multivoice";
+
                 var headers = new List<HeadersModel>()
                 {
                     new HeadersModel("User-Agent", Http.UserAgent),
                     new HeadersModel("Referer", "https://ashdi.vip/")
                 };
 
-                string fetchUrl = vodUrl;
                 if (ApnHelper.IsEnabled(_init) && string.IsNullOrWhiteSpace(_init.webcorshost))
                     fetchUrl = ApnHelper.WrapUrl(_init, fetchUrl);
 
