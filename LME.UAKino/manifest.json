@@ -1,0 +1,12 @@
+{
+  "enable": true,
+  "version": 3,
+  "initspace": "LME.UAKino.ModInit",
+  "online": "LME.UAKino.OnlineApi",
+  "syntaxPaths": [
+    "../LME.Shared/GlobalUsings.cs",
+    "../LME.Shared/Online/OnlineRegistry.cs",
+    "../LME.Shared/Update/ModuleUpdateService.cs",
+    "../LME.Shared/Apn/ApnHelper.cs"
+  ]
+}
