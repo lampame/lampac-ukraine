@@ -99,7 +99,37 @@ namespace LME.UAKino.Controllers
 
             var voices = await invoke.GetPlaylist(newsId);
             if (voices == null || voices.Count == 0)
+            {
+                // Fallback: playlist API повернув ERR_NOT_DATA — пробуємо зі сторінки
+                string fallbackUrl = await invoke.GetPageFallbackUrl(itemUrl);
+                if (!string.IsNullOrEmpty(fallbackUrl))
+                {
+                    if (serial == 1)
+                    {
+                        var voice_tpl = new VoiceTpl();
+                        var episode_tpl = new EpisodeTpl();
+                        string streamUrl = BuildStreamUrl(init, fallbackUrl);
+                        voice_tpl.Append("Озвучення", true, null);
+                        episode_tpl.Append("Епізод 1", title ?? original_title, s >= 0 ? s.ToString() : "1", "01", streamUrl);
+                        episode_tpl.Append(voice_tpl);
+                        return rjson
+                            ? Content(episode_tpl.ToJson(), "application/json; charset=utf-8")
+                            : Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
+                    }
+                    else
+                    {
+                        if (ApnHelper.IsAshdiUrl(fallbackUrl) && !fallbackUrl.Contains("multivoice"))
+                            fallbackUrl += (fallbackUrl.Contains("?") ? "&" : "?") + "multivoice";
+                        string streamUrl = BuildStreamUrl(init, fallbackUrl);
+                        var movie_tpl = new MovieTpl(title, original_title);
+                        movie_tpl.Append("Фільм", streamUrl);
+                        return rjson
+                            ? Content(movie_tpl.ToJson(), "application/json; charset=utf-8")
+                            : Content(movie_tpl.ToHtml(), "text/html; charset=utf-8");
+                    }
+                }
                 return OnError("lme_uakino", refresh_proxy: true);
+            }
 
             if (serial == 1)
             {
@@ -190,7 +220,11 @@ namespace LME.UAKino.Controllers
                     if (voices.Count == 1 && voice.Episodes.Count > 1)
                         label = ep.Title;
 
-                    string streamUrl = BuildStreamUrl(init, ep.FileUrl);
+                    string fileUrl = ep.FileUrl;
+                    if (ApnHelper.IsAshdiUrl(fileUrl) && !fileUrl.Contains("multivoice"))
+                        fileUrl += (fileUrl.Contains("?") ? "&" : "?") + "multivoice";
+
+                    string streamUrl = BuildStreamUrl(init, fileUrl);
                     movie_tpl.Append(label, streamUrl);
                 }
             }

@@ -140,6 +140,60 @@ namespace LME.UAKino
         }
 
         /// <summary>
+        /// Fallback: отримати стрім з HTML сторінки фільму коли playlist API недоступний
+        /// Парсить &lt;link itemprop="video" value="..."&gt; або &lt;iframe id="pre" src="..."&gt;
+        /// </summary>
+        public async Task<string> GetPageFallbackUrl(string pageUrl)
+        {
+            if (string.IsNullOrEmpty(pageUrl))
+                return null;
+
+            try
+            {
+                _onLog?.Invoke($"UAKino page fallback: {pageUrl}");
+
+                var headers = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3 Safari/605.1.15"),
+                    new HeadersModel("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+                    new HeadersModel("Referer", _init.host)
+                };
+
+                string html = await HttpGet(pageUrl, headers);
+                if (string.IsNullOrEmpty(html))
+                    return null;
+
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+
+                // Спершу пробуємо <link itemprop="video" value="...">
+                var linkTag = doc.DocumentNode.SelectSingleNode("//link[@itemprop='video']");
+                if (linkTag != null)
+                {
+                    string value = linkTag.GetAttributeValue("value", "");
+                    if (!string.IsNullOrEmpty(value))
+                        return NormalizeUrl(value);
+                }
+
+                // Fallback до <iframe id="pre" src="...">
+                var iframeTag = doc.DocumentNode.SelectSingleNode("//iframe[@id='pre']");
+                if (iframeTag != null)
+                {
+                    string src = iframeTag.GetAttributeValue("src", "");
+                    if (!string.IsNullOrEmpty(src))
+                        return NormalizeUrl(src);
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _onLog?.Invoke($"UAKino page fallback error: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Витягнути news_id з URL контенту
         /// </summary>
         public static string ExtractNewsId(string url)
