@@ -373,7 +373,7 @@ namespace LME.JackTor.Controllers
             }
         }
 
-        private (List<HeadersModel> headers, string host) ResolveProbeTorrentServer(JackTorSettings init, string account_email)
+        private (IReadOnlyList<HeadersModel> headers, string host) ResolveProbeTorrentServer(JackTorSettings init, string account_email)
         {
             if ((init.torrs == null || init.torrs.Length == 0) && (init.auth_torrs == null || init.auth_torrs.Count == 0))
             {
