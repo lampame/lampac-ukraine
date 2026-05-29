@@ -241,6 +241,51 @@ namespace LME.Uaflix
             return ExtractIframeFromMeta(doc);
         }
 
+        /// <summary>
+        /// Отримати всі iframe URL зі сторінки (з video-box, загальних iframe та og:meta)
+        /// Використовується для сторінок з кількома плеєрами (напр. zetvideo з субтитрами)
+        /// </summary>
+        private List<string> ExtractAllIframeUrls(HtmlDocument doc)
+        {
+            var result = new List<string>();
+            if (doc?.DocumentNode == null)
+                return result;
+
+            // Спочатку збираємо всі iframe з video-box контейнерів
+            var videoBoxNodes = doc.DocumentNode.SelectNodes("//div[contains(@class, 'video-box')]//iframe");
+            if (videoBoxNodes != null)
+            {
+                foreach (var node in videoBoxNodes)
+                {
+                    string url = NormalizeIframeUrl(node.GetAttributeValue("src", null));
+                    if (!string.IsNullOrEmpty(url) && !result.Any(u => string.Equals(u, url, StringComparison.OrdinalIgnoreCase)))
+                        result.Add(url);
+                }
+            }
+
+            // Якщо нічого не знайшли в video-box, шукаємо будь-які iframe
+            if (result.Count == 0)
+            {
+                var allIframeNodes = doc.DocumentNode.SelectNodes("//iframe");
+                if (allIframeNodes != null)
+                {
+                    foreach (var node in allIframeNodes)
+                    {
+                        string url = NormalizeIframeUrl(node.GetAttributeValue("src", null));
+                        if (!string.IsNullOrEmpty(url) && !result.Any(u => string.Equals(u, url, StringComparison.OrdinalIgnoreCase)))
+                            result.Add(url);
+                    }
+                }
+            }
+
+            // Також додаємо URL з og:video:iframe meta
+            string metaIframe = ExtractIframeFromMeta(doc);
+            if (!string.IsNullOrEmpty(metaIframe) && !result.Any(u => string.Equals(u, metaIframe, StringComparison.OrdinalIgnoreCase)))
+                result.Add(metaIframe);
+
+            return result;
+        }
+
         private async Task<(string iframeUrl, string playerType)> ProbeEpisodePlayer(string pageUrl)
         {
             if (string.IsNullOrWhiteSpace(pageUrl))
@@ -1896,41 +1941,76 @@ namespace LME.Uaflix
                     }
                 }
 
-                string iframeUrl = ExtractIframeUrl(doc);
-                if (!string.IsNullOrEmpty(iframeUrl))
+                // Отримуємо всі iframe зі сторінки (підтримка кількох плеєрів, напр. zetvideo з субтитрами)
+                var allIframes = ExtractAllIframeUrls(doc);
+
+                // Фільтруємо zetvideo iframe — повертаємо всі як окремі потоки
+                var zetvideoIframes = allIframes
+                    .Where(u => u != null && u.Contains("zetvideo.net"))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (zetvideoIframes.Count > 0)
                 {
-                    if (iframeUrl.Contains("ashdi.vip/serial/"))
+                    int streamIndex = 0;
+                    foreach (var zetIframe in zetvideoIframes)
                     {
-                        result.ashdi_url = iframeUrl;
-                        return result;
-                    }
+                        var streams = await ParseAllZetvideoSources(zetIframe);
+                        if (streams == null || streams.Count == 0)
+                            continue;
 
-                    // Ігноруємо YouTube трейлери
-                    if (iframeUrl.Contains("youtube.com/embed/"))
-                    {
-                        _onLog($"ParseEpisode: Ignoring YouTube trailer iframe: {iframeUrl}");
-                        return result;
-                    }
-
-                    if (iframeUrl.Contains("zetvideo.net"))
-                        result.streams = await ParseAllZetvideoSources(iframeUrl);
-                    else if (iframeUrl.Contains("ashdi.vip"))
-                    {
-                        // Перевіряємо, чи це ashdi-vod (окремий епізод) або ashdi-serial (багатосерійний плеєр)
-                        if (iframeUrl.Contains("/vod/"))
+                        foreach (var stream in streams)
                         {
-                            // Це окремий епізод на ashdi.vip/vod/, обробляємо як ashdi-vod
-                            result.streams = await ParseAshdiVodEpisode(iframeUrl);
+                            // Перший потік → "Uaflix" (переклад), наступні → "Оригінал"
+                            string label = streamIndex == 0 ? "Uaflix" : "Оригінал";
+                            stream.title = label;
+
+                            _onLog($"ParseEpisode: zetvideo потік #{streamIndex + 1}: {label} -> {zetIframe}" +
+                                (stream.subtitles != null && stream.subtitles.Value.data != null && stream.subtitles.Value.data.Count > 0
+                                    ? " (має субтитри)" : ""));
                         }
-                        else
+
+                        result.streams.AddRange(streams);
+                        streamIndex++;
+                    }
+                }
+                else
+                {
+                    // Старий код: використовуємо перший iframe для ashdi/інших
+                    string iframeUrl = ExtractIframeUrl(doc);
+                    if (!string.IsNullOrEmpty(iframeUrl))
+                    {
+                        if (iframeUrl.Contains("ashdi.vip/serial/"))
                         {
-                            // Це багатосерійний плеєр, обробляємо як і раніше
-                            result.streams = await ParseAllAshdiSources(iframeUrl);
-                            var idMatch = Regex.Match(iframeUrl, @"_(\d+)|vod/(\d+)");
-                            if (idMatch.Success)
+                            result.ashdi_url = iframeUrl;
+                            return result;
+                        }
+
+                        // Ігноруємо YouTube трейлери
+                        if (iframeUrl.Contains("youtube.com/embed/"))
+                        {
+                            _onLog($"ParseEpisode: Ignoring YouTube trailer iframe: {iframeUrl}");
+                            return result;
+                        }
+
+                        if (iframeUrl.Contains("ashdi.vip"))
+                        {
+                            // Перевіряємо, чи це ashdi-vod (окремий епізод) або ashdi-serial (багатосерійний плеєр)
+                            if (iframeUrl.Contains("/vod/"))
                             {
-                                string ashdiId = idMatch.Groups[1].Success ? idMatch.Groups[1].Value : idMatch.Groups[2].Value;
-                                result.subtitles = await GetAshdiSubtitles(ashdiId);
+                                // Це окремий епізод на ashdi.vip/vod/, обробляємо як ashdi-vod
+                                result.streams = await ParseAshdiVodEpisode(iframeUrl);
+                            }
+                            else
+                            {
+                                // Це багатосерійний плеєр, обробляємо як і раніше
+                                result.streams = await ParseAllAshdiSources(iframeUrl);
+                                var idMatch = Regex.Match(iframeUrl, @"_(\d+)|vod/(\d+)");
+                                if (idMatch.Success)
+                                {
+                                    string ashdiId = idMatch.Groups[1].Success ? idMatch.Groups[1].Value : idMatch.Groups[2].Value;
+                                    result.subtitles = await GetAshdiSubtitles(ashdiId);
+                                }
                             }
                         }
                     }
@@ -1988,15 +2068,27 @@ namespace LME.Uaflix
             var script = doc.DocumentNode.SelectSingleNode("//script[contains(text(), 'file:')]");
             if (script != null)
             {
-                var match = Regex.Match(script.InnerText, @"file:\s*""([^""]+\.m3u8)");
-                if (match.Success)
+                var fileMatch = Regex.Match(script.InnerText, @"file:\s*""([^""]+\.m3u8)");
+                if (fileMatch.Success)
                 {
-                    string link = match.Groups[1].Value;
+                    string link = fileMatch.Groups[1].Value;
+
+                    // Парсимо subtitle з того ж Playerjs конфігу
+                    SubtitleTpl? subtitles = null;
+                    var subtitleMatch = Regex.Match(script.InnerText, @"subtitle:\s*""([^""]*)""");
+                    if (subtitleMatch.Success)
+                    {
+                        string subtitleStr = subtitleMatch.Groups[1].Value;
+                        if (!string.IsNullOrWhiteSpace(subtitleStr))
+                            subtitles = ApnHelper.ParseSubtitles(subtitleStr);
+                    }
+
                     result.Add(new PlayStream
                     {
                         link = link,
                         quality = "1080p",
-                        title = BuildDisplayTitle("Основне джерело", link, 1)
+                        title = BuildDisplayTitle("Основне джерело", link, 1),
+                        subtitles = subtitles
                     });
                     return result;
                 }
