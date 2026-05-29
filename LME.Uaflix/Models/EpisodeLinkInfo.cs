@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace LME.Uaflix.Models
 {
@@ -12,5 +13,11 @@ namespace LME.Uaflix.Models
         // Нові поля для підтримки змішаних плеєрів
         public string playerType { get; set; } // "ashdi-serial", "zetvideo-serial", "zetvideo-vod", "ashdi-vod"
         public string iframeUrl { get; set; }  // URL iframe для цього епізоду
+        
+        /// <summary>
+        /// Всі zetvideo iframe URL на сторінці епізоду (для створення кількох перекладів)
+        /// Перший елемент відповідає iframeUrl, наступні — додаткові плеєри (напр. з субтитрами)
+        /// </summary>
+        public List<string> zetvideoIframeUrls { get; set; }
     }
 }

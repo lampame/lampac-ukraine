@@ -76,8 +76,10 @@ namespace LME.Uaflix.Controllers
 
             if (play)
             {
-                // Визначаємо URL для парсингу - або з параметра t, або з episode_url
-                string urlToParse = !string.IsNullOrEmpty(t) ? t : Request.Query["episode_url"];
+                // Визначаємо URL для парсингу (параметр t тепер може бути назвою голосу, а не URL)
+                string urlToParse = Request.Query["episode_url"];
+                if (string.IsNullOrWhiteSpace(urlToParse))
+                    urlToParse = t;
                 if (string.IsNullOrWhiteSpace(urlToParse))
                 {
                     OnLog("=== RETURN: play missing url OnError ===");
@@ -87,8 +89,21 @@ namespace LME.Uaflix.Controllers
                 var playResult = await invoke.ParseEpisode(urlToParse);
                 if (playResult.streams != null && playResult.streams.Count > 0)
                 {
-                    OnLog("=== RETURN: play redirect ===");
-                    return UpdateService.Validate(Redirect(BuildStreamUrl(init, playResult.streams.First().link)));
+                    // Якщо кілька потоків, вибираємо за голосом
+                    PlayStream targetStream;
+                    if (playResult.streams.Count > 1 && !string.IsNullOrEmpty(t))
+                    {
+                        targetStream = playResult.streams.FirstOrDefault(s =>
+                            string.Equals(s.title, t, StringComparison.OrdinalIgnoreCase))
+                            ?? playResult.streams.First();
+                    }
+                    else
+                    {
+                        targetStream = playResult.streams.First();
+                    }
+
+                    OnLog($"=== RETURN: play redirect (stream: {targetStream.title}) ===");
+                    return UpdateService.Validate(Redirect(BuildStreamUrl(init, targetStream.link)));
                 }
                 
                 OnLog("=== RETURN: play no streams ===");
@@ -102,9 +117,28 @@ namespace LME.Uaflix.Controllers
                 var playResult = await invoke.ParseEpisode(episodeUrl);
                 if (playResult.streams != null && playResult.streams.Count > 0)
                 {
+                    // Якщо є кілька потоків (напр. Uaflix + Оригінал), вибираємо за голосом (t)
+                    PlayStream targetStream;
+                    if (playResult.streams.Count > 1 && !string.IsNullOrEmpty(t))
+                    {
+                        targetStream = playResult.streams.FirstOrDefault(s =>
+                            string.Equals(s.title, t, StringComparison.OrdinalIgnoreCase));
+                        if (targetStream == null)
+                        {
+                            _onLog($"call method: голос '{t}' не знайдено серед потоків, використовую перший");
+                            targetStream = playResult.streams.First();
+                        }
+                        else
+                            _onLog($"call method: вибрано потік для голосу '{t}'");
+                    }
+                    else
+                    {
+                        targetStream = playResult.streams.First();
+                    }
+
                     // Повертаємо JSON з інформацією про стрім для методу 'play'
-                    string streamUrl = BuildStreamUrl(init, playResult.streams.First().link);
-                    var subtitles = playResult.subtitles ?? playResult.streams.FirstOrDefault(s => s.subtitles != null)?.subtitles;
+                    string streamUrl = BuildStreamUrl(init, targetStream.link);
+                    var subtitles = playResult.subtitles ?? targetStream.subtitles;
                     
                     OnLog($"=== RETURN: call method JSON for episode_url ===");
                     return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, title ?? original_title, subtitles: subtitles), "application/json; charset=utf-8"));
@@ -277,7 +311,7 @@ namespace LME.Uaflix.Controllers
                         {
                             // Для zetvideo-vod та ashdi-vod використовуємо URL епізоду для виклику
                             // Потрібно передати URL епізоду в інший параметр, щоб не плутати з play=true
-                            string callUrl = $"{host}/lite/lme_uaflix?episode_url={HttpUtility.UrlEncode(ep.File)}&imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&s={s}&e={ep.Number}";
+                            string callUrl = $"{host}/lite/lme_uaflix?episode_url={HttpUtility.UrlEncode(ep.File)}&imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&s={s}&e={ep.Number}&t={HttpUtility.UrlEncode(t ?? "Uaflix")}";
                             episode_tpl.Append(
                                 name: episodeTitle,
                                 title: title,

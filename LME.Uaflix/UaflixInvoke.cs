@@ -286,14 +286,14 @@ namespace LME.Uaflix
             return result;
         }
 
-        private async Task<(string iframeUrl, string playerType)> ProbeEpisodePlayer(string pageUrl)
+        private async Task<EpisodePlayerInfo> ProbeEpisodePlayer(string pageUrl)
         {
             if (string.IsNullOrWhiteSpace(pageUrl))
-                return (null, null);
+                return null;
 
             string memKey = $"lme_uaflix:episode-player:{pageUrl}";
             if (_hybridCache.TryGetValue(memKey, out EpisodePlayerInfo cached))
-                return (cached?.IframeUrl, cached?.PlayerType);
+                return cached;
 
             try
             {
@@ -305,7 +305,7 @@ namespace LME.Uaflix
 
                 string html = await GetHtml(pageUrl, headers);
                 if (string.IsNullOrWhiteSpace(html))
-                    return (null, null);
+                    return null;
 
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
@@ -313,25 +313,40 @@ namespace LME.Uaflix
                 string iframeUrl = ExtractIframeUrl(doc);
                 string playerType = DeterminePlayerType(iframeUrl);
 
-                _hybridCache.Set(memKey, new EpisodePlayerInfo
+                // Витягуємо всі zetvideo iframe для підтримки кількох перекладів
+                List<string> zetvideoIframeUrls = null;
+                if (playerType == "zetvideo-vod")
+                {
+                    var allIframes = ExtractAllIframeUrls(doc);
+                    var zetIframes = allIframes
+                        .Where(u => u != null && u.Contains("zetvideo.net"))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    if (zetIframes.Count > 1)
+                        zetvideoIframeUrls = zetIframes;
+                }
+
+                var info = new EpisodePlayerInfo
                 {
                     IframeUrl = iframeUrl,
-                    PlayerType = playerType
-                }, cacheTime(20));
+                    PlayerType = playerType,
+                    ZetvideoIframeUrls = zetvideoIframeUrls
+                };
 
-                return (iframeUrl, playerType);
+                _hybridCache.Set(memKey, info, cacheTime(20));
+                return info;
             }
             catch (Exception ex)
             {
                 _onLog($"ProbeEpisodePlayer error ({pageUrl}): {ex.Message}");
-                return (null, null);
+                return null;
             }
         }
 
-        private async Task<(string iframeUrl, string playerType)> ProbeSeasonPlayer(List<EpisodeLinkInfo> seasonEpisodes)
+        private async Task<EpisodePlayerInfo> ProbeSeasonPlayer(List<EpisodeLinkInfo> seasonEpisodes)
         {
             if (seasonEpisodes == null || seasonEpisodes.Count == 0)
-                return (null, null);
+                return null;
 
             foreach (var episode in seasonEpisodes.OrderBy(e => e.episode))
             {
@@ -339,21 +354,26 @@ namespace LME.Uaflix
                     continue;
 
                 var probed = await ProbeEpisodePlayer(episode.url);
-                string playerType = probed.playerType;
-
-                episode.iframeUrl = probed.iframeUrl;
-                episode.playerType = playerType;
-
-                if (string.IsNullOrWhiteSpace(playerType))
+                if (probed == null)
                     continue;
 
-                if (playerType == "trailer")
+                episode.iframeUrl = probed.IframeUrl;
+                episode.playerType = probed.PlayerType;
+
+                // Зберігаємо всі zetvideo iframe для створення кількох перекладів
+                if (probed.ZetvideoIframeUrls != null && probed.ZetvideoIframeUrls.Count > 0)
+                    episode.zetvideoIframeUrls = probed.ZetvideoIframeUrls;
+
+                if (string.IsNullOrWhiteSpace(probed.PlayerType))
+                    continue;
+
+                if (probed.PlayerType == "trailer")
                     continue;
 
                 return probed;
             }
 
-            return (null, null);
+            return null;
         }
 
         private static string NormalizeSerialPlayerKey(string playerType, string iframeUrl)
@@ -732,22 +752,22 @@ namespace LME.Uaflix
                         _onLog($"AggregateSerialStructure: Processing season {season}");
 
                         var seasonProbe = await ProbeSeasonPlayer(seasonGroup.Value);
-                        if (string.IsNullOrWhiteSpace(seasonProbe.playerType))
+                        if (seasonProbe == null || string.IsNullOrWhiteSpace(seasonProbe.PlayerType))
                         {
                             _onLog($"AggregateSerialStructure: Season {season} has no supported player");
                             continue;
                         }
 
-                        if (seasonProbe.playerType == "ashdi-serial" || seasonProbe.playerType == "zetvideo-serial")
+                        if (seasonProbe.PlayerType == "ashdi-serial" || seasonProbe.PlayerType == "zetvideo-serial")
                         {
-                            string serialKey = NormalizeSerialPlayerKey(seasonProbe.playerType, seasonProbe.iframeUrl);
+                            string serialKey = NormalizeSerialPlayerKey(seasonProbe.PlayerType, seasonProbe.IframeUrl);
                             if (!serialPlayersProcessed.Add(serialKey))
                             {
                                 _onLog($"AggregateSerialStructure: Serial player already parsed for season {season}: {serialKey}");
                                 continue;
                             }
 
-                            var voices = await ParseMultiEpisodePlayer(seasonProbe.iframeUrl, seasonProbe.playerType);
+                            var voices = await ParseMultiEpisodePlayer(seasonProbe.IframeUrl, seasonProbe.PlayerType);
                             if (voices == null || voices.Count == 0)
                             {
                                 _onLog($"AggregateSerialStructure: No voices in serial player for season {season}");
@@ -755,18 +775,18 @@ namespace LME.Uaflix
                             }
 
                             MergeVoices(structure, voices);
-                            _onLog($"AggregateSerialStructure: Parsed serial player {seasonProbe.playerType}, voices={voices.Count}");
+                            _onLog($"AggregateSerialStructure: Parsed serial player {seasonProbe.PlayerType}, voices={voices.Count}");
                             continue;
                         }
 
-                        if (seasonProbe.playerType == "ashdi-vod" || seasonProbe.playerType == "zetvideo-vod")
+                        if (seasonProbe.PlayerType == "ashdi-vod" || seasonProbe.PlayerType == "zetvideo-vod")
                         {
-                            AddVodSeasonEpisodes(structure, seasonProbe.playerType, season, seasonGroup.Value);
+                            AddVodSeasonEpisodes(structure, seasonProbe.PlayerType, season, seasonGroup.Value);
                             _onLog($"AggregateSerialStructure: Added vod season {season}, episodes={seasonGroup.Value.Count}");
                             continue;
                         }
 
-                        _onLog($"AggregateSerialStructure: Unsupported player {seasonProbe.playerType} for season {season}");
+                        _onLog($"AggregateSerialStructure: Unsupported player {seasonProbe.PlayerType} for season {season}");
                     }
                 }
                 else
@@ -774,15 +794,15 @@ namespace LME.Uaflix
                     _onLog($"AggregateSerialStructure: No episodes from pagination for {serialUrl}, fallback to page iframe");
 
                     var serialProbe = await ProbeEpisodePlayer(serialUrl);
-                    if (string.IsNullOrWhiteSpace(serialProbe.playerType))
+                    if (serialProbe == null || string.IsNullOrWhiteSpace(serialProbe.PlayerType))
                     {
                         _onLog($"AggregateSerialStructure: Fallback probe failed for {serialUrl}");
                         return null;
                     }
 
-                    if (serialProbe.playerType == "ashdi-serial" || serialProbe.playerType == "zetvideo-serial")
+                    if (serialProbe.PlayerType == "ashdi-serial" || serialProbe.PlayerType == "zetvideo-serial")
                     {
-                        var voices = await ParseMultiEpisodePlayer(serialProbe.iframeUrl, serialProbe.playerType);
+                        var voices = await ParseMultiEpisodePlayer(serialProbe.IframeUrl, serialProbe.PlayerType);
                         if (voices == null || voices.Count == 0)
                         {
                             _onLog($"AggregateSerialStructure: Fallback serial player has no voices for {serialUrl}");
@@ -792,8 +812,13 @@ namespace LME.Uaflix
                         MergeVoices(structure, voices);
                         _onLog($"AggregateSerialStructure: Fallback serial player parsed, voices={voices.Count}");
                     }
-                    else if (serialProbe.playerType == "ashdi-vod" || serialProbe.playerType == "zetvideo-vod")
+                    else if (serialProbe.PlayerType == "ashdi-vod" || serialProbe.PlayerType == "zetvideo-vod")
                     {
+                        // Копіюємо zetvideoIframeUrls якщо є
+                        List<string> zetvideoUrls = null;
+                        if (serialProbe.ZetvideoIframeUrls != null && serialProbe.ZetvideoIframeUrls.Count > 0)
+                            zetvideoUrls = serialProbe.ZetvideoIframeUrls;
+
                         var syntheticEpisodes = new List<EpisodeLinkInfo>
                         {
                             new EpisodeLinkInfo
@@ -802,17 +827,18 @@ namespace LME.Uaflix
                                 title = "Епізод 1",
                                 season = 1,
                                 episode = 1,
-                                iframeUrl = serialProbe.iframeUrl,
-                                playerType = serialProbe.playerType
+                                iframeUrl = serialProbe.IframeUrl,
+                                playerType = serialProbe.PlayerType,
+                                zetvideoIframeUrls = zetvideoUrls
                             }
                         };
 
                         structure.AllEpisodes = syntheticEpisodes;
-                        AddVodSeasonEpisodes(structure, serialProbe.playerType, 1, syntheticEpisodes);
+                        AddVodSeasonEpisodes(structure, serialProbe.PlayerType, 1, syntheticEpisodes);
                     }
                     else
                     {
-                        _onLog($"AggregateSerialStructure: Fallback player is not supported for serial: {serialProbe.playerType}");
+                        _onLog($"AggregateSerialStructure: Fallback player is not supported for serial: {serialProbe.PlayerType}");
                         return null;
                     }
                 }
@@ -1096,20 +1122,20 @@ namespace LME.Uaflix
                 };
 
                 var seasonProbe = await ProbeSeasonPlayer(seasonEpisodes);
-                if (string.IsNullOrWhiteSpace(seasonProbe.playerType))
+                if (seasonProbe == null || string.IsNullOrWhiteSpace(seasonProbe.PlayerType))
                 {
                     // fallback: інколи плеєр є лише на головній сторінці
                     seasonProbe = await ProbeEpisodePlayer(serialUrl);
-                    if (string.IsNullOrWhiteSpace(seasonProbe.playerType))
+                    if (seasonProbe == null || string.IsNullOrWhiteSpace(seasonProbe.PlayerType))
                     {
                         _onLog($"GetSeasonStructure: unsupported player for season={season}");
                         return null;
                     }
                 }
 
-                if (seasonProbe.playerType == "ashdi-serial" || seasonProbe.playerType == "zetvideo-serial")
+                if (seasonProbe.PlayerType == "ashdi-serial" || seasonProbe.PlayerType == "zetvideo-serial")
                 {
-                    var voices = await ParseMultiEpisodePlayerCached(seasonProbe.iframeUrl, seasonProbe.playerType);
+                    var voices = await ParseMultiEpisodePlayerCached(seasonProbe.IframeUrl, seasonProbe.PlayerType);
                     foreach (var voice in voices)
                     {
                         if (voice?.Seasons == null || !voice.Seasons.TryGetValue(season, out List<EpisodeInfo> seasonVoiceEpisodes) || seasonVoiceEpisodes == null || seasonVoiceEpisodes.Count == 0)
@@ -1138,13 +1164,53 @@ namespace LME.Uaflix
                         };
                     }
                 }
-                else if (seasonProbe.playerType == "ashdi-vod" || seasonProbe.playerType == "zetvideo-vod")
+                else if (seasonProbe.PlayerType == "ashdi-vod" || seasonProbe.PlayerType == "zetvideo-vod")
                 {
-                    AddVodSeasonEpisodes(structure, seasonProbe.playerType, season, seasonEpisodes);
+                    // Створюємо базовий голос (перший плеєр)
+                    AddVodSeasonEpisodes(structure, seasonProbe.PlayerType, season, seasonEpisodes);
+
+                    // Якщо є додаткові zetvideo плеєри — створюємо окремий голос для кожного
+                    if (seasonEpisodes != null && seasonEpisodes.Count > 0)
+                    {
+                        var firstEp = seasonEpisodes.FirstOrDefault(e => e.zetvideoIframeUrls != null && e.zetvideoIframeUrls.Count > 1);
+                        if (firstEp != null)
+                        {
+                            // Додаткові плеєри починаються з індексу 1
+                            for (int extraIdx = 1; extraIdx < firstEp.zetvideoIframeUrls.Count; extraIdx++)
+                            {
+                                string extraVoiceName = GetZetvideoVoiceName(extraIdx);
+                                _onLog($"GetSeasonStructure: створюю додатковий голос '{extraVoiceName}' для zetvideo плеєра #{extraIdx + 1}");
+
+                                var extraEpisodes = seasonEpisodes
+                                    .OrderBy(ep => ep.episode)
+                                    .Select(ep => new EpisodeInfo
+                                    {
+                                        Number = ep.episode,
+                                        Title = ep.title,
+                                        File = ep.url,
+                                        Id = ep.url,
+                                        Poster = null,
+                                        Subtitle = null
+                                    })
+                                    .ToList();
+
+                                structure.Voices[extraVoiceName] = new VoiceInfo
+                                {
+                                    Name = extraVoiceName,
+                                    PlayerType = seasonProbe.PlayerType,
+                                    DisplayName = extraVoiceName,
+                                    Seasons = new Dictionary<int, List<EpisodeInfo>>
+                                    {
+                                        [season] = extraEpisodes
+                                    }
+                                };
+                            }
+                        }
+                    }
                 }
                 else
                 {
-                    _onLog($"GetSeasonStructure: player '{seasonProbe.playerType}' is not supported");
+                    _onLog($"GetSeasonStructure: player '{seasonProbe.PlayerType}' is not supported");
                     return null;
                 }
 
@@ -2056,6 +2122,15 @@ namespace LME.Uaflix
             }
         }
 
+        /// <summary>
+        /// Повертає назву голосу для додаткового zetvideo плеєра за індексом
+        /// Індекс 0 = "Uaflix" (основний), індекс 1 = "Оригінал", індекс 2+ = "Оригінал #N"
+        /// </summary>
+        private static string GetZetvideoVoiceName(int playerIndex)
+        {
+            return playerIndex <= 1 ? "Оригінал" : $"Оригінал #{playerIndex}";
+        }
+
         async Task<List<PlayStream>> ParseAllZetvideoSources(string iframeUrl)
         {
             var result = new List<PlayStream>();
@@ -2313,6 +2388,7 @@ namespace LME.Uaflix
         {
             public string IframeUrl { get; set; }
             public string PlayerType { get; set; }
+            public List<string> ZetvideoIframeUrls { get; set; }
         }
 
         sealed class SearchMeta
