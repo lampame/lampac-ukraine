@@ -1966,7 +1966,7 @@ namespace LME.Uaflix
                             stream.title = label;
 
                             _onLog($"ParseEpisode: zetvideo потік #{streamIndex + 1}: {label} -> {zetIframe}" +
-                                (stream.subtitles != null && stream.subtitles.Value.data != null && stream.subtitles.Value.data.Count > 0
+                                (stream.subtitles?.data?.Count > 0
                                     ? " (має субтитри)" : ""));
                         }
 
