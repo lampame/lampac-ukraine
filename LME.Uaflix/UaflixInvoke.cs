@@ -18,6 +18,13 @@ using System.Text;
 
 namespace LME.Uaflix
 {
+    public enum PageStatus
+    {
+        PageNotFound,
+        PageExistsNoPlayer,  // Page loaded (HTTP 200) but no playable streams found
+        HasStreams           // At least one stream found
+    }
+
     public class UaflixInvoke
     {
         private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase);
@@ -2090,6 +2097,133 @@ namespace LME.Uaflix
             }
             _onLog($"ParseEpisode result: streams.count={result.streams.Count}, ashdi_url={result.ashdi_url}");
             return result;
+        }
+
+        /// <summary>
+        /// Parse episode with page status detection — distinguishes between
+        /// "page not found", "page exists but no player", and "has streams"
+        /// </summary>
+        public async Task<(PlayResult result, PageStatus status)> ParseEpisodeWithStatus(string url)
+        {
+            var result = new PlayResult() { streams = new List<PlayStream>() };
+            try
+            {
+                var headers = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", "Mozilla/5.0"),
+                    new HeadersModel("Referer", _init.host)
+                };
+
+                string html = await GetHtml(url, headers);
+
+                if (string.IsNullOrWhiteSpace(html))
+                {
+                    _onLog($"ParseEpisodeWithStatus: Page not found or empty for {url}");
+                    return (result, PageStatus.PageNotFound);
+                }
+
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+
+                var videoNode = doc.DocumentNode.SelectSingleNode("//video");
+                if (videoNode != null)
+                {
+                    string videoUrl = videoNode.GetAttributeValue("src", "");
+                    if (!string.IsNullOrEmpty(videoUrl))
+                    {
+                        result.streams.Add(new PlayStream
+                        {
+                            link = videoUrl,
+                            quality = "1080p",
+                            title = BuildDisplayTitle("Основне джерело", videoUrl, 1)
+                        });
+                        return (result, PageStatus.HasStreams);
+                    }
+                }
+
+                var allIframes = ExtractAllIframeUrls(doc);
+
+                var zetvideoIframes = allIframes
+                    .Where(u => u != null && u.Contains("zetvideo.net"))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (zetvideoIframes.Count > 0)
+                {
+                    int streamIndex = 0;
+                    foreach (var zetIframe in zetvideoIframes)
+                    {
+                        var streams = await ParseAllZetvideoSources(zetIframe);
+                        if (streams == null || streams.Count == 0)
+                            continue;
+
+                        foreach (var stream in streams)
+                        {
+                            string label = streamIndex == 0 ? "Uaflix" : "Оригінал";
+                            stream.title = label;
+
+                            _onLog($"ParseEpisodeWithStatus: zetvideo stream #{streamIndex + 1}: {label} -> {zetIframe}" +
+                                (stream.subtitles?.data?.Count > 0
+                                    ? " (has subtitles)" : ""));
+                        }
+
+                        result.streams.AddRange(streams);
+                        streamIndex++;
+                    }
+
+                    if (result.streams.Count > 0)
+                        return (result, PageStatus.HasStreams);
+                }
+                else
+                {
+                    string iframeUrl = ExtractIframeUrl(doc);
+                    if (!string.IsNullOrEmpty(iframeUrl))
+                    {
+                        if (iframeUrl.Contains("ashdi.vip/serial/"))
+                        {
+                            result.ashdi_url = iframeUrl;
+                            return (result, PageStatus.HasStreams);
+                        }
+
+                        if (iframeUrl.Contains("youtube.com/embed/"))
+                        {
+                            _onLog($"ParseEpisodeWithStatus: Only YouTube trailer found on page: {iframeUrl}");
+                            return (result, PageStatus.PageExistsNoPlayer);
+                        }
+
+                        if (iframeUrl.Contains("ashdi.vip"))
+                        {
+                            if (iframeUrl.Contains("/vod/"))
+                            {
+                                result.streams = await ParseAshdiVodEpisode(iframeUrl);
+                            }
+                            else
+                            {
+                                result.streams = await ParseAllAshdiSources(iframeUrl);
+                                var idMatch = Regex.Match(iframeUrl, @"_(\d+)|vod/(\d+)");
+                                if (idMatch.Success)
+                                {
+                                    string ashdiId = idMatch.Groups[1].Success ? idMatch.Groups[1].Value : idMatch.Groups[2].Value;
+                                    result.subtitles = await GetAshdiSubtitles(ashdiId);
+                                }
+                            }
+
+                            if (result.streams.Count > 0)
+                                return (result, PageStatus.HasStreams);
+                        }
+                    }
+                }
+
+                _onLog($"ParseEpisodeWithStatus: Page exists but no playable streams for {url}");
+                return (result, PageStatus.PageExistsNoPlayer);
+            }
+            catch (Exception ex)
+            {
+                _onLog($"ParseEpisodeWithStatus error: {ex.Message}");
+            }
+
+            _onLog($"ParseEpisodeWithStatus result: streams.count={result.streams.Count}, ashdi_url={result.ashdi_url}");
+            return (result, result.streams.Count > 0 ? PageStatus.HasStreams : PageStatus.PageNotFound);
         }
 
         private void NormalizeUaflixVoiceNames(SerialAggregatedStructure structure)

@@ -14,6 +14,7 @@ using System.Text;
 using Shared.Models.Online.Settings;
 using Shared.Models;
 using LME.Uaflix.Models;
+using LME.Uaflix;
 
 namespace LME.Uaflix.Controllers
 {
@@ -107,7 +108,7 @@ namespace LME.Uaflix.Controllers
                 }
                 
                 OnLog("=== RETURN: play no streams ===");
-                return OnError("lme_uaflix", refresh_proxy: true);
+                return OnError("lme_uaflix", gbcache: false, refresh_proxy: true);
             }
 
             // Якщо є episode_url але немає play=true, це виклик для отримання інформації про стрім (для method: 'call')
@@ -145,7 +146,7 @@ namespace LME.Uaflix.Controllers
                 }
 
                 OnLog("=== RETURN: call method no streams ===");
-                return OnError("lme_uaflix", refresh_proxy: true);
+                return OnError("lme_uaflix", gbcache: false, refresh_proxy: true);
             }
 
             string filmUrl = href;
@@ -370,9 +371,37 @@ namespace LME.Uaflix.Controllers
             }
             else // Фільм
             {
-                var playResult = await invoke.ParseEpisode(filmUrl);
+                var (playResult, pageStatus) = await invoke.ParseEpisodeWithStatus(filmUrl);
+
+                // Retry: якщо сторінка існує, але плеєр ще не додано — чекаємо 3 сек і пробуємо знову
+                if (pageStatus == PageStatus.PageExistsNoPlayer
+                    && (playResult?.streams == null || playResult.streams.Count == 0))
+                {
+                    OnLog("Movie page exists but no player found, retrying in 3 seconds...");
+                    await Task.Delay(3000);
+
+                    var retryResult = await invoke.ParseEpisode(filmUrl);
+                    if (retryResult?.streams != null && retryResult.streams.Count > 0)
+                    {
+                        playResult = retryResult;
+                        pageStatus = PageStatus.HasStreams;
+                        OnLog("Retry successful: streams found after delay");
+                    }
+                    else
+                    {
+                        OnLog("Retry: still no streams after delay");
+                    }
+                }
+
                 if (playResult?.streams == null || playResult.streams.Count == 0)
                 {
+                    if (pageStatus == PageStatus.PageExistsNoPlayer)
+                    {
+                        OnLog("=== RETURN: movie page exists but player temporarily unavailable ===");
+                        // gbcache: false — не кешувати помилку, щоб наступні запити не блокувалися
+                        return OnError("Плеєр тимчасово недоступний, спробуйте пізніше", gbcache: false, refresh_proxy: false);
+                    }
+
                     OnLog("=== RETURN: movie no streams ===");
                     return OnError("lme_uaflix", refresh_proxy: true);
                 }
