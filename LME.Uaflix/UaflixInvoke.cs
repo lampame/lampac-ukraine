@@ -291,7 +291,8 @@ namespace LME.Uaflix
             if (string.IsNullOrWhiteSpace(pageUrl))
                 return null;
 
-            string memKey = $"lme_uaflix:episode-player:{pageUrl}";
+            // v2 — зміна кеш-ключа для інвалідації старих даних без ZetvideoIframeUrls
+            string memKey = $"lme_uaflix:episode-player-v2:{pageUrl}";
             if (_hybridCache.TryGetValue(memKey, out EpisodePlayerInfo cached))
                 return cached;
 
@@ -1099,7 +1100,8 @@ namespace LME.Uaflix
             if (season < 0)
                 return null;
 
-            string memKey = $"lme_uaflix:season-structure:{serialUrl}:{season}";
+            // v2 — зміна кеш-ключа для інвалідації старих структур без multi-voice
+            string memKey = $"lme_uaflix:season-structure-v2:{serialUrl}:{season}";
             if (_hybridCache.TryGetValue(memKey, out SerialAggregatedStructure cached))
             {
                 _onLog($"GetSeasonStructure: Using cached structure for season={season}, url={serialUrl}");
