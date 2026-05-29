@@ -125,11 +125,11 @@ namespace LME.Uaflix.Controllers
                             string.Equals(s.title, t, StringComparison.OrdinalIgnoreCase));
                         if (targetStream == null)
                         {
-                            _onLog($"call method: голос '{t}' не знайдено серед потоків, використовую перший");
+                            OnLog($"call method: голос '{t}' не знайдено серед потоків, використовую перший");
                             targetStream = playResult.streams.First();
                         }
                         else
-                            _onLog($"call method: вибрано потік для голосу '{t}'");
+                            OnLog($"call method: вибрано потік для голосу '{t}'");
                     }
                     else
                     {
