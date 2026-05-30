@@ -254,7 +254,58 @@ namespace LME.Mikai.Controllers
                 catch { }
             }
 
-            string streamUrl = BuildStreamUrl(init, streamLink, streamHeaders, forceProxy);
+            var streamQuality = new StreamQualityTpl();
+            string streamUrl = null;
+
+            if (!string.IsNullOrEmpty(streamLink) && (streamLink.StartsWith("[") || streamLink.Contains("]http")))
+            {
+                var bracketMatches = Regex.Matches(streamLink, @"\[(?<quality>[^\]]+)\](?<url>https?://[^,\[]+)", RegexOptions.IgnoreCase);
+                foreach (Match match in bracketMatches)
+                {
+                    string quality = match.Groups["quality"].Value;
+                    string urlVal = match.Groups["url"].Value?.Trim()?.TrimEnd(',');
+                    if (string.IsNullOrWhiteSpace(urlVal))
+                        continue;
+
+                    var headers = streamHeaders;
+                    if (urlVal.Contains("moonanime.art") || urlVal.Contains("mooncdn.space"))
+                    {
+                        headers = new List<HeadersModel>()
+                        {
+                            new HeadersModel("User-Agent", "Mozilla/5.0"),
+                            new HeadersModel("Referer", "https://moonanime.art/")
+                        };
+                    }
+
+                    string qualityStreamUrl = BuildStreamUrl(init, urlVal, headers, forceProxy);
+                    streamQuality.Append(qualityStreamUrl, quality);
+                }
+
+                if (streamQuality.Any())
+                {
+                    var first = streamQuality.Firts();
+                    streamUrl = first.link;
+                }
+            }
+
+            if (string.IsNullOrEmpty(streamUrl))
+            {
+                var headers = streamHeaders;
+                if (!string.IsNullOrEmpty(streamLink) && (streamLink.Contains("moonanime.art") || streamLink.Contains("mooncdn.space")))
+                {
+                    headers = new List<HeadersModel>()
+                    {
+                        new HeadersModel("User-Agent", "Mozilla/5.0"),
+                        new HeadersModel("Referer", "https://moonanime.art/")
+                    };
+                }
+                streamUrl = BuildStreamUrl(init, streamLink, headers, forceProxy);
+            }
+
+            if (streamQuality.Any())
+            {
+                return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, title ?? string.Empty, subtitles: subtitleTpl, streamquality: streamQuality), "application/json; charset=utf-8"));
+            }
             return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, title ?? string.Empty, subtitles: subtitleTpl), "application/json; charset=utf-8"));
         }
 

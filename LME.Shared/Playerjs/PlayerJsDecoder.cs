@@ -11,7 +11,7 @@ namespace LME.Common.Playerjs
 {
     public static class PlayerJsDecoder
     {
-        private static readonly Regex _reAtobLiteral = new Regex(@"atob\(\s*(['""])(?<payload>[A-Za-z0-9+/=]+)\1\s*\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex _reAtobLiteral = new Regex(@"atob\(\s*(['""])(?<payload>[^'""]+)\1\s*\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex _reJsonParseHelper = new Regex(@"JSON\.parse\(\s*(?<fn>[A-Za-z_$][\w$]*)\(\s*(?<quote>['""])(?<payload>.*?)(\k<quote>)\s*\)\s*\)", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
         private static readonly Regex _reHelperCall = new Regex(@"^\s*(?<fn>[A-Za-z_$][\w$]*)\(\s*(?<quote>['""])(?<payload>.*?)(\k<quote>)\s*\)\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
         private static readonly Regex _reTrailingComma = new Regex(@",\s*([}\]])", RegexOptions.Compiled);
@@ -150,7 +150,10 @@ namespace LME.Common.Playerjs
             if (!match.Success)
                 return null;
 
-            byte[] rawData = SafeBase64Decode(match.Groups["payload"].Value);
+            string rawBase64 = match.Groups["payload"].Value;
+            rawBase64 = Regex.Replace(rawBase64, @"\s+", "");
+
+            byte[] rawData = SafeBase64Decode(rawBase64);
             if (rawData == null || rawData.Length <= 32)
                 return null;
 
@@ -161,7 +164,39 @@ namespace LME.Common.Playerjs
             for (int index = 0; index < encryptedData.Length; index++)
                 decoded[index] = (byte)(encryptedData[index] ^ key[index % key.Length]);
 
-            return DecodeBytes(decoded);
+            string decodedStr = DecodeBytes(decoded);
+            if (decodedStr != null && (decodedStr.Contains("Playerjs") || decodedStr.Contains("file:")))
+                return decodedStr;
+
+            try
+            {
+                if (rawData.Length > 33)
+                {
+                    byte state = rawData[0];
+                    byte[] moonKey = new byte[32];
+                    Array.Copy(rawData, 1, moonKey, 0, 32);
+
+                    int payloadLen = rawData.Length - 33;
+                    byte[] moonPayload = new byte[payloadLen];
+                    Array.Copy(rawData, 33, moonPayload, 0, payloadLen);
+
+                    for (int i = 0; i < moonPayload.Length; i++)
+                    {
+                        byte encrypted = moonPayload[i];
+                        byte keyByte = moonKey[i % 32];
+
+                        moonPayload[i] = (byte)(encrypted ^ keyByte ^ state);
+                        state = (byte)((encrypted + keyByte) & 0xFF);
+                    }
+
+                    string moonDecoded = DecodeBytes(moonPayload);
+                    if (moonDecoded != null && (moonDecoded.Contains("Playerjs") || moonDecoded.Contains("file:")))
+                        return moonDecoded;
+                }
+            }
+            catch { }
+
+            return decodedStr;
         }
 
         private static byte[] SafeBase64Decode(string value)
