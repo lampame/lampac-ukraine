@@ -30,7 +30,30 @@ namespace LME.AnimeON.Models
         public string ImdbId { get; set; }
 
         [JsonPropertyName("season")]
-        public int Season { get; set; }
+        public System.Text.Json.JsonElement? RawSeason { get; set; }
+
+        [JsonIgnore]
+        public int Season
+        {
+            get
+            {
+                if (RawSeason == null)
+                    return 0;
+
+                var element = RawSeason.Value;
+                if (element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out int val))
+                    return val;
+
+                if (element.ValueKind == JsonValueKind.String)
+                {
+                    string str = element.GetString();
+                    if (int.TryParse(str, out int val2))
+                        return val2;
+                }
+
+                return 0;
+            }
+        }
     }
 
     public class FundubsResponseModel
