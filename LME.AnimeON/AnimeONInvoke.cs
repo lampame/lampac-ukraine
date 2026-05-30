@@ -169,15 +169,82 @@ namespace LME.AnimeON
             return JsonSerializer.Deserialize<EpisodeModel>(episodesJson);
         }
 
+        #region MoonAnime Decryption
+        private static string CleanMoonUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string cleaned = Regex.Replace(url, @"([?&])player=[^&]*", "$1", RegexOptions.IgnoreCase);
+            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
+            return cleaned;
+        }
+
+        public static string MoonDecode(string base64Input)
+        {
+            try
+            {
+                byte[] raw = Convert.FromBase64String(base64Input);
+                const int KeySize = 32;
+                const int HeaderSize = 1 + KeySize;
+
+                if (raw.Length < HeaderSize)
+                    return null;
+
+                byte state = raw[0];
+                byte[] key = new byte[KeySize];
+                Array.Copy(raw, 1, key, 0, KeySize);
+
+                int payloadLen = raw.Length - HeaderSize;
+                byte[] payload = new byte[payloadLen];
+                Array.Copy(raw, HeaderSize, payload, 0, payloadLen);
+
+                for (int i = 0; i < payload.Length; i++)
+                {
+                    byte encrypted = payload[i];
+                    byte keyByte = key[i % KeySize];
+
+                    payload[i] = (byte)(encrypted ^ keyByte ^ state);
+                    state = (byte)((encrypted + keyByte) & 0xFF);
+                }
+
+                return Encoding.UTF8.GetString(payload);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public static string MoonXorDecrypt(string file, string key)
+        {
+            try
+            {
+                byte[] keyBytes = Encoding.UTF8.GetBytes(key);
+                byte[] data = Convert.FromBase64String(file);
+
+                for (int i = 0; i < data.Length; i++)
+                {
+                    data[i] = (byte)(data[i] ^ keyBytes[i % keyBytes.Length]);
+                }
+
+                return Encoding.UTF8.GetString(data);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        #endregion
+
         public async Task<string> ParseMoonAnimePage(string url)
         {
             try
             {
-                string requestUrl = $"{url}?player=animeon.club";
+                string requestUrl = CleanMoonUrl(url);
                 var headers = new List<HeadersModel>()
                 {
-                    new HeadersModel("User-Agent", "Mozilla/5.0"),
-                    new HeadersModel("Referer", "https://animeon.club/")
+                    new HeadersModel("User-Agent", "Mozilla/5.0")
                 };
 
                 _onLog($"AnimeON: using proxy {_proxyManager.CurrentProxyIp} for {requestUrl}");
@@ -185,12 +252,56 @@ namespace LME.AnimeON
                 if (string.IsNullOrEmpty(html))
                     return null;
 
-                var payload = PlayerJsDecoder.ExtractPlayerPayload(html);
-                if (payload?.FilePayload == null)
-                    return null;
+                var atobMatch = Regex.Match(html, @"=atob\(""([^""]+)""\)");
+                if (!atobMatch.Success)
+                {
+                    atobMatch = Regex.Match(html, @"=atob\('([^']+)'\)");
+                }
 
-                var streamUrls = ExtractStreamUrls(payload.FilePayload);
-                return streamUrls?.FirstOrDefault();
+                if (atobMatch.Success)
+                {
+                    string blob = atobMatch.Groups[1].Value;
+                    string decryptedJs = MoonDecode(blob);
+                    if (!string.IsNullOrEmpty(decryptedJs))
+                    {
+                        var keyMatch = Regex.Match(decryptedJs, @"var k=""([^""]+)""");
+                        if (!keyMatch.Success)
+                            keyMatch = Regex.Match(decryptedJs, @"var k='([^']+)'");
+
+                        var fileMatch = Regex.Match(decryptedJs, @"file\s*:\s*_0xd\(""([^""]+)""\)");
+                        if (!fileMatch.Success)
+                            fileMatch = Regex.Match(decryptedJs, @"file\s*:\s*_0xd\('([^']+)'\)");
+
+                        if (keyMatch.Success && fileMatch.Success)
+                        {
+                            string key = keyMatch.Groups[1].Value;
+                            string fileEncrypted = fileMatch.Groups[1].Value;
+                            string streams = MoonXorDecrypt(fileEncrypted, key);
+                            if (!string.IsNullOrEmpty(streams))
+                            {
+                                return streams;
+                            }
+                        }
+                        else
+                        {
+                            var directFileMatch = Regex.Match(decryptedJs, @"file\s*:\s*""([^""]+)""");
+                            if (!directFileMatch.Success)
+                                directFileMatch = Regex.Match(decryptedJs, @"file\s*:\s*'([^']+)'");
+
+                            if (directFileMatch.Success)
+                            {
+                                return directFileMatch.Groups[1].Value;
+                            }
+                        }
+                    }
+                }
+
+                var payload = PlayerJsDecoder.ExtractPlayerPayload(html);
+                if (payload?.FilePayload != null)
+                {
+                    var streamUrls = ExtractStreamUrls(payload.FilePayload);
+                    return streamUrls?.FirstOrDefault();
+                }
             }
             catch (Exception ex)
             {
