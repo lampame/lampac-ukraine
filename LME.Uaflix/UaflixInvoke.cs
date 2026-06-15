@@ -1141,8 +1141,8 @@ namespace LME.Uaflix
             if (season < 0)
                 return null;
 
-            // v2 — зміна кеш-ключа для інвалідації старих структур без multi-voice
-            string memKey = $"lme_uaflix:season-structure-v2:{serialUrl}:{season}";
+            // v3 — інвалідація старих структур, що містили прем'єрні серії
+            string memKey = $"lme_uaflix:season-structure-v3:{serialUrl}:{season}";
             if (_hybridCache.TryGetValue(memKey, out SerialAggregatedStructure cached))
             {
                 _onLog($"GetSeasonStructure: Using cached structure for season={season}, url={serialUrl}");
