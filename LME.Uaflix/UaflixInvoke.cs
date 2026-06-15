@@ -433,6 +433,17 @@ namespace LME.Uaflix
             if (structure == null || string.IsNullOrWhiteSpace(playerType) || seasonEpisodes == null || seasonEpisodes.Count == 0)
                 return;
 
+            // Відфільтровуємо епізоди, що ще не вийшли (позначені як «Прем'єра»)
+            var availableEpisodes = seasonEpisodes.Where(e => !e.IsPremiere).ToList();
+            int filteredCount = seasonEpisodes.Count - availableEpisodes.Count;
+            if (filteredCount > 0)
+                _onLog($"AddVodSeasonEpisodes: Відфільтровано {filteredCount} прем'єрних епізодів із сезону {season}");
+            if (availableEpisodes.Count == 0)
+            {
+                _onLog($"AddVodSeasonEpisodes: Усі епізоди сезону {season} є прем'єрами, пропускаю");
+                return;
+            }
+
             string displayName = playerType == "ashdi-vod" ? "Uaflix #3" : "Uaflix #2";
             if (!structure.Voices.ContainsKey(displayName))
             {
@@ -445,7 +456,7 @@ namespace LME.Uaflix
                 };
             }
 
-            var episodes = seasonEpisodes
+            var episodes = availableEpisodes
                 .OrderBy(ep => ep.episode)
                 .Select(ep => new EpisodeInfo
                 {
@@ -1198,13 +1209,24 @@ namespace LME.Uaflix
                 }
                 else if (seasonProbe.PlayerType == "ashdi-vod" || seasonProbe.PlayerType == "zetvideo-vod")
                 {
+                    // Відфільтровуємо прем'єрні епізоди (ще не вийшли) перед додаванням у структуру
+                    var seasonAvailable = seasonEpisodes.Where(e => !e.IsPremiere).ToList();
+                    int filteredCount = seasonEpisodes.Count - seasonAvailable.Count;
+                    if (filteredCount > 0)
+                        _onLog($"GetSeasonStructure: Відфільтровано {filteredCount} прем'єрних епізодів із сезону {season}");
+                    if (seasonAvailable.Count == 0)
+                    {
+                        _onLog($"GetSeasonStructure: Усі епізоди сезону {season} є прем'єрами, пропускаю");
+                        continue;
+                    }
+
                     // Створюємо базовий голос (перший плеєр)
-                    AddVodSeasonEpisodes(structure, seasonProbe.PlayerType, season, seasonEpisodes);
+                    AddVodSeasonEpisodes(structure, seasonProbe.PlayerType, season, seasonAvailable);
 
                     // Якщо є додаткові zetvideo плеєри — створюємо окремий голос для кожного
-                    if (seasonEpisodes != null && seasonEpisodes.Count > 0)
+                    if (seasonAvailable.Count > 0)
                     {
-                        var firstEp = seasonEpisodes.FirstOrDefault(e => e.zetvideoIframeUrls != null && e.zetvideoIframeUrls.Count > 1);
+                        var firstEp = seasonAvailable.FirstOrDefault(e => e.zetvideoIframeUrls != null && e.zetvideoIframeUrls.Count > 1);
                         if (firstEp != null)
                         {
                             // Додаткові плеєри починаються з індексу 1
@@ -1213,7 +1235,7 @@ namespace LME.Uaflix
                                 string extraVoiceName = GetZetvideoVoiceName(extraIdx);
                                 _onLog($"GetSeasonStructure: створюю додатковий голос '{extraVoiceName}' для zetvideo плеєра #{extraIdx + 1}");
 
-                                var extraEpisodes = seasonEpisodes
+                                var extraEpisodes = seasonAvailable
                                     .OrderBy(ep => ep.episode)
                                     .Select(ep => new EpisodeInfo
                                     {
