@@ -1216,8 +1216,8 @@ namespace LME.Uaflix
                         _onLog($"GetSeasonStructure: Відфільтровано {filteredCount} прем'єрних епізодів із сезону {season}");
                     if (seasonAvailable.Count == 0)
                     {
-                        _onLog($"GetSeasonStructure: Усі епізоди сезону {season} є прем'єрами, пропускаю");
-                        continue;
+                        _onLog($"GetSeasonStructure: Усі епізоди сезону {season} є прем'єрами, повертаю null");
+                        return null;
                     }
 
                     // Створюємо базовий голос (перший плеєр)
