@@ -19,5 +19,12 @@ namespace LME.Uaflix.Models
         /// Перший елемент відповідає iframeUrl, наступні — додаткові плеєри (напр. з субтитрами)
         /// </summary>
         public List<string> zetvideoIframeUrls { get; set; }
+
+        /// <summary>
+        /// Епізод позначено як «Прем'єра» (ще не вийшов) на сторінці сезону.
+        /// У таких епізодів у vi-desc → vi-title зазначено "Прем'єра. ДД.ММ.РРРР".
+        /// ProbeSeasonPlayer не робитиме зайвого HTTP-запиту для таких епізодів.
+        /// </summary>
+        public bool IsPremiere { get; set; }
     }
 }

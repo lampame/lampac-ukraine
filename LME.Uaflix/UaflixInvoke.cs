@@ -361,6 +361,14 @@ namespace LME.Uaflix
                 if (episode == null || string.IsNullOrWhiteSpace(episode.url))
                     continue;
 
+                // Пропускаємо епізоди, позначені як «Прем'єра» — вони ще не вийшли,
+                // робити зайвий HTTP-запит на сторінку епізоду не потрібно.
+                if (episode.IsPremiere)
+                {
+                    _onLog($"ProbeSeasonPlayer: Пропускаю епізод {episode.episode} — позначено як прем'єра");
+                    continue;
+                }
+
                 var probed = await ProbeEpisodePlayer(episode.url);
                 if (probed == null)
                     continue;
@@ -1084,13 +1092,28 @@ namespace LME.Uaflix
                         parsedEpisode = episodeFromUrl;
                 }
 
-                episodes.Add(new EpisodeLinkInfo
+                var episode = new EpisodeLinkInfo
                 {
                     url = episodeUrl,
                     title = episodeNode.SelectSingleNode(".//div[@class='vi-rate']")?.InnerText.Trim() ?? $"Епізод {parsedEpisode}",
                     season = parsedSeason,
                     episode = parsedEpisode
-                });
+                };
+
+                // Перевірка на «Прем'єра» — епізод ще не вийшов, плеєра немає
+                var viDesc = episodeNode.SelectSingleNode(".//div[contains(@class, 'vi-desc')]");
+                if (viDesc != null)
+                {
+                    var viTitle = viDesc.SelectSingleNode(".//div[contains(@class, 'vi-title')]");
+                    string descText = viTitle?.InnerText?.Trim() ?? string.Empty;
+                    if (descText.IndexOf("Прем'єра", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        episode.IsPremiere = true;
+                        _onLog($"ParseSeasonEpisodesFromHtml: Серія {parsedEpisode} позначена як прем'єра: '{descText}'");
+                    }
+                }
+
+                episodes.Add(episode);
 
                 fallbackEpisode = Math.Max(fallbackEpisode, parsedEpisode + 1);
             }
@@ -1954,15 +1977,30 @@ namespace LME.Uaflix
 
                             var match = Regex.Match(episodeUrl, @"season-(\d+).*?episode-(\d+)");
                             if (match.Success)
+                    {
+                        var ep = new EpisodeLinkInfo
+                        {
+                            url = episodeUrl,
+                            title = episodeNode.SelectSingleNode(".//div[@class='vi-rate']")?.InnerText.Trim() ?? $"Епізод {match.Groups[2].Value}",
+                            season = int.Parse(match.Groups[1].Value),
+                            episode = int.Parse(match.Groups[2].Value)
+                        };
+
+                        // Перевірка на «Прем'єра» — епізод ще не вийшов
+                        var viDesc = episodeNode.SelectSingleNode(".//div[contains(@class, 'vi-desc')]");
+                        if (viDesc != null)
+                        {
+                            var viTitle = viDesc.SelectSingleNode(".//div[contains(@class, 'vi-title')]");
+                            string descText = viTitle?.InnerText?.Trim() ?? string.Empty;
+                            if (descText.IndexOf("Прем'єра", StringComparison.OrdinalIgnoreCase) >= 0)
                             {
-                                allEpisodes.Add(new EpisodeLinkInfo
-                                {
-                                    url = episodeUrl,
-                                    title = episodeNode.SelectSingleNode(".//div[@class='vi-rate']")?.InnerText.Trim() ?? $"Епізод {match.Groups[2].Value}",
-                                    season = int.Parse(match.Groups[1].Value),
-                                    episode = int.Parse(match.Groups[2].Value)
-                                });
+                                ep.IsPremiere = true;
+                                _onLog($"GetPaginationInfo: Серія {ep.episode} позначена як прем'єра: '{descText}'");
                             }
+                        }
+
+                        allEpisodes.Add(ep);
+                    }
                         }
                     }
                 }
