@@ -1,12 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Net.Http;
 using System.Net.Mime;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -68,7 +67,7 @@ namespace LME.Common.Update
                     Version = _versionResolver(),
                 };
 
-                var requestJson = JsonConvert.SerializeObject(request, Formatting.None);
+                var requestJson = JsonSerializer.Serialize(request);
                 var requestContent = new StringContent(requestJson, Encoding.UTF8, MediaTypeNames.Application.Json);
 
                 var response = await client
@@ -83,7 +82,7 @@ namespace LME.Common.Update
                         .ReadAsStringAsync(cancellationToken)
                         .ConfigureAwait(false);
 
-                    _connect = JsonConvert.DeserializeObject<ConnectResponse>(responseText);
+                    _connect = JsonSerializer.Deserialize<ConnectResponse>(responseText);
                 }
 
                 lock (_lock)
@@ -118,7 +117,7 @@ namespace LME.Common.Update
         public ActionResult Validate(ActionResult result)
         {
             return IsDisconnected()
-                ? throw new JsonReaderException($"Disconnect error: {Guid.CreateVersion7()}")
+                ? throw new JsonException($"Disconnect error: {Guid.CreateVersion7()}")
                 : result;
         }
 

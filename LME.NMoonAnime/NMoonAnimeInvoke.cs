@@ -17,7 +17,7 @@ using System.Web;
 
 namespace LME.NMoonAnime
 {
-    public class NMoonAnimeInvoke
+    public partial class NMoonAnimeInvoke
     {
         private readonly OnlinesSettings _init;
         private readonly IHybridCache _hybridCache;
@@ -28,8 +28,12 @@ namespace LME.NMoonAnime
         {
             PropertyNameCaseInsensitive = true
         };
-        private static readonly Regex _reSeason = new Regex(@"(?:season|сезон)\s*(\d+)|(\d+)\s*(?:season|сезон)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        private static readonly Regex _reEpisode = new Regex(@"(?:episode|серія|серия|епізод|ep)\s*(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        [GeneratedRegex(@"(?:season|сезон)\s*(\d+)|(\d+)\s*(?:season|сезон)", RegexOptions.IgnoreCase)]
+        private static partial Regex ReSeason();
+
+        [GeneratedRegex(@"(?:episode|серія|серия|епізод|ep)\s*(\d+)", RegexOptions.IgnoreCase)]
+        private static partial Regex ReEpisode();
 
         public NMoonAnimeInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, HttpHydra httpHydra = null)
         {
@@ -61,7 +65,7 @@ namespace LME.NMoonAnime
                         continue;
 
                     _onLog($"NMoonAnime: пошук через {searchUrl}");
-                    string json = await HttpGet(searchUrl, DefaultHeaders());
+                    string json = await HttpHelper.GetAsync(_httpHydra, _init, searchUrl, DefaultHeaders(), _proxyManager);
                     if (string.IsNullOrWhiteSpace(json))
                         continue;
 
@@ -80,7 +84,7 @@ namespace LME.NMoonAnime
 
                     if (seasons != null && seasons.Count > 0)
                     {
-                        _hybridCache.Set(memKey, seasons, cacheTime(10, init: _init));
+                        _hybridCache.Set(memKey, seasons, CacheHelper.CacheTime(10, init: _init));
                         return seasons;
                     }
                 }
@@ -105,13 +109,13 @@ namespace LME.NMoonAnime
             try
             {
                 _onLog($"NMoonAnime: завантаження сезону {season.Url}");
-                string html = await HttpGet(season.Url, DefaultHeaders());
+                string html = await HttpHelper.GetAsync(_httpHydra, _init, season.Url, DefaultHeaders(), _proxyManager);
                 if (string.IsNullOrWhiteSpace(html))
                     return null;
 
                 var content = ParseSeasonPage(html, season.SeasonNumber, season.Url);
                 if (content != null)
-                    _hybridCache.Set(memKey, content, cacheTime(20, init: _init));
+                    _hybridCache.Set(memKey, content, CacheHelper.CacheTime(20, init: _init));
 
                 return content;
             }
@@ -571,7 +575,7 @@ namespace LME.NMoonAnime
             if (string.IsNullOrWhiteSpace(value))
                 return null;
 
-            var match = _reSeason.Match(value);
+            var match = ReSeason().Match(value);
             if (!match.Success)
                 return null;
 
@@ -587,7 +591,7 @@ namespace LME.NMoonAnime
             if (string.IsNullOrWhiteSpace(title))
                 return fallback;
 
-            var episodeMatch = _reEpisode.Match(title);
+            var episodeMatch = ReEpisode().Match(title);
             if (episodeMatch.Success && int.TryParse(episodeMatch.Groups[1].Value, out int episodeNumber))
                 return episodeNumber;
 
@@ -670,26 +674,6 @@ namespace LME.NMoonAnime
                 new HeadersModel("User-Agent", "Mozilla/5.0"),
                 new HeadersModel("Referer", _init.host)
             };
-        }
-
-        private Task<string> HttpGet(string url, List<HeadersModel> headers)
-        {
-            if (_httpHydra != null)
-                return _httpHydra.Get(url, newheaders: headers);
-
-            return Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
-        }
-
-        public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
-        {
-            if (init != null && init.rhub && rhub != -1)
-                return TimeSpan.FromMinutes(rhub);
-
-            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
-            if (ctime > multiaccess)
-                ctime = multiaccess;
-
-            return TimeSpan.FromMinutes(ctime);
         }
 
         private sealed class NMoonAnimeMovieEntry

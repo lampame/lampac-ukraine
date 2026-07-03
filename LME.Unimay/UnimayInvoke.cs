@@ -8,6 +8,7 @@ using System.Linq;
 using LME.Unimay.Models;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 
 namespace LME.Unimay
 {
@@ -40,7 +41,8 @@ namespace LME.Unimay
                 string searchUrl = $"{_init.host}/release/search?page=0&page_size=10&title={searchQuery}";
 
                 var headers = httpHeaders(_init);
-                SearchResponse root = await HttpGet<SearchResponse>(searchUrl, headers, timeoutSeconds: 8);
+                string json = await HttpHelper.GetAsync(_httpHydra, _init, searchUrl, headers, _proxyManager);
+                SearchResponse root = json != null ? JsonSerializer.Deserialize<SearchResponse>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) : null;
 
                 if (root == null || root.Content == null || root.Content.Count == 0)
                 {
@@ -49,7 +51,7 @@ namespace LME.Unimay
                     return null;
                 }
 
-                _hybridCache.Set(memKey, root, cacheTime(30, init: _init));
+                _hybridCache.Set(memKey, root, CacheHelper.CacheTime(30, init: _init));
                 return root;
             }
             catch (Exception ex)
@@ -70,7 +72,8 @@ namespace LME.Unimay
                 string releaseUrl = $"{_init.host}/release?code={code}";
 
                 var headers = httpHeaders(_init);
-                ReleaseResponse root = await HttpGet<ReleaseResponse>(releaseUrl, headers, timeoutSeconds: 8);
+                string json = await HttpHelper.GetAsync(_httpHydra, _init, releaseUrl, headers, _proxyManager);
+                ReleaseResponse root = json != null ? JsonSerializer.Deserialize<ReleaseResponse>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) : null;
 
                 if (root == null)
                 {
@@ -79,7 +82,7 @@ namespace LME.Unimay
                     return null;
                 }
 
-                _hybridCache.Set(memKey, root, cacheTime(60, init: _init));
+                _hybridCache.Set(memKey, root, CacheHelper.CacheTime(60, init: _init));
                 return root;
             }
             catch (Exception ex)
@@ -161,24 +164,5 @@ namespace LME.Unimay
             };
         }
 
-        private Task<T> HttpGet<T>(string url, List<HeadersModel> headers, int timeoutSeconds = 15)
-        {
-            if (_httpHydra != null)
-                return _httpHydra.Get<T>(url, newheaders: headers);
-
-            return Http.Get<T>(_init.cors(url), timeoutSeconds: timeoutSeconds, proxy: _proxyManager.Get(), headers: headers);
-        }
-
-        public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
-        {
-            if (init != null && init.rhub && rhub != -1)
-                return TimeSpan.FromMinutes(rhub);
-
-            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
-            if (ctime > multiaccess)
-                ctime = multiaccess;
-
-            return TimeSpan.FromMinutes(ctime);
-        }
     }
 }

@@ -4,8 +4,8 @@ using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Shared;
 using Shared.Engine;
 using Shared.Models;
@@ -17,8 +17,6 @@ namespace LME.Makhno
     public class MakhnoInvoke
     {
         private const string WormholeHost = "https://wh.lme.isroot.in/";
-        private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase);
-        private static readonly Regex QualityFhdRegex = new Regex(@"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b", RegexOptions.IgnoreCase);
 
         private readonly OnlinesSettings _init;
         private readonly IHybridCache _hybridCache;
@@ -48,11 +46,11 @@ namespace LME.Makhno
                     new HeadersModel("User-Agent", Http.UserAgent)
                 };
 
-                string response = await HttpGet(url, headers, timeoutSeconds: 4);
+                string response = await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
                 if (string.IsNullOrWhiteSpace(response))
                     return null;
 
-                var payload = JsonConvert.DeserializeObject<WormholeResponse>(response);
+                var payload = JsonSerializer.Deserialize<WormholeResponse>(response);
                 return string.IsNullOrWhiteSpace(payload?.play) ? null : payload.play;
             }
             catch (Exception ex)
@@ -69,7 +67,7 @@ namespace LME.Makhno
 
             try
             {
-                string sourceUrl = WithAshdiMultivoice(playerUrl);
+                string sourceUrl = ApnExtensions.WithAshdiMultivoice(playerUrl);
                 string requestUrl = sourceUrl;
                 var headers = new List<HeadersModel>()
                 {
@@ -86,7 +84,7 @@ namespace LME.Makhno
 
                 _onLog($"lme_makhno getting player data from: {requestUrl}");
 
-                var response = await HttpGet(requestUrl, headers);
+                var response = await HttpHelper.GetAsync(_httpHydra, _init, requestUrl, headers, _proxyManager);
                 if (string.IsNullOrEmpty(response))
                     return null;
 
@@ -127,8 +125,8 @@ namespace LME.Makhno
                             new MovieVariant
                             {
                                 File = file,
-                                Quality = DetectQualityTag(file) ?? "auto",
-                                Title = BuildMovieTitle("Основне джерело", file, 1),
+                                Quality = QualityHelper.DetectQualityTag(file) ?? "auto",
+                                Title = QualityHelper.BuildDisplayTitle("Основне джерело", file, 1),
                                 Subtitles = subtitles
                             }
                         }
@@ -168,8 +166,8 @@ namespace LME.Makhno
                             new MovieVariant
                             {
                                 File = m3u8Match.Groups[1].Value,
-                                Quality = DetectQualityTag(m3u8Match.Groups[1].Value) ?? "auto",
-                                Title = BuildMovieTitle("Основне джерело", m3u8Match.Groups[1].Value, 1)
+                                Quality = QualityHelper.DetectQualityTag(m3u8Match.Groups[1].Value) ?? "auto",
+                                Title = QualityHelper.BuildDisplayTitle("Основне джерело", m3u8Match.Groups[1].Value, 1)
                             }
                         }
                     };
@@ -189,8 +187,8 @@ namespace LME.Makhno
                             new MovieVariant
                             {
                                 File = sourceMatch.Groups[1].Value,
-                                Quality = DetectQualityTag(sourceMatch.Groups[1].Value) ?? "auto",
-                                Title = BuildMovieTitle("Основне джерело", sourceMatch.Groups[1].Value, 1)
+                                Quality = QualityHelper.DetectQualityTag(sourceMatch.Groups[1].Value) ?? "auto",
+                                Title = QualityHelper.BuildDisplayTitle("Основне джерело", sourceMatch.Groups[1].Value, 1)
                             }
                         }
                     };
@@ -209,7 +207,7 @@ namespace LME.Makhno
         {
             try
             {
-                var voicesArray = JsonConvert.DeserializeObject<List<JObject>>(jsonData);
+                var voicesArray = JsonSerializer.Deserialize<List<JsonObject>>(jsonData);
                 var voices = new List<Voice>();
 
                 if (voicesArray == null)
@@ -223,7 +221,7 @@ namespace LME.Makhno
                         Seasons = new List<Season>()
                     };
 
-                    var seasons = voiceGroup["folder"] as JArray;
+                    var seasons = voiceGroup["folder"] as JsonArray;
                     if (seasons != null)
                     {
                         foreach (var seasonGroup in seasons)
@@ -231,7 +229,7 @@ namespace LME.Makhno
                             string seasonTitle = seasonGroup["title"]?.ToString() ?? string.Empty;
                             var episodes = new List<Episode>();
 
-                            var episodesArray = seasonGroup["folder"] as JArray;
+                            var episodesArray = seasonGroup["folder"] as JsonArray;
                             if (episodesArray != null)
                             {
                                 foreach (var episode in episodesArray)
@@ -277,7 +275,7 @@ namespace LME.Makhno
         {
             try
             {
-                var voicesArray = JsonConvert.DeserializeObject<List<JObject>>(jsonData);
+                var voicesArray = JsonSerializer.Deserialize<List<JsonObject>>(jsonData);
                 var movies = new List<MovieVariant>();
                 if (voicesArray == null || voicesArray.Count == 0)
                     return movies;
@@ -293,8 +291,8 @@ namespace LME.Makhno
                     movies.Add(new MovieVariant
                     {
                         File = file,
-                        Quality = DetectQualityTag($"{rawTitle} {file}") ?? "auto",
-                        Title = BuildMovieTitle(rawTitle, file, index),
+                        Quality = QualityHelper.DetectQualityTag($"{rawTitle} {file}") ?? "auto",
+                        Title = QualityHelper.BuildDisplayTitle(rawTitle, file, index),
                         Subtitles = ApnHelper.ParseSubtitles(item["subtitle"]?.ToString())
                     });
                     index++;
@@ -318,7 +316,7 @@ namespace LME.Makhno
             if (startIndex < 0)
                 return null;
 
-            string jsonArray = ExtractBracketArray(html, startIndex);
+            string jsonArray = AshdiParser.ExtractBracketArray(html, startIndex);
             if (string.IsNullOrEmpty(jsonArray))
                 return null;
 
@@ -395,67 +393,6 @@ namespace LME.Makhno
             return bracketIndex;
         }
 
-        private string ExtractBracketArray(string text, int startIndex)
-        {
-            if (startIndex < 0 || startIndex >= text.Length || text[startIndex] != '[')
-                return null;
-
-            int depth = 0;
-            bool inString = false;
-            bool escape = false;
-            char quoteChar = '\0';
-
-            for (int i = startIndex; i < text.Length; i++)
-            {
-                char ch = text[i];
-
-                if (inString)
-                {
-                    if (escape)
-                    {
-                        escape = false;
-                        continue;
-                    }
-
-                    if (ch == '\\')
-                    {
-                        escape = true;
-                        continue;
-                    }
-
-                    if (ch == quoteChar)
-                    {
-                        inString = false;
-                        quoteChar = '\0';
-                    }
-
-                    continue;
-                }
-
-                if (ch == '"' || ch == '\'')
-                {
-                    inString = true;
-                    quoteChar = ch;
-                    continue;
-                }
-
-                if (ch == '[')
-                {
-                    depth++;
-                    continue;
-                }
-
-                if (ch == ']')
-                {
-                    depth--;
-                    if (depth == 0)
-                        return text.Substring(startIndex, i - startIndex + 1);
-                }
-            }
-
-            return null;
-        }
-
         private int? ExtractEpisodeNumber(string value)
         {
             if (string.IsNullOrEmpty(value))
@@ -469,77 +406,6 @@ namespace LME.Makhno
                 return num;
 
             return null;
-        }
-
-        private static string WithAshdiMultivoice(string url)
-        {
-            if (string.IsNullOrWhiteSpace(url))
-                return url;
-
-            if (url.IndexOf("ashdi.vip/vod/", StringComparison.OrdinalIgnoreCase) < 0)
-                return url;
-
-            if (url.IndexOf("multivoice", StringComparison.OrdinalIgnoreCase) >= 0)
-                return url;
-
-            return url.Contains("?") ? $"{url}&multivoice" : $"{url}?multivoice";
-        }
-
-        private static string BuildMovieTitle(string rawTitle, string file, int index)
-        {
-            string title = string.IsNullOrWhiteSpace(rawTitle) ? $"Варіант {index}" : StripMoviePrefix(WebUtility.HtmlDecode(rawTitle).Trim());
-            string qualityTag = DetectQualityTag($"{title} {file}");
-
-            if (string.IsNullOrWhiteSpace(qualityTag))
-                return title;
-
-            if (title.StartsWith("[4K]", StringComparison.OrdinalIgnoreCase) || title.StartsWith("[FHD]", StringComparison.OrdinalIgnoreCase))
-                return title;
-
-            return $"{qualityTag} {title}";
-        }
-
-        private static string DetectQualityTag(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
-
-            if (Quality4kRegex.IsMatch(value))
-                return "[4K]";
-
-            if (QualityFhdRegex.IsMatch(value))
-                return "[FHD]";
-
-            return null;
-        }
-
-        private static string StripMoviePrefix(string title)
-        {
-            if (string.IsNullOrWhiteSpace(title))
-                return title;
-
-            string normalized = Regex.Replace(title, @"\s+", " ").Trim();
-            int sepIndex = normalized.LastIndexOf(" - ", StringComparison.Ordinal);
-            if (sepIndex <= 0 || sepIndex >= normalized.Length - 3)
-                return normalized;
-
-            string prefix = normalized.Substring(0, sepIndex).Trim();
-            string suffix = normalized.Substring(sepIndex + 3).Trim();
-            if (string.IsNullOrWhiteSpace(suffix))
-                return normalized;
-
-            if (Regex.IsMatch(prefix, @"(19|20)\d{2}"))
-                return suffix;
-
-            return normalized;
-        }
-
-        private Task<string> HttpGet(string url, List<HeadersModel> headers, int timeoutSeconds = 15)
-        {
-            if (_httpHydra != null)
-                return _httpHydra.Get(url, newheaders: headers);
-
-            return Http.Get(_init.cors(url), timeoutSeconds: timeoutSeconds, headers: headers, proxy: _proxyManager.Get());
         }
 
         private class WormholeResponse

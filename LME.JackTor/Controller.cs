@@ -56,7 +56,7 @@ namespace LME.JackTor.Controllers
 
             if (checksearch)
             {
-                if (!IsCheckOnlineSearchEnabled())
+                if (!StreamHelper.IsCheckOnlineSearchEnabled())
                     return OnError("lme_jacktor", refresh_proxy: true);
 
                 var check = await invoke.Search(title, original_title, year, serial, original_language);
@@ -478,34 +478,6 @@ namespace LME.JackTor.Controllers
                 return string.Empty;
 
             return Regex.Replace(url, "(apikey=)[^&]+", "$1***", RegexOptions.IgnoreCase);
-        }
-
-        private static bool IsCheckOnlineSearchEnabled()
-        {
-            try
-            {
-                var onlineType = Type.GetType("Online.ModInit");
-                if (onlineType == null)
-                {
-                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                    {
-                        onlineType = asm.GetType("Online.ModInit");
-                        if (onlineType != null)
-                            break;
-                    }
-                }
-                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                var conf = confField?.GetValue(null);
-                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-                if (checkProp?.GetValue(conf) is bool enabled)
-                    return enabled;
-            }
-            catch
-            {
-            }
-
-            return true;
         }
 
         private static void OnLog(string message)

@@ -39,7 +39,7 @@ namespace LME.NMoonAnime.Controllers
 
             if (checksearch)
             {
-                if (!IsCheckOnlineSearchEnabled())
+                if (!StreamHelper.IsCheckOnlineSearchEnabled())
                     return OnError("lme_nmoonanime", refresh_proxy: true);
 
                 var checkResults = await invoke.Search(imdb_id, effectiveMalId, title, year);
@@ -314,72 +314,15 @@ namespace LME.NMoonAnime.Controllers
 
         private string BuildStreamUrl(OnlinesSettings init, string streamLink)
         {
-            string link = StripLampacArgs(streamLink?.Trim());
-            if (string.IsNullOrEmpty(link))
-                return link;
-
             var headers = new List<HeadersModel>
             {
                 new HeadersModel("User-Agent", "Mozilla/5.0"),
                 new HeadersModel("Referer", "https://moonanime.art/")
             };
 
-            if (ApnHelper.IsEnabled(init))
-            {
-                if (ModInit.ApnHostProvided)
-                    return ApnHelper.WrapUrl(init, link);
-
-                var noApn = (OnlinesSettings)init.Clone();
-                noApn.apnstream = false;
-                noApn.apn = null;
-                return HostStreamProxy(noApn, link, headers: headers, proxy: proxyManager.Get());
-            }
-
-            return HostStreamProxy(init, link, headers: headers, proxy: proxyManager.Get());
-        }
-
-        private static string StripLampacArgs(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return url;
-
-            string cleaned = Regex.Replace(
-                url,
-                @"([?&])(account_email|uid|nws_id)=[^&]*",
-                "$1",
-                RegexOptions.IgnoreCase
-            );
-
-            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
-            return cleaned;
-        }
-
-        private static bool IsCheckOnlineSearchEnabled()
-        {
-            try
-            {
-                var onlineType = Type.GetType("Online.ModInit");
-                if (onlineType == null)
-                {
-                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                    {
-                        onlineType = asm.GetType("Online.ModInit");
-                        if (onlineType != null)
-                            break;
-                    }
-                }
-                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                var conf = confField?.GetValue(null);
-                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-                if (checkProp?.GetValue(conf) is bool enabled)
-                    return enabled;
-            }
-            catch
-            {
-            }
-
-            return true;
+            return StreamHelper.BuildStreamUrl(init, streamLink, ModInit.ApnHostProvided,
+                (s, l) => HostStreamProxy(s, l, headers: headers, proxy: proxyManager.Get()),
+                checkAshdiUrl: false);
         }
 
         private static void OnLog(string message)

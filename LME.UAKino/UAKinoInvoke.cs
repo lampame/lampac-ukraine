@@ -77,7 +77,7 @@ namespace LME.UAKino
                 var results = GroupByShow(rawItems);
 
                 if (results.Count > 0)
-                    _hybridCache.Set(memKey, results, cacheTime(20));
+                    _hybridCache.Set(memKey, results, CacheHelper.CacheTime(20));
 
                 return results;
             }
@@ -114,7 +114,7 @@ namespace LME.UAKino
                     new HeadersModel("Accept", "application/json, text/javascript, */*; q=0.01")
                 };
 
-                string json = await HttpGet(url, headers);
+                string json = await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
                 if (string.IsNullOrEmpty(json))
                     return null;
 
@@ -128,7 +128,7 @@ namespace LME.UAKino
 
                 var voices = ParsePlaylistHtml(html);
                 if (voices.Count > 0)
-                    _hybridCache.Set(memKey, voices, cacheTime(30));
+                    _hybridCache.Set(memKey, voices, CacheHelper.CacheTime(30));
 
                 return voices;
             }
@@ -159,7 +159,7 @@ namespace LME.UAKino
                     new HeadersModel("Referer", _init.host)
                 };
 
-                string html = await HttpGet(pageUrl, headers);
+                string html = await HttpHelper.GetAsync(_httpHydra, _init, pageUrl, headers, _proxyManager);
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -218,7 +218,7 @@ namespace LME.UAKino
                 if (ApnHelper.IsEnabled(_init) && string.IsNullOrWhiteSpace(_init.webcorshost))
                     fetchUrl = ApnHelper.WrapUrl(_init, fetchUrl);
 
-                string html = await HttpGet(fetchUrl, headers);
+                string html = await HttpHelper.GetAsync(_httpHydra, _init, fetchUrl, headers, _proxyManager);
                 if (string.IsNullOrEmpty(html))
                     return vodUrl;
 
@@ -302,7 +302,7 @@ namespace LME.UAKino
                 if (ApnHelper.IsEnabled(_init) && string.IsNullOrWhiteSpace(_init.webcorshost))
                     fetchUrl = ApnHelper.WrapUrl(_init, fetchUrl);
 
-                string html = await HttpGet(fetchUrl, headers);
+                string html = await HttpHelper.GetAsync(_httpHydra, _init, fetchUrl, headers, _proxyManager);
                 if (string.IsNullOrEmpty(html))
                 {
                     result.Add((vodUrl, null));
@@ -794,21 +794,6 @@ namespace LME.UAKino
             return HtmlEntity.DeEntitize(value).Trim();
         }
 
-        private Task<string> HttpGet(string url, List<HeadersModel> headers)
-        {
-            if (_httpHydra != null)
-                return _httpHydra.Get(url, newheaders: headers);
 
-            return Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
-        }
-
-        public static TimeSpan cacheTime(int multiaccess, OnlinesSettings init = null)
-        {
-            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
-            if (ctime > multiaccess)
-                ctime = multiaccess;
-
-            return TimeSpan.FromMinutes(ctime);
-        }
     }
 }

@@ -56,7 +56,7 @@ namespace LME.StarLight
             try
             {
                 _onLog?.Invoke($"StarLight search: {url}");
-                string payload = await HttpGet(url, headers);
+                string payload = await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
                 if (string.IsNullOrEmpty(payload))
                     return null;
 
@@ -85,7 +85,7 @@ namespace LME.StarLight
                 }
 
                 if (results.Count > 0)
-                    _hybridCache.Set(memKey, results, cacheTime(15, init: _init));
+                    _hybridCache.Set(memKey, results, CacheHelper.CacheTime(15, init: _init));
 
                 return results;
             }
@@ -114,7 +114,7 @@ namespace LME.StarLight
             try
             {
                 _onLog?.Invoke($"StarLight project: {href}");
-                string payload = await HttpGet(href, headers);
+                string payload = await HttpHelper.GetAsync(_httpHydra, _init, href, headers, _proxyManager);
                 if (string.IsNullOrEmpty(payload))
                     return null;
 
@@ -169,7 +169,7 @@ namespace LME.StarLight
 
                 await LoadMissingSeasonEpisodes(project, href, headers);
 
-                _hybridCache.Set(memKey, project, cacheTime(10, init: _init));
+                _hybridCache.Set(memKey, project, CacheHelper.CacheTime(10, init: _init));
                 return project;
             }
             catch (Exception ex)
@@ -195,7 +195,7 @@ namespace LME.StarLight
                 try
                 {
                     _onLog?.Invoke($"StarLight season: {seasonUrl}");
-                    string payload = await HttpGet(seasonUrl, headers);
+                    string payload = await HttpHelper.GetAsync(_httpHydra, _init, seasonUrl, headers, _proxyManager);
                     if (string.IsNullOrEmpty(payload))
                         continue;
 
@@ -281,7 +281,7 @@ namespace LME.StarLight
             try
             {
                 _onLog?.Invoke($"StarLight stream: {url}");
-                string payload = await HttpGet(url, headers);
+                string payload = await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
                 if (string.IsNullOrEmpty(payload))
                     return null;
 
@@ -338,26 +338,6 @@ namespace LME.StarLight
                 return path;
 
             return $"{_init.host}{path}";
-        }
-
-        private Task<string> HttpGet(string url, List<HeadersModel> headers)
-        {
-            if (_httpHydra != null)
-                return _httpHydra.Get(url, newheaders: headers);
-
-            return Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
-        }
-
-        public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
-        {
-            if (init != null && init.rhub && rhub != -1)
-                return TimeSpan.FromMinutes(rhub);
-
-            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
-            if (ctime > multiaccess)
-                ctime = multiaccess;
-
-            return TimeSpan.FromMinutes(ctime);
         }
 
         private static List<(string link, string quality)> ParseMultiHlsStreams(string streamUrl)
