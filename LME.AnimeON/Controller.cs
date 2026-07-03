@@ -36,12 +36,12 @@ namespace LME.AnimeON.Controllers
             if (!init.enable)
                 return Forbid();
 
-            TryEnableMagicApn(init);
+            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "AnimeON");
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
 
             if (checksearch)
             {
-                if (!IsCheckOnlineSearchEnabled())
+                if (!StreamHelper.IsCheckOnlineSearchEnabled())
                     return OnError("lme_animeon", refresh_proxy: true);
 
                 var checkSeasons = await invoke.Search(imdb_id, kinopoisk_id, title, original_title, year, serial);
@@ -352,7 +352,7 @@ namespace LME.AnimeON.Controllers
                     var seasons = searchResults.Where(a => a.ImdbId == imdb_id).ToList();
                     if (seasons.Count > 0)
                     {
-                        hybridCache.Set(memKey, seasons, cacheTime(5));
+                        hybridCache.Set(memKey, seasons, CacheHelper.CacheTime(5));
                         return seasons;
                     }
                 }
@@ -362,7 +362,7 @@ namespace LME.AnimeON.Controllers
                 if (firstResult != null)
                 {
                     var list = new List<SearchModel> { firstResult };
-                    hybridCache.Set(memKey, list, cacheTime(5));
+                    hybridCache.Set(memKey, list, CacheHelper.CacheTime(5));
                     return list;
                 }
 
@@ -385,7 +385,7 @@ namespace LME.AnimeON.Controllers
             if (!init.enable)
                 return Forbid();
 
-            TryEnableMagicApn(init);
+            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "AnimeON");
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
             bool disableAshdiMultivoiceForVod = serial == 1;
             OnLog($"AnimeON Play: url={url}, episode_id={episode_id}, serial={serial}");
@@ -495,89 +495,8 @@ namespace LME.AnimeON.Controllers
             return UpdateService.Validate(Content(VideoTpl.ToJson("play", streamUrl, title ?? string.Empty, subtitles: subtitleTpl), "application/json; charset=utf-8"));
         }
 
-        private static string StripLampacArgs(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return url;
-
-            string cleaned = System.Text.RegularExpressions.Regex.Replace(
-                url,
-                @"([?&])(account_email|uid|nws_id)=[^&]*",
-                "$1",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase
-            );
-
-            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
-            return cleaned;
-        }
-
         string BuildStreamUrl(OnlinesSettings init, string streamLink, List<HeadersModel> headers, bool forceProxy)
-        {
-            string link = streamLink?.Trim();
-            if (string.IsNullOrEmpty(link))
-                return link;
-
-            link = StripLampacArgs(link);
-
-            if (ApnHelper.IsEnabled(init))
-            {
-                if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))
-                    return ApnHelper.WrapUrl(init, link);
-
-                var noApn = (OnlinesSettings)init.Clone();
-                noApn.apnstream = false;
-                noApn.apn = null;
-                return HostStreamProxy(noApn, link, headers: headers, force_streamproxy: forceProxy);
-            }
-
-            return HostStreamProxy(init, link, headers: headers, force_streamproxy: forceProxy);
-        }
-
-        private void TryEnableMagicApn(OnlinesSettings init)
-        {
-            if (init == null
-                || init.apn != null
-                || init.streamproxy
-                || string.IsNullOrWhiteSpace(ModInit.MagicApnAshdiHost))
-                return;
-
-            string player = new RchClient(HttpContext, host, init, requestInfo).InfoConnected()?.player;
-            bool useInnerPlayer = string.IsNullOrWhiteSpace(player)
-                || player.Equals("inner", StringComparison.OrdinalIgnoreCase);
-            if (!useInnerPlayer)
-                return;
-
-            ApnHelper.ApplyInitConf(true, ModInit.MagicApnAshdiHost, init);
-            OnLog($"AnimeON: увімкнено magic_apn для Ashdi (player={player ?? "unknown"}).");
-        }
-
-        private static bool IsCheckOnlineSearchEnabled()
-        {
-            try
-            {
-                var onlineType = Type.GetType("Online.ModInit");
-                if (onlineType == null)
-                {
-                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                    {
-                        onlineType = asm.GetType("Online.ModInit");
-                        if (onlineType != null)
-                            break;
-                    }
-                }
-                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                var conf = confField?.GetValue(null);
-                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-                if (checkProp?.GetValue(conf) is bool enabled)
-                    return enabled;
-            }
-            catch
-            {
-            }
-
-            return true;
-        }
+            => StreamHelper.BuildStreamUrl(init, streamLink, ModInit.ApnHostProvided, (s, l) => HostStreamProxy(s, l, headers: headers, force_streamproxy: forceProxy));
 
         private static void OnLog(string message)
         {

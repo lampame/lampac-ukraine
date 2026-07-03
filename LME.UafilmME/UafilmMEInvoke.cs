@@ -75,7 +75,7 @@ namespace LME.UafilmME
                 string json = await ApiGet($"titles/{titleId}?loader=titlePage", $"{_init.host}/titles/{titleId}");
                 var title = ParseTitleDetails(json);
                 if (title != null)
-                    _hybridCache.Set(memKey, title, cacheTime(30, init: _init));
+                    _hybridCache.Set(memKey, title, CacheHelper.CacheTime(30, init: _init));
 
                 return title;
             }
@@ -134,7 +134,7 @@ namespace LME.UafilmME
             }
 
             if (result.Count > 0)
-                _hybridCache.Set(memKey, result, cacheTime(60, init: _init));
+                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(60, init: _init));
 
             return result;
         }
@@ -171,7 +171,7 @@ namespace LME.UafilmME
                 .ToList();
 
             if (result.Count > 0)
-                _hybridCache.Set(memKey, result, cacheTime(30, init: _init));
+                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(30, init: _init));
 
             return result;
         }
@@ -200,7 +200,7 @@ namespace LME.UafilmME
                 string json = await ApiGet($"watch/{videoId}", _init.host);
                 var watch = ParseWatchInfo(json);
                 if (watch?.Video != null)
-                    _hybridCache.Set(memKey, watch, cacheTime(7, init: _init));
+                    _hybridCache.Set(memKey, watch, CacheHelper.CacheTime(7, init: _init));
 
                 return watch;
             }
@@ -249,7 +249,7 @@ namespace LME.UafilmME
             var items = ParseSearchResults(json);
 
             if (items.Count > 0)
-                _hybridCache.Set(memKey, items, cacheTime(20, init: _init));
+                _hybridCache.Set(memKey, items, CacheHelper.CacheTime(20, init: _init));
 
             return items;
         }
@@ -267,8 +267,8 @@ namespace LME.UafilmME
             string json = await ApiGet($"titles/{titleId}/seasons{suffix}", $"{_init.host}/titles/{titleId}");
             var parsed = ParseSeasonsPage(json);
 
-            _hybridCache.Set(memKey, parsed.Items, cacheTime(30, init: _init));
-            _hybridCache.Set(memKey + ":next", parsed.NextPage, cacheTime(30, init: _init));
+            _hybridCache.Set(memKey, parsed.Items, CacheHelper.CacheTime(30, init: _init));
+            _hybridCache.Set(memKey + ":next", parsed.NextPage, CacheHelper.CacheTime(30, init: _init));
             return parsed;
         }
 
@@ -285,8 +285,8 @@ namespace LME.UafilmME
             string json = await ApiGet($"titles/{titleId}/seasons/{season}/episodes{suffix}", $"{_init.host}/titles/{titleId}");
             var parsed = ParseEpisodesPage(json);
 
-            _hybridCache.Set(memKey, parsed.Items, cacheTime(20, init: _init));
-            _hybridCache.Set(memKey + ":next", parsed.NextPage, cacheTime(20, init: _init));
+            _hybridCache.Set(memKey, parsed.Items, CacheHelper.CacheTime(20, init: _init));
+            _hybridCache.Set(memKey + ":next", parsed.NextPage, CacheHelper.CacheTime(20, init: _init));
             return parsed;
         }
 
@@ -712,19 +712,6 @@ namespace LME.UafilmME
             return TryReadLong(source, property, out long value)
                 ? value
                 : 0;
-        }
-
-        public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
-        {
-            if (init != null && init.rhub && rhub != -1)
-                return TimeSpan.FromMinutes(rhub);
-
-            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
-
-            if (ctime > multiaccess)
-                ctime = multiaccess;
-
-            return TimeSpan.FromMinutes(ctime);
         }
 
         private static bool TryReadLong(JsonElement source, string property, out long value)

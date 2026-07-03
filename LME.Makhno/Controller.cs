@@ -28,7 +28,7 @@ namespace LME.Makhno
         {
             if (checksearch)
             {
-                if (!IsCheckOnlineSearchEnabled())
+                if (!StreamHelper.IsCheckOnlineSearchEnabled())
                     return OnError();
 
                 return Content("data-json=", "text/plain; charset=utf-8");
@@ -39,7 +39,7 @@ namespace LME.Makhno
             var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
-            TryEnableMagicApn(init);
+            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "lme_makhno");
             Initialization(init);
 
             OnLog($"lme_makhno: {title} (serial={serial}, s={s}, season={season}, t={t})");
@@ -65,7 +65,7 @@ namespace LME.Makhno
             var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
-            TryEnableMagicApn(init);
+            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "lme_makhno");
             Initialization(init);
 
             OnLog($"Makhno Play: {title} (s={s}, season={season}, t={t}, episodeId={episodeId}) play={play}");
@@ -124,7 +124,7 @@ namespace LME.Makhno
             var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
-            TryEnableMagicApn(init);
+            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "lme_makhno");
             Initialization(init);
 
             OnLog($"lme_makhno PlayMovie: {title} ({year}) play={play}");
@@ -481,94 +481,13 @@ namespace LME.Makhno
             return url.Contains("/serial/", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string StripLampacArgs(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return url;
-
-            string cleaned = System.Text.RegularExpressions.Regex.Replace(
-                url,
-                @"([?&])(account_email|uid|nws_id)=[^&]*",
-                "$1",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase
-            );
-
-            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
-            return cleaned;
-        }
-
         private string BuildStreamUrl(OnlinesSettings init, string streamLink)
-        {
-            string link = streamLink?.Trim();
-            if (string.IsNullOrEmpty(link))
-                return link;
-
-            link = StripLampacArgs(link);
-
-            if (ApnHelper.IsEnabled(init))
-            {
-                if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))
-                    return ApnHelper.WrapUrl(init, link);
-
-                var noApn = (OnlinesSettings)init.Clone();
-                noApn.apnstream = false;
-                noApn.apn = null;
-                return HostStreamProxy(noApn, link);
-            }
-
-            return HostStreamProxy(init, link);
-        }
-
-        private void TryEnableMagicApn(OnlinesSettings init)
-        {
-            if (init == null
-                || init.apn != null
-                || init.streamproxy
-                || string.IsNullOrWhiteSpace(ModInit.MagicApnAshdiHost))
-                return;
-
-            string player = new RchClient(HttpContext, host, init, requestInfo).InfoConnected()?.player;
-            bool useInnerPlayer = string.IsNullOrWhiteSpace(player)
-                || player.Equals("inner", StringComparison.OrdinalIgnoreCase);
-            if (!useInnerPlayer)
-                return;
-
-            ApnHelper.ApplyInitConf(true, ModInit.MagicApnAshdiHost, init);
-            OnLog($"lme_makhno: увімкнено magic_apn для Ashdi (player={player ?? "unknown"}).");
-        }
+            => StreamHelper.BuildStreamUrl(init, streamLink, ModInit.ApnHostProvided, (s, l) => HostStreamProxy(s, l));
 
         private class ResolveResult
         {
             public string PlayUrl { get; set; }
             public bool IsSerial { get; set; }
-        }
-
-        private static bool IsCheckOnlineSearchEnabled()
-        {
-            try
-            {
-                var onlineType = Type.GetType("Online.ModInit");
-                if (onlineType == null)
-                {
-                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                    {
-                        onlineType = asm.GetType("Online.ModInit");
-                        if (onlineType != null)
-                            break;
-                    }
-                }
-                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                var conf = confField?.GetValue(null);
-                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-                if (checkProp?.GetValue(conf) is bool enabled)
-                    return enabled;
-            }
-            catch
-            {
-            }
-
-            return true;
         }
 
         private static void OnLog(string message)

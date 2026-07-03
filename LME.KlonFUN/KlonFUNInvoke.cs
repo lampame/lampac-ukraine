@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 using System.Web;
 using HtmlAgilityPack;
 using LME.KlonFUN.Models;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Shared;
 using Shared.Engine;
 using Shared.Models;
@@ -18,11 +18,11 @@ namespace LME.KlonFUN
 {
     public class KlonFUNInvoke
     {
-        private static readonly Regex DirectFileRegex = new Regex(@"file\s*:\s*['""](?<url>https?://[^'"">\s]+\.m3u8[^'"">\s]*)['""]", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-        private static readonly Regex YearRegex = new Regex(@"(19|20)\d{2}", RegexOptions.IgnoreCase);
-        private static readonly Regex NumberRegex = new Regex(@"(\d+)", RegexOptions.IgnoreCase);
-        private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase);
-        private static readonly Regex QualityFhdRegex = new Regex(@"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b", RegexOptions.IgnoreCase);
+        private static readonly Regex DirectFileRegex = new Regex(@"file\s*:\s*['""](?<url>https?://[^'"">\s]+\.m3u8[^'"">\s]*)['""]", RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex YearRegex = new Regex(@"(19|20)\d{2}", RegexOptions.Compiled);
+
+        private static readonly Regex NumberRegex = new Regex(@"(\d+)", RegexOptions.Compiled);
 
         private readonly OnlinesSettings _init;
         private readonly IHybridCache _hybridCache;
@@ -52,7 +52,7 @@ namespace LME.KlonFUN
                     var byImdb = await SearchByQuery(imdbId);
                     if (byImdb?.Count > 0)
                     {
-                        _hybridCache.Set(cacheKey, byImdb, cacheTime(20, init: _init));
+                        _hybridCache.Set(cacheKey, byImdb, CacheHelper.CacheTime(20, init: _init));
                         _onLog?.Invoke($"KlonFUN: знайдено {byImdb.Count} результат(ів) за imdb_id={imdbId}");
                         return byImdb;
                     }
@@ -85,7 +85,7 @@ namespace LME.KlonFUN
 
                 if (results.Count > 0)
                 {
-                    _hybridCache.Set(cacheKey, results, cacheTime(20, init: _init));
+                    _hybridCache.Set(cacheKey, results, CacheHelper.CacheTime(20, init: _init));
                     _onLog?.Invoke($"KlonFUN: знайдено {results.Count} результат(ів) за назвою");
                     return results;
                 }
@@ -110,7 +110,7 @@ namespace LME.KlonFUN
             try
             {
                 var headers = DefaultHeaders();
-                string html = await HttpGet(url, headers);
+                string html = await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
                 if (string.IsNullOrWhiteSpace(html))
                     return null;
 
@@ -164,7 +164,7 @@ namespace LME.KlonFUN
                     Year = year
                 };
 
-                _hybridCache.Set(cacheKey, result, cacheTime(40, init: _init));
+                _hybridCache.Set(cacheKey, result, CacheHelper.CacheTime(40, init: _init));
                 return result;
             }
             catch (Exception ex)
@@ -185,29 +185,29 @@ namespace LME.KlonFUN
 
             try
             {
-                string playerHtml = await GetPlayerHtml(WithAshdiMultivoice(playerUrl));
+                    string playerHtml = await GetPlayerHtml(ApnExtensions.WithAshdiMultivoice(playerUrl));
                 if (string.IsNullOrWhiteSpace(playerHtml))
                     return null;
 
                 var streams = new List<MovieStream>();
 
-                JArray playerArray = ParsePlayerArray(playerHtml);
+                JsonArray playerArray = ParsePlayerArray(playerHtml);
                 if (playerArray != null)
                 {
                     int index = 1;
-                    foreach (JObject item in playerArray.OfType<JObject>())
+                    foreach (JsonObject item in playerArray.OfType<JsonObject>())
                     {
-                        string link = item.Value<string>("file");
+                        string link = (string?)item["file"];
                         if (string.IsNullOrWhiteSpace(link))
                             continue;
 
-                        string voiceTitle = FormatMovieTitle(item.Value<string>("title"), link, index);
+                        string voiceTitle = QualityHelper.BuildDisplayTitle((string?)item["title"], link, index);
 
                         streams.Add(new MovieStream
                         {
                             Title = voiceTitle,
                             Link = link,
-                            Subtitles = ApnHelper.ParseSubtitles(item.Value<string>("subtitle"))
+                            Subtitles = ApnHelper.ParseSubtitles((string?)item["subtitle"])
                         });
 
                         index++;
@@ -221,7 +221,7 @@ namespace LME.KlonFUN
                     {
                         streams.Add(new MovieStream
                         {
-                            Title = FormatMovieTitle("Основне джерело", directMatch.Groups["url"].Value, 1),
+                            Title = QualityHelper.BuildDisplayTitle("Основне джерело", directMatch.Groups["url"].Value, 1),
                             Link = directMatch.Groups["url"].Value,
                             Subtitles = ApnHelper.ParseSubtitles(ApnHelper.ExtractPlayerSubtitle(playerHtml))
                         });
@@ -230,7 +230,7 @@ namespace LME.KlonFUN
 
                 if (streams.Count > 0)
                 {
-                    _hybridCache.Set(cacheKey, streams, cacheTime(30, init: _init));
+                    _hybridCache.Set(cacheKey, streams, CacheHelper.CacheTime(30, init: _init));
                     return streams;
                 }
             }
@@ -257,20 +257,20 @@ namespace LME.KlonFUN
                 if (string.IsNullOrWhiteSpace(playerHtml))
                     return null;
 
-                JArray playerArray = ParsePlayerArray(playerHtml);
+                JsonArray playerArray = ParsePlayerArray(playerHtml);
                 if (playerArray == null || playerArray.Count == 0)
                     return null;
 
                 var structure = new SerialStructure();
                 var voiceCounter = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-                foreach (JObject voiceObj in playerArray.OfType<JObject>())
+                foreach (JsonObject voiceObj in playerArray.OfType<JsonObject>())
                 {
-                    var seasonsRaw = voiceObj["folder"] as JArray;
+                    var seasonsRaw = voiceObj["folder"] as JsonArray;
                     if (seasonsRaw == null || seasonsRaw.Count == 0)
                         continue;
 
-                    string baseName = CleanText(voiceObj.Value<string>("title"));
+                    string baseName = CleanText((string?)voiceObj["title"]);
                     if (string.IsNullOrWhiteSpace(baseName))
                         baseName = "Озвучення";
 
@@ -284,12 +284,12 @@ namespace LME.KlonFUN
                     };
 
                     int seasonFallback = 1;
-                    foreach (JObject seasonObj in seasonsRaw.OfType<JObject>())
+                    foreach (JsonObject seasonObj in seasonsRaw.OfType<JsonObject>())
                     {
-                        string seasonTitle = seasonObj.Value<string>("title");
+                        string seasonTitle = (string?)seasonObj["title"];
                         int seasonNumber = ParseNumber(seasonTitle, seasonFallback);
 
-                        var episodesRaw = seasonObj["folder"] as JArray;
+                        var episodesRaw = seasonObj["folder"] as JsonArray;
                         if (episodesRaw == null || episodesRaw.Count == 0)
                         {
                             seasonFallback++;
@@ -299,13 +299,13 @@ namespace LME.KlonFUN
                         var episodes = new List<SerialEpisode>();
                         int episodeFallback = 1;
 
-                        foreach (JObject episodeObj in episodesRaw.OfType<JObject>())
+                        foreach (JsonObject episodeObj in episodesRaw.OfType<JsonObject>())
                         {
-                            string link = episodeObj.Value<string>("file");
+                            string link = (string?)episodeObj["file"];
                             if (string.IsNullOrWhiteSpace(link))
                                 continue;
 
-                            string episodeTitle = CleanText(episodeObj.Value<string>("title"));
+                            string episodeTitle = CleanText((string?)episodeObj["title"]);
                             int episodeNumber = ParseNumber(episodeTitle, episodeFallback);
 
                             episodes.Add(new SerialEpisode
@@ -313,7 +313,7 @@ namespace LME.KlonFUN
                                 Number = episodeNumber,
                                 Title = string.IsNullOrWhiteSpace(episodeTitle) ? $"Серія {episodeNumber}" : episodeTitle,
                                 Link = link,
-                                Subtitles = ApnHelper.ParseSubtitles(episodeObj.Value<string>("subtitle"))
+                                Subtitles = ApnHelper.ParseSubtitles((string?)episodeObj["subtitle"])
                             });
 
                             episodeFallback++;
@@ -335,7 +335,7 @@ namespace LME.KlonFUN
                         .OrderBy(v => v.DisplayName, StringComparer.OrdinalIgnoreCase)
                         .ToList();
 
-                    _hybridCache.Set(cacheKey, structure, cacheTime(30, init: _init));
+                    _hybridCache.Set(cacheKey, structure, CacheHelper.CacheTime(30, init: _init));
                     return structure;
                 }
             }
@@ -448,7 +448,7 @@ namespace LME.KlonFUN
 
                 if (results.Count > 0)
                 {
-                    _hybridCache.Set(cacheKey, results, cacheTime(20, init: _init));
+                    _hybridCache.Set(cacheKey, results, CacheHelper.CacheTime(20, init: _init));
                     return results;
                 }
             }
@@ -470,10 +470,10 @@ namespace LME.KlonFUN
                 requestUrl = ApnHelper.WrapUrl(_init, playerUrl);
 
             var headers = DefaultHeaders();
-            return await HttpGet(requestUrl, headers);
+            return await HttpHelper.GetAsync(_httpHydra, _init, requestUrl, headers, _proxyManager);
         }
 
-        private static JArray ParsePlayerArray(string html)
+        private static JsonArray ParsePlayerArray(string html)
         {
             if (string.IsNullOrWhiteSpace(html))
                 return null;
@@ -486,7 +486,7 @@ namespace LME.KlonFUN
 
             try
             {
-                return JsonConvert.DeserializeObject<JArray>(json);
+                return JsonNode.Parse(json) as JsonArray;
             }
             catch
             {
@@ -639,98 +639,12 @@ namespace LME.KlonFUN
             return $"{baseName} #{count}";
         }
 
-        private static string WithAshdiMultivoice(string url)
-        {
-            if (string.IsNullOrWhiteSpace(url))
-                return url;
-
-            if (url.IndexOf("ashdi.vip/vod/", StringComparison.OrdinalIgnoreCase) < 0)
-                return url;
-
-            if (url.IndexOf("multivoice", StringComparison.OrdinalIgnoreCase) >= 0)
-                return url;
-
-            return url.Contains("?") ? $"{url}&multivoice" : $"{url}?multivoice";
-        }
-
-        private static string FormatMovieTitle(string rawTitle, string streamUrl, int index)
-        {
-            string title = StripMoviePrefix(CleanText(rawTitle));
-            if (string.IsNullOrWhiteSpace(title))
-                title = $"Варіант {index}";
-
-            string tag = DetectQualityTag($"{title} {streamUrl}");
-            if (string.IsNullOrWhiteSpace(tag))
-                return title;
-
-            if (title.StartsWith("[4K]", StringComparison.OrdinalIgnoreCase) || title.StartsWith("[FHD]", StringComparison.OrdinalIgnoreCase))
-                return title;
-
-            return $"{tag} {title}";
-        }
-
-        private static string StripMoviePrefix(string title)
-        {
-            if (string.IsNullOrWhiteSpace(title))
-                return title;
-
-            string normalized = Regex.Replace(title, @"\s+", " ").Trim();
-            int sepIndex = normalized.LastIndexOf(" - ", StringComparison.Ordinal);
-            if (sepIndex <= 0 || sepIndex >= normalized.Length - 3)
-                return normalized;
-
-            string prefix = normalized.Substring(0, sepIndex).Trim();
-            string suffix = normalized.Substring(sepIndex + 3).Trim();
-            if (string.IsNullOrWhiteSpace(suffix))
-                return normalized;
-
-            if (Regex.IsMatch(prefix, @"(19|20)\d{2}"))
-                return suffix;
-
-            return normalized;
-        }
-
-        private static string DetectQualityTag(string source)
-        {
-            if (string.IsNullOrWhiteSpace(source))
-                return null;
-
-            if (Quality4kRegex.IsMatch(source))
-                return "[4K]";
-
-            if (QualityFhdRegex.IsMatch(source))
-                return "[FHD]";
-
-            return null;
-        }
-
-        private Task<string> HttpGet(string url, List<HeadersModel> headers)
-        {
-            if (_httpHydra != null)
-                return _httpHydra.Get(url, newheaders: headers);
-
-            return Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
-        }
-
         private Task<string> HttpPost(string url, string data, List<HeadersModel> headers)
         {
             if (_httpHydra != null)
                 return _httpHydra.Post(url, data, newheaders: headers);
 
             return Http.Post(_init.cors(url), data, headers: headers, proxy: _proxyManager.Get());
-        }
-
-        public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
-        {
-            if (init != null && init.rhub && rhub != -1)
-                return TimeSpan.FromMinutes(rhub);
-
-            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
-
-            if (ctime > multiaccess)
-                ctime = multiaccess;
-
-            return TimeSpan.FromMinutes(ctime);
         }
     }
 }

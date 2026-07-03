@@ -52,7 +52,7 @@ namespace LME.Bamboo
                 };
 
                 _onLog?.Invoke($"Bamboo search: {searchUrl}");
-                string html = await HttpGet(searchUrl, headers);
+                string html = await HttpHelper.GetAsync(_httpHydra, _init, searchUrl, headers, _proxyManager);
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -82,7 +82,7 @@ namespace LME.Bamboo
                 }
 
                 if (results.Count > 0)
-                    _hybridCache.Set(memKey, results, cacheTime(20, init: _init));
+                    _hybridCache.Set(memKey, results, CacheHelper.CacheTime(20, init: _init));
 
                 return results;
             }
@@ -111,7 +111,7 @@ namespace LME.Bamboo
                 };
 
                 _onLog?.Invoke($"Bamboo series page: {href}");
-                string html = await HttpGet(href, headers);
+                string html = await HttpHelper.GetAsync(_httpHydra, _init, href, headers, _proxyManager);
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -157,7 +157,7 @@ namespace LME.Bamboo
                         result.Sub.AddRange(fallback);
                 }
 
-                _hybridCache.Set(memKey, result, cacheTime(30, init: _init));
+                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(30, init: _init));
                 return result;
             }
             catch (Exception ex)
@@ -185,7 +185,7 @@ namespace LME.Bamboo
                 };
 
                 _onLog?.Invoke($"Bamboo movie page: {href}");
-                string html = await HttpGet(href, headers);
+                string html = await HttpHelper.GetAsync(_httpHydra, _init, href, headers, _proxyManager);
                 if (string.IsNullOrEmpty(html))
                     return null;
 
@@ -214,7 +214,7 @@ namespace LME.Bamboo
                 }
 
                 if (streams.Count > 0)
-                    _hybridCache.Set(memKey, streams, cacheTime(30, init: _init));
+                    _hybridCache.Set(memKey, streams, CacheHelper.CacheTime(30, init: _init));
 
                 return streams;
             }
@@ -313,24 +313,5 @@ namespace LME.Bamboo
             return HtmlEntity.DeEntitize(value).Trim();
         }
 
-        private Task<string> HttpGet(string url, List<HeadersModel> headers)
-        {
-            if (_httpHydra != null)
-                return _httpHydra.Get(url, newheaders: headers);
-
-            return Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
-        }
-
-        public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
-        {
-            if (init != null && init.rhub && rhub != -1)
-                return TimeSpan.FromMinutes(rhub);
-
-            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
-            if (ctime > multiaccess)
-                ctime = multiaccess;
-
-            return TimeSpan.FromMinutes(ctime);
-        }
     }
 }

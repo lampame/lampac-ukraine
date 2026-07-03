@@ -31,13 +31,13 @@ namespace LME.KlonFUN.Controllers
             if (!init.enable)
                 return Forbid();
 
-            TryEnableMagicApn(init);
+            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "KlonFUN");
 
             var invoke = new KlonFUNInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
 
             if (checksearch)
             {
-                if (!IsCheckOnlineSearchEnabled())
+                if (!StreamHelper.IsCheckOnlineSearchEnabled())
                     return OnError("lme_klonfun", refresh_proxy: true);
 
                 var checkResults = await invoke.Search(imdb_id, title, original_title);
@@ -200,86 +200,7 @@ namespace LME.KlonFUN.Controllers
         }
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)
-        {
-            string link = StripLampacArgs(streamLink?.Trim());
-            if (string.IsNullOrWhiteSpace(link))
-                return link;
-
-            if (ApnHelper.IsEnabled(init))
-            {
-                if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))
-                    return ApnHelper.WrapUrl(init, link);
-
-                var noApn = (OnlinesSettings)init.Clone();
-                noApn.apnstream = false;
-                noApn.apn = null;
-                return HostStreamProxy(noApn, link);
-            }
-
-            return HostStreamProxy(init, link);
-        }
-
-        private void TryEnableMagicApn(OnlinesSettings init)
-        {
-            if (init == null
-                || init.apn != null
-                || init.streamproxy
-                || string.IsNullOrWhiteSpace(ModInit.MagicApnAshdiHost))
-                return;
-
-            string player = new RchClient(HttpContext, host, init, requestInfo).InfoConnected()?.player;
-            bool useInnerPlayer = string.IsNullOrWhiteSpace(player)
-                || player.Equals("inner", StringComparison.OrdinalIgnoreCase);
-            if (!useInnerPlayer)
-                return;
-
-            ApnHelper.ApplyInitConf(true, ModInit.MagicApnAshdiHost, init);
-            OnLog($"KlonFUN: увімкнено magic_apn для Ashdi (player={player ?? "unknown"}).");
-        }
-
-        private static string StripLampacArgs(string url)
-        {
-            if (string.IsNullOrWhiteSpace(url))
-                return url;
-
-            string cleaned = System.Text.RegularExpressions.Regex.Replace(
-                url,
-                @"([?&])(account_email|uid|nws_id)=[^&]*",
-                "$1",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase
-            );
-
-            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
-            return cleaned;
-        }
-
-        private static bool IsCheckOnlineSearchEnabled()
-        {
-            try
-            {
-                var onlineType = Type.GetType("Online.ModInit");
-                if (onlineType == null)
-                {
-                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                    {
-                        onlineType = asm.GetType("Online.ModInit");
-                        if (onlineType != null)
-                            break;
-                    }
-                }
-                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                var conf = confField?.GetValue(null);
-                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-                if (checkProp?.GetValue(conf) is bool enabled)
-                    return enabled;
-            }
-            catch
-            {
-            }
-
-            return true;
-        }
+            => StreamHelper.BuildStreamUrl(init, streamLink, ModInit.ApnHostProvided, (s, l) => HostStreamProxy(s, l));
 
         private static void OnLog(string message)
         {

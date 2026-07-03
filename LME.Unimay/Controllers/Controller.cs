@@ -4,7 +4,6 @@ using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Web;
-using Newtonsoft.Json.Linq;
 using Shared.Models.Templates;
 using Shared.Models.Online.Settings;
 using Shared;
@@ -35,7 +34,7 @@ namespace LME.Unimay.Controllers
 
             if (checksearch)
             {
-                if (!IsCheckOnlineSearchEnabled())
+                if (!StreamHelper.IsCheckOnlineSearchEnabled())
                     return OnError("lme_unimay");
 
                 var searchResults = await invoke.Search(title, original_title, serial);
@@ -116,7 +115,7 @@ namespace LME.Unimay.Controllers
                     if (string.IsNullOrEmpty(masterUrl))
                         return OnError("no stream");
 
-                    string cleaned = StripLampacArgs(masterUrl?.Trim());
+                    string cleaned = StreamHelper.StripLampacArgs(masterUrl?.Trim());
                     return UpdateService.Validate(Redirect(HostStreamProxy(init, cleaned, proxy: proxyManager.Get())));
                 }
 
@@ -152,50 +151,6 @@ namespace LME.Unimay.Controllers
 
                 return OnError("unsupported type");
             });
-        }
-
-        private static string StripLampacArgs(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return url;
-
-            string cleaned = System.Text.RegularExpressions.Regex.Replace(
-                url,
-                @"([?&])(account_email|uid|nws_id)=[^&]*",
-                "$1",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase
-            );
-
-            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
-            return cleaned;
-        }
-
-        private static bool IsCheckOnlineSearchEnabled()
-        {
-            try
-            {
-                var onlineType = Type.GetType("Online.ModInit");
-                if (onlineType == null)
-                {
-                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                    {
-                        onlineType = asm.GetType("Online.ModInit");
-                        if (onlineType != null)
-                            break;
-                    }
-                }
-                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                var conf = confField?.GetValue(null);
-                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-                if (checkProp?.GetValue(conf) is bool enabled)
-                    return enabled;
-            }
-            catch
-            {
-            }
-
-            return true;
         }
 
         private static void OnLog(string message)

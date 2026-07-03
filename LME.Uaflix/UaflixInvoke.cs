@@ -12,9 +12,9 @@ using LME.Uaflix.Models;
 using System.Linq;
 using Shared.Models.Templates;
 using System.Net;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace LME.Uaflix
 {
@@ -27,8 +27,6 @@ namespace LME.Uaflix
 
     public class UaflixInvoke
     {
-        private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase);
-        private static readonly Regex QualityFhdRegex = new Regex(@"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b", RegexOptions.IgnoreCase);
 
         private readonly UaflixSettings _init;
         private readonly IHybridCache _hybridCache;
@@ -341,7 +339,7 @@ namespace LME.Uaflix
                     ZetvideoIframeUrls = zetvideoIframeUrls
                 };
 
-                _hybridCache.Set(memKey, info, cacheTime(20));
+                _hybridCache.Set(memKey, info, CacheHelper.CacheTime(20));
                 return info;
             }
             catch (Exception ex)
@@ -514,7 +512,7 @@ namespace LME.Uaflix
                     .Replace("\\'", "'")
                     .Replace("\\\"", "\"");
                 
-                var voicesArray = JsonConvert.DeserializeObject<List<JObject>>(jsonStr);
+                var voicesArray = JsonSerializer.Deserialize<List<JsonObject>>(jsonStr);
                 var voices = new List<VoiceInfo>();
                 
                 string playerPrefix = playerType == "ashdi-serial" ? "Ashdi" : "Zetvideo";
@@ -549,7 +547,7 @@ namespace LME.Uaflix
                         Seasons = new Dictionary<int, List<EpisodeInfo>>()
                     };
                     
-                    var seasons = voiceObj["folder"] as JArray;
+                    var seasons = voiceObj["folder"] as JsonArray;
                     if (seasons != null)
                     {
                         foreach (var seasonObj in seasons)
@@ -562,7 +560,7 @@ namespace LME.Uaflix
                             
                             int seasonNumber = int.Parse(seasonMatch.Groups[1].Value);
                             var episodes = new List<EpisodeInfo>();
-                            var episodesArray = seasonObj["folder"] as JArray;
+                            var episodesArray = seasonObj["folder"] as JsonArray;
                             
                             if (episodesArray != null)
                             {
@@ -646,12 +644,12 @@ namespace LME.Uaflix
             var result = new List<PlayStream>();
             try
             {
-                string requestUrl = WithAshdiMultivoice(iframeUrl);
+                string requestUrl = ApnExtensions.WithAshdiMultivoice(iframeUrl);
                 string html = await GetHtml(AshdiRequestUrl(requestUrl), headers);
                 if (string.IsNullOrEmpty(html))
                     return result;
 
-                string rawArray = ExtractPlayerFileArray(html);
+                string rawArray = AshdiParser.ExtractPlayerFileArray(html);
                 if (!string.IsNullOrWhiteSpace(rawArray))
                 {
                     string json = WebUtility.HtmlDecode(rawArray)
@@ -659,7 +657,7 @@ namespace LME.Uaflix
                         .Replace("\\'", "'")
                         .Replace("\\\"", "\"");
 
-                    var items = JsonConvert.DeserializeObject<List<JObject>>(json);
+                    var items = JsonSerializer.Deserialize<List<JsonObject>>(json);
                     if (items != null && items.Count > 0)
                     {
                         int index = 1;
@@ -673,8 +671,8 @@ namespace LME.Uaflix
                             result.Add(new PlayStream
                             {
                                 link = fileUrl,
-                                quality = DetectQualityTag($"{rawTitle} {fileUrl}") ?? "auto",
-                                title = BuildDisplayTitle(rawTitle, fileUrl, index),
+                                quality = QualityHelper.DetectQualityTag($"{rawTitle} {fileUrl}") ?? "auto",
+                                title = QualityHelper.BuildDisplayTitle(rawTitle, fileUrl, index),
                                 subtitles = ApnHelper.ParseSubtitles(item?["subtitle"]?.ToString())
                             });
                             index++;
@@ -697,8 +695,8 @@ namespace LME.Uaflix
                 result.Add(new PlayStream
                 {
                     link = fallbackFile,
-                    quality = DetectQualityTag(fallbackFile) ?? "auto",
-                    title = BuildDisplayTitle(ExtractVoiceFromUrl(fallbackFile), fallbackFile, 1),
+                    quality = QualityHelper.DetectQualityTag(fallbackFile) ?? "auto",
+                    title = QualityHelper.BuildDisplayTitle(ExtractVoiceFromUrl(fallbackFile), fallbackFile, 1),
                     subtitles = ApnHelper.ParseSubtitles(ApnHelper.ExtractPlayerSubtitle(html))
                 });
 
@@ -891,7 +889,7 @@ namespace LME.Uaflix
                     return null;
                 }
 
-                _hybridCache.Set(memKey, structure, cacheTime(40));
+                _hybridCache.Set(memKey, structure, CacheHelper.CacheTime(40));
                 _onLog($"AggregateSerialStructure: Cached structure with {structure.Voices.Count} total voices");
 
                 // Детальне логування структури для діагностики
@@ -961,7 +959,7 @@ namespace LME.Uaflix
                     // Якщо явного списку сезонів немає, вважаємо що є один сезон.
                     result.Seasons[1] = 1;
                     result.SeasonUrls[1] = serialUrl;
-                    _hybridCache.Set(memKey, result, cacheTime(40));
+                    _hybridCache.Set(memKey, result, CacheHelper.CacheTime(40));
                     return result;
                 }
 
@@ -997,7 +995,7 @@ namespace LME.Uaflix
                     result.SeasonUrls[1] = serialUrl;
                 }
 
-                _hybridCache.Set(memKey, result, cacheTime(40));
+                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(40));
                 return result;
             }
             catch (Exception ex)
@@ -1059,7 +1057,7 @@ namespace LME.Uaflix
                     });
                 }
 
-                _hybridCache.Set(memKey, result, cacheTime(20));
+                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(20));
                 return result;
             }
             catch (Exception ex)
@@ -1275,7 +1273,7 @@ namespace LME.Uaflix
                 }
 
                 NormalizeUaflixVoiceNames(structure);
-                _hybridCache.Set(memKey, structure, cacheTime(30));
+                _hybridCache.Set(memKey, structure, CacheHelper.CacheTime(30));
                 return structure;
             }
             catch (Exception ex)
@@ -1296,7 +1294,7 @@ namespace LME.Uaflix
             if (parsed == null || parsed.Count == 0)
                 return new List<VoiceInfo>();
 
-            _hybridCache.Set(memKey, parsed, cacheTime(40));
+            _hybridCache.Set(memKey, parsed, CacheHelper.CacheTime(40));
             return CloneVoices(parsed);
         }
 
@@ -1538,7 +1536,7 @@ namespace LME.Uaflix
                     .ThenBy(r => r.Title)
                     .ToList();
 
-                _hybridCache.Set(memKey, results, cacheTime(20));
+                _hybridCache.Set(memKey, results, CacheHelper.CacheTime(20));
                 return results;
             }
             catch (Exception ex)
@@ -1663,7 +1661,7 @@ namespace LME.Uaflix
                 _onLog($"LoadSearchMeta error: {ex.Message}");
             }
 
-            _hybridCache.Set(memKey, meta, cacheTime(60));
+            _hybridCache.Set(memKey, meta, CacheHelper.CacheTime(60));
             return meta;
         }
 
@@ -1923,7 +1921,7 @@ namespace LME.Uaflix
                     }
                 }
                 
-                _hybridCache.Set(memKey, result, cacheTime(60));
+                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(60));
                 return result;
             }
             catch (Exception ex)
@@ -2040,7 +2038,7 @@ namespace LME.Uaflix
 
                 if (paginationInfo.Episodes.Count > 0)
                 {
-                    _hybridCache.Set(memKey, paginationInfo, cacheTime(20));
+                    _hybridCache.Set(memKey, paginationInfo, CacheHelper.CacheTime(20));
                     return paginationInfo;
                 }
             }
@@ -2070,7 +2068,7 @@ namespace LME.Uaflix
                         {
                             link = videoUrl,
                             quality = "1080p",
-                            title = BuildDisplayTitle("Основне джерело", videoUrl, 1)
+                            title = QualityHelper.BuildDisplayTitle("Основне джерело", videoUrl, 1)
                         });
                         return result;
                     }
@@ -2195,7 +2193,7 @@ namespace LME.Uaflix
                         {
                             link = videoUrl,
                             quality = "1080p",
-                            title = BuildDisplayTitle("Основне джерело", videoUrl, 1)
+                            title = QualityHelper.BuildDisplayTitle("Основне джерело", videoUrl, 1)
                         });
                         return (result, PageStatus.HasStreams);
                     }
@@ -2358,7 +2356,7 @@ namespace LME.Uaflix
                     {
                         link = link,
                         quality = "1080p",
-                        title = BuildDisplayTitle("Основне джерело", link, 1),
+                        title = QualityHelper.BuildDisplayTitle("Основне джерело", link, 1),
                         subtitles = subtitles
                     });
                     return result;
@@ -2376,7 +2374,7 @@ namespace LME.Uaflix
                     {
                         link = link,
                         quality = quality,
-                        title = BuildDisplayTitle(quality, link, result.Count + 1)
+                        title = QualityHelper.BuildDisplayTitle(quality, link, result.Count + 1)
                     });
                 }
             }
@@ -2403,7 +2401,7 @@ namespace LME.Uaflix
                     {
                         link = link,
                         quality = quality,
-                        title = BuildDisplayTitle(quality, link, result.Count + 1)
+                        title = QualityHelper.BuildDisplayTitle(quality, link, result.Count + 1)
                     });
                 }
             }
@@ -2418,168 +2416,6 @@ namespace LME.Uaflix
             return ApnHelper.ParseSubtitles(subtitle);
         }
 
-        private static string WithAshdiMultivoice(string url)
-        {
-            if (string.IsNullOrWhiteSpace(url))
-                return url;
-
-            if (url.IndexOf("ashdi.vip/vod/", StringComparison.OrdinalIgnoreCase) < 0)
-                return url;
-
-            if (url.IndexOf("multivoice", StringComparison.OrdinalIgnoreCase) >= 0)
-                return url;
-
-            return url.Contains("?") ? $"{url}&multivoice" : $"{url}?multivoice";
-        }
-
-        private static string BuildDisplayTitle(string rawTitle, string link, int index)
-        {
-            string normalized = string.IsNullOrWhiteSpace(rawTitle) ? $"Варіант {index}" : StripMoviePrefix(WebUtility.HtmlDecode(rawTitle).Trim());
-            string qualityTag = DetectQualityTag($"{normalized} {link}");
-            if (string.IsNullOrWhiteSpace(qualityTag))
-                return normalized;
-
-            if (normalized.StartsWith("[4K]", StringComparison.OrdinalIgnoreCase) || normalized.StartsWith("[FHD]", StringComparison.OrdinalIgnoreCase))
-                return normalized;
-
-            return $"{qualityTag} {normalized}";
-        }
-
-        private static string DetectQualityTag(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
-
-            if (Quality4kRegex.IsMatch(value))
-                return "[4K]";
-
-            if (QualityFhdRegex.IsMatch(value))
-                return "[FHD]";
-
-            return null;
-        }
-
-        private static string StripMoviePrefix(string title)
-        {
-            if (string.IsNullOrWhiteSpace(title))
-                return title;
-
-            string normalized = Regex.Replace(title, @"\s+", " ").Trim();
-            int sepIndex = normalized.LastIndexOf(" - ", StringComparison.Ordinal);
-            if (sepIndex <= 0 || sepIndex >= normalized.Length - 3)
-                return normalized;
-
-            string prefix = normalized.Substring(0, sepIndex).Trim();
-            string suffix = normalized.Substring(sepIndex + 3).Trim();
-            if (string.IsNullOrWhiteSpace(suffix))
-                return normalized;
-
-            if (Regex.IsMatch(prefix, @"(19|20)\d{2}"))
-                return suffix;
-
-            return normalized;
-        }
-
-        private static string ExtractPlayerFileArray(string html)
-        {
-            if (string.IsNullOrWhiteSpace(html))
-                return null;
-
-            int searchIndex = 0;
-            while (searchIndex >= 0 && searchIndex < html.Length)
-            {
-                int fileIndex = html.IndexOf("file", searchIndex, StringComparison.OrdinalIgnoreCase);
-                if (fileIndex < 0)
-                    return null;
-
-                int colonIndex = html.IndexOf(':', fileIndex);
-                if (colonIndex < 0)
-                    return null;
-
-                int startIndex = colonIndex + 1;
-                while (startIndex < html.Length && char.IsWhiteSpace(html[startIndex]))
-                    startIndex++;
-
-                if (startIndex < html.Length && (html[startIndex] == '\'' || html[startIndex] == '"'))
-                {
-                    startIndex++;
-                    while (startIndex < html.Length && char.IsWhiteSpace(html[startIndex]))
-                        startIndex++;
-                }
-
-                if (startIndex >= html.Length || html[startIndex] != '[')
-                {
-                    searchIndex = fileIndex + 4;
-                    continue;
-                }
-
-                return ExtractBracketArray(html, startIndex);
-            }
-
-            return null;
-        }
-
-        private static string ExtractBracketArray(string text, int startIndex)
-        {
-            if (startIndex < 0 || startIndex >= text.Length || text[startIndex] != '[')
-                return null;
-
-            int depth = 0;
-            bool inString = false;
-            bool escaped = false;
-            char quoteChar = '\0';
-
-            for (int i = startIndex; i < text.Length; i++)
-            {
-                char ch = text[i];
-
-                if (inString)
-                {
-                    if (escaped)
-                    {
-                        escaped = false;
-                        continue;
-                    }
-
-                    if (ch == '\\')
-                    {
-                        escaped = true;
-                        continue;
-                    }
-
-                    if (ch == quoteChar)
-                    {
-                        inString = false;
-                        quoteChar = '\0';
-                    }
-
-                    continue;
-                }
-
-                if (ch == '"' || ch == '\'')
-                {
-                    inString = true;
-                    quoteChar = ch;
-                    continue;
-                }
-
-                if (ch == '[')
-                {
-                    depth++;
-                    continue;
-                }
-
-                if (ch == ']')
-                {
-                    depth--;
-                    if (depth == 0)
-                        return text.Substring(startIndex, i - startIndex + 1);
-                }
-            }
-
-            return null;
-        }
-
         sealed class EpisodePlayerInfo
         {
             public string IframeUrl { get; set; }
@@ -2592,33 +2428,6 @@ namespace LME.Uaflix
             public int Year { get; set; }
             public string Category { get; set; }
             public bool IsAnime { get; set; }
-        }
-        
-        public static TimeSpan cacheTime(int multiaccess, int home = 5, int mikrotik = 2, OnlinesSettings init = null, int rhub = -1)
-        {
-            if (init != null && init.rhub && rhub != -1)
-                return TimeSpan.FromMinutes(rhub);
-            
-            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
-            if (ctime > multiaccess)
-                ctime = multiaccess;
-            
-            return TimeSpan.FromMinutes(ctime);
-        }
-
-        /// <summary>
-        /// Оновлений метод кешування згідно стандарту Lampac
-        /// </summary>
-        public static TimeSpan GetCacheTime(OnlinesSettings init, int multiaccess = 20, int home = 5, int mikrotik = 2, int rhub = -1)
-        {
-            if (init != null && init.rhub && rhub != -1)
-                return TimeSpan.FromMinutes(rhub);
-            
-            int ctime = init != null && init.cache_time > 0 ? init.cache_time : multiaccess;
-            if (ctime > multiaccess)
-                ctime = multiaccess;
-            
-            return TimeSpan.FromMinutes(ctime);
         }
     }
 }

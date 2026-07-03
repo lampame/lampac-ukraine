@@ -37,7 +37,7 @@ namespace LME.StarLight.Controllers
 
             if (checksearch)
             {
-                if (!IsCheckOnlineSearchEnabled())
+                if (!StreamHelper.IsCheckOnlineSearchEnabled())
                     return OnError("lme_starlight", refresh_proxy: true);
 
                 var searchResults = await invoke.Search(title, original_title);
@@ -180,40 +180,7 @@ namespace LME.StarLight.Controllers
         }
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)
-        {
-            string link = StripLampacArgs(streamLink?.Trim());
-            if (string.IsNullOrEmpty(link))
-                return link;
-
-            if (ApnHelper.IsEnabled(init))
-            {
-                if (ModInit.ApnHostProvided || ApnHelper.IsAshdiUrl(link))
-                    return ApnHelper.WrapUrl(init, link);
-
-                var noApn = (OnlinesSettings)init.Clone();
-                noApn.apnstream = false;
-                noApn.apn = null;
-                return HostStreamProxy(noApn, link, proxy: proxyManager.Get());
-            }
-
-            return HostStreamProxy(init, link, proxy: proxyManager.Get());
-        }
-
-        private static string StripLampacArgs(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return url;
-
-            string cleaned = System.Text.RegularExpressions.Regex.Replace(
-                url,
-                @"([?&])(account_email|uid|nws_id)=[^&]*",
-                "$1",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase
-            );
-
-            cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
-            return cleaned;
-        }
+            => StreamHelper.BuildStreamUrl(init, streamLink, ModInit.ApnHostProvided, (s, l) => HostStreamProxy(s, l, proxy: proxyManager.Get()));
 
         private static string GetSeasonNumber(SeasonInfo season, int fallbackIndex)
         {
@@ -265,34 +232,6 @@ namespace LME.StarLight.Controllers
                 return dt;
 
             return DateTime.TryParse(episode.Date, CultureInfo.InvariantCulture, DateTimeStyles.None, out dt) ? dt : null;
-        }
-
-        private static bool IsCheckOnlineSearchEnabled()
-        {
-            try
-            {
-                var onlineType = Type.GetType("Online.ModInit");
-                if (onlineType == null)
-                {
-                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                    {
-                        onlineType = asm.GetType("Online.ModInit");
-                        if (onlineType != null)
-                            break;
-                    }
-                }
-                var confField = onlineType?.GetField("conf", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                var conf = confField?.GetValue(null);
-                var checkProp = conf?.GetType().GetProperty("checkOnlineSearch", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-                if (checkProp?.GetValue(conf) is bool enabled)
-                    return enabled;
-            }
-            catch
-            {
-            }
-
-            return true;
         }
 
         private static void OnLog(string message)
