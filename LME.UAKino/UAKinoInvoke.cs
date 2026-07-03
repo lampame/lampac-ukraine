@@ -272,6 +272,7 @@ namespace LME.UAKino
 
         /// <summary>
         /// Резолв Ashdi VOD з ?multivoice: повертає ВСІ стріми з JSON масиву
+        /// або один стрім якщо файл один (не масив)
         /// </summary>
         public async Task<List<(string file, string title)>> ResolveAshdiVodAll(string vodUrl)
         {
@@ -309,6 +310,23 @@ namespace LME.UAKino
                     return result;
                 }
 
+                // 1. Спершу простий pattern file:'url' (одиничний стрім, не масив)
+                var fileMatch = Regex.Match(html, @"file:\s*'([^']+)'", RegexOptions.IgnoreCase);
+                if (!fileMatch.Success)
+                    fileMatch = Regex.Match(html, @"file:\s*""([^""]+)""", RegexOptions.IgnoreCase);
+
+                if (fileMatch.Success)
+                {
+                    string resolvedUrl = fileMatch.Groups[1].Value;
+                    if (!string.IsNullOrEmpty(resolvedUrl) && !resolvedUrl.StartsWith("["))
+                    {
+                        _onLog?.Invoke($"UAKino resolved Ashdi: {resolvedUrl}");
+                        result.Add((resolvedUrl, null));
+                        return result;
+                    }
+                }
+
+                // 2. JSON масив (file:'[{...}]')
                 int arrayStart = FindAshdiJsonArray(html);
                 if (arrayStart >= 0)
                 {
@@ -333,6 +351,19 @@ namespace LME.UAKino
                     }
                 }
 
+                // 3. Прямий .m3u8 в HTML (якщо file pattern не знайдено)
+                if (result.Count == 0)
+                {
+                    var m3u8Match = Regex.Match(html, @"(https?://[^""'\s>]+\.m3u8[^""'\s>]*)", RegexOptions.IgnoreCase);
+                    if (m3u8Match.Success)
+                    {
+                        _onLog?.Invoke($"UAKino resolved Ashdi (m3u8 fallback): {m3u8Match.Groups[1].Value}");
+                        result.Add((m3u8Match.Groups[1].Value, null));
+                        return result;
+                    }
+                }
+
+                // 4. Якщо нічого не знайдено — повертаємо оригінал як fallback
                 if (result.Count == 0)
                     result.Add((vodUrl, null));
 
