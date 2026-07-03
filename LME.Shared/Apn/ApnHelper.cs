@@ -8,12 +8,11 @@ using System.Web;
 
 namespace Shared.Engine
 {
-    public static partial class ApnHelper
+    public static class ApnHelper
     {
         public const string DefaultHost = "https://tut.im/proxy.php?url={encodeurl}";
 
-        [GeneratedRegex(@"\[([^\]]+)\]([^,]+)")]
-        private static partial Regex SubtitleLineRegex();
+        private static readonly Regex SubtitleLineRegex = new Regex(@"\[([^\]]+)\]([^,]+)", RegexOptions.Compiled);
 
         public static bool TryGetInitConf(JObject conf, out bool enabled, out string host)
         {
@@ -137,7 +136,7 @@ namespace Shared.Engine
                 .Replace("\\'", "'")
                 .Replace("\\\"", "\"");
 
-            foreach (Match match in SubtitleLineRegex().Matches(normalized))
+            foreach (Match match in SubtitleLineRegex.Matches(normalized))
             {
                 string label = WebUtility.HtmlDecode(match.Groups[1].Value).Trim();
                 string url = WebUtility.HtmlDecode(match.Groups[2].Value).Trim();

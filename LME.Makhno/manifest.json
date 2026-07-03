@@ -6,6 +6,13 @@
     "../LME.Shared/GlobalUsings.cs",
     "../LME.Shared/Online/OnlineRegistry.cs",
     "../LME.Shared/Update/ModuleUpdateService.cs",
-    "../LME.Shared/Apn/ApnHelper.cs"
+    "../LME.Shared/Apn/ApnHelper.cs",
+    "../LME.Shared/Engine/StreamHelper.cs",
+    "../LME.Shared/Engine/CacheHelper.cs",
+    "../LME.Shared/Engine/HttpHelper.cs",
+    "../LME.Shared/Engine/ApnExtensions.cs",
+    "../LME.Shared/Engine/QualityHelper.cs",
+    "../LME.Shared/Engine/AshdiParser.cs",
+    "../LME.Shared/Engine/TortugaDecoder.cs"
   ]
 }

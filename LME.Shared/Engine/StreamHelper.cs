@@ -9,10 +9,9 @@ namespace LME.Common.Engine
     /// Спільні утиліти для роботи зі стрімами: очистка URL, APN-логіка, checkOnlineSearch.
     /// Винесено з 11-12 копій у Controller.cs кожного модуля.
     /// </summary>
-    public static partial class StreamHelper
+    public static class StreamHelper
     {
-        [GeneratedRegex(@"([?&])(account_email|uid|nws_id)=[^&]*", RegexOptions.IgnoreCase)]
-        private static partial Regex LampacArgsRegex();
+        private static readonly Regex LampacArgsRegex = new Regex(@"([?&])(account_email|uid|nws_id)=[^&]*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         /// <summary>
         /// Видаляє службові параметри lampac (account_email, uid, nws_id) з URL стріму.
@@ -22,7 +21,7 @@ namespace LME.Common.Engine
             if (string.IsNullOrEmpty(url))
                 return url;
 
-            string cleaned = LampacArgsRegex().Replace(url, "$1");
+            string cleaned = LampacArgsRegex.Replace(url, "$1");
             cleaned = cleaned.Replace("?&", "?").Replace("&&", "&").TrimEnd('?', '&');
             return cleaned;
         }

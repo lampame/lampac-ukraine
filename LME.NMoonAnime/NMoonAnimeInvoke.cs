@@ -17,7 +17,7 @@ using System.Web;
 
 namespace LME.NMoonAnime
 {
-    public partial class NMoonAnimeInvoke
+    public class NMoonAnimeInvoke
     {
         private readonly OnlinesSettings _init;
         private readonly IHybridCache _hybridCache;
@@ -29,11 +29,9 @@ namespace LME.NMoonAnime
             PropertyNameCaseInsensitive = true
         };
 
-        [GeneratedRegex(@"(?:season|сезон)\s*(\d+)|(\d+)\s*(?:season|сезон)", RegexOptions.IgnoreCase)]
-        private static partial Regex ReSeason();
+        private static readonly Regex ReSeason = new Regex(@"(?:season|сезон)\s*(\d+)|(\d+)\s*(?:season|сезон)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        [GeneratedRegex(@"(?:episode|серія|серия|епізод|ep)\s*(\d+)", RegexOptions.IgnoreCase)]
-        private static partial Regex ReEpisode();
+        private static readonly Regex ReEpisode = new Regex(@"(?:episode|серія|серия|епізод|ep)\s*(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         public NMoonAnimeInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, HttpHydra httpHydra = null)
         {
@@ -575,7 +573,7 @@ namespace LME.NMoonAnime
             if (string.IsNullOrWhiteSpace(value))
                 return null;
 
-            var match = ReSeason().Match(value);
+            var match = ReSeason.Match(value);
             if (!match.Success)
                 return null;
 
@@ -591,7 +589,7 @@ namespace LME.NMoonAnime
             if (string.IsNullOrWhiteSpace(title))
                 return fallback;
 
-            var episodeMatch = ReEpisode().Match(title);
+            var episodeMatch = ReEpisode.Match(title);
             if (episodeMatch.Success && int.TryParse(episodeMatch.Groups[1].Value, out int episodeNumber))
                 return episodeNumber;
 

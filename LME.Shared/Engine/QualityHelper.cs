@@ -8,19 +8,15 @@ namespace LME.Common.Engine
     /// Визначення якості відео та побудова відображуваної назви.
     /// Винесено з 5 копій у *Invoke.cs (Uaflix, Mikai, AnimeON, KlonFUN, Makhno).
     /// </summary>
-    public static partial class QualityHelper
+    public static class QualityHelper
     {
-        [GeneratedRegex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase)]
-        private static partial Regex Quality4kRegex();
+        private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        [GeneratedRegex(@"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b", RegexOptions.IgnoreCase)]
-        private static partial Regex QualityFhdRegex();
+        private static readonly Regex QualityFhdRegex = new Regex(@"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        [GeneratedRegex(@"\s+")]
-        private static partial Regex WhitespaceRegex();
+        private static readonly Regex WhitespaceRegex = new Regex(@"\s+", RegexOptions.Compiled);
 
-        [GeneratedRegex(@"(19|20)\d{2}")]
-        private static partial Regex YearPrefixRegex();
+        private static readonly Regex YearPrefixRegex = new Regex(@"(19|20)\d{2}", RegexOptions.Compiled);
 
         /// <summary>
         /// Визначає тег якості ([4K] або [FHD]) з назви/посилання.
@@ -30,10 +26,10 @@ namespace LME.Common.Engine
             if (string.IsNullOrWhiteSpace(value))
                 return null;
 
-            if (Quality4kRegex().IsMatch(value))
+            if (Quality4kRegex.IsMatch(value))
                 return "[4K]";
 
-            if (QualityFhdRegex().IsMatch(value))
+            if (QualityFhdRegex.IsMatch(value))
                 return "[FHD]";
 
             return null;
@@ -47,7 +43,7 @@ namespace LME.Common.Engine
             if (string.IsNullOrWhiteSpace(title))
                 return title;
 
-            string normalized = WhitespaceRegex().Replace(title, " ").Trim();
+            string normalized = WhitespaceRegex.Replace(title, " ").Trim();
             int sepIndex = normalized.LastIndexOf(" - ", StringComparison.Ordinal);
             if (sepIndex <= 0 || sepIndex >= normalized.Length - 3)
                 return normalized;
@@ -57,7 +53,7 @@ namespace LME.Common.Engine
             if (string.IsNullOrWhiteSpace(suffix))
                 return normalized;
 
-            if (YearPrefixRegex().IsMatch(prefix))
+            if (YearPrefixRegex.IsMatch(prefix))
                 return suffix;
 
             return normalized;

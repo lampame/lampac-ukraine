@@ -16,16 +16,13 @@ using Shared.Models.Online.Settings;
 
 namespace LME.KlonFUN
 {
-    public partial class KlonFUNInvoke
+    public class KlonFUNInvoke
     {
-        [GeneratedRegex(@"file\s*:\s*['""](?<url>https?://[^'"">\s]+\.m3u8[^'"">\s]*)['""]", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
-        private static partial Regex DirectFileRegex();
+        private static readonly Regex DirectFileRegex = new Regex(@"file\s*:\s*['""](?<url>https?://[^'"">\s]+\.m3u8[^'"">\s]*)['""]", RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        [GeneratedRegex(@"(19|20)\d{2}")]
-        private static partial Regex YearRegex();
+        private static readonly Regex YearRegex = new Regex(@"(19|20)\d{2}", RegexOptions.Compiled);
 
-        [GeneratedRegex(@"(\d+)")]
-        private static partial Regex NumberRegex();
+        private static readonly Regex NumberRegex = new Regex(@"(\d+)", RegexOptions.Compiled);
 
         private readonly OnlinesSettings _init;
         private readonly IHybridCache _hybridCache;
@@ -152,7 +149,7 @@ namespace LME.KlonFUN
                 var yearNode = doc.DocumentNode.SelectSingleNode("//div[contains(@class,'table__category') and contains(.,'Рік')]/following-sibling::div");
                 if (yearNode != null)
                 {
-                    var yearMatch = YearRegex().Match(yearNode.InnerText ?? string.Empty);
+                    var yearMatch = YearRegex.Match(yearNode.InnerText ?? string.Empty);
                     if (yearMatch.Success)
                         int.TryParse(yearMatch.Value, out year);
                 }
@@ -219,7 +216,7 @@ namespace LME.KlonFUN
 
                 if (streams.Count == 0)
                 {
-                    var directMatch = DirectFileRegex().Match(playerHtml);
+                    var directMatch = DirectFileRegex.Match(playerHtml);
                     if (directMatch.Success)
                     {
                         streams.Add(new MovieStream
@@ -404,7 +401,7 @@ namespace LME.KlonFUN
                         int year = 0;
                         if (!string.IsNullOrWhiteSpace(meta))
                         {
-                            var yearMatch = YearRegex().Match(meta);
+                            var yearMatch = YearRegex.Match(meta);
                             if (yearMatch.Success)
                                 int.TryParse(yearMatch.Value, out year);
                         }
@@ -621,7 +618,7 @@ namespace LME.KlonFUN
         {
             if (!string.IsNullOrWhiteSpace(value))
             {
-                var match = NumberRegex().Match(value);
+                var match = NumberRegex.Match(value);
                 if (match.Success && int.TryParse(match.Value, out int parsed) && parsed > 0)
                     return parsed;
             }

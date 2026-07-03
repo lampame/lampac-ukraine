@@ -9,19 +9,15 @@ using System.Text.RegularExpressions;
 
 namespace LME.Common.Playerjs
 {
-    public static partial class PlayerJsDecoder
+    public static class PlayerJsDecoder
     {
-        [GeneratedRegex(@"atob\(\s*(['""])(?<payload>[^'""]+)\1\s*\)", RegexOptions.IgnoreCase)]
-        private static partial Regex ReAtobLiteral();
+        private static readonly Regex ReAtobLiteral = new Regex(@"atob\(\s*(['""])(?<payload>[^'""]+)\1\s*\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        [GeneratedRegex(@"JSON\.parse\(\s*(?<fn>[A-Za-z_$][\w$]*)\(\s*(?<quote>['""])(?<payload>.*?)(\k<quote>)\s*\)\s*\)", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
-        private static partial Regex ReJsonParseHelper();
+        private static readonly Regex ReJsonParseHelper = new Regex(@"JSON\.parse\(\s*(?<fn>[A-Za-z_$][\w$]*)\(\s*(?<quote>['""])(?<payload>.*?)(\k<quote>)\s*\)\s*\)", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
 
-        [GeneratedRegex(@"^\s*(?<fn>[A-Za-z_$][\w$]*)\(\s*(?<quote>['""])(?<payload>.*?)(\k<quote>)\s*\)\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
-        private static partial Regex ReHelperCall();
+        private static readonly Regex ReHelperCall = new Regex(@"^\s*(?<fn>[A-Za-z_$][\w$]*)\(\s*(?<quote>['""])(?<payload>.*?)(\k<quote>)\s*\)\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
 
-        [GeneratedRegex(@",\s*([}\]])")]
-        private static partial Regex ReTrailingComma();
+        private static readonly Regex ReTrailingComma = new Regex(@",\s*([}\]])", RegexOptions.Compiled);
 
         private static readonly UTF8Encoding _utf8Strict = new UTF8Encoding(false, true);
         private static readonly Encoding _latin1 = Encoding.GetEncoding("ISO-8859-1");
@@ -77,7 +73,7 @@ namespace LME.Common.Playerjs
                     return loaded;
             }
 
-            var parseMatch = ReJsonParseHelper().Match(text);
+            var parseMatch = ReJsonParseHelper.Match(text);
             if (parseMatch.Success)
             {
                 string decoded = DecodeHelperPayload(parseMatch.Groups["fn"].Value, parseMatch.Groups["payload"].Value, contextText);
@@ -89,7 +85,7 @@ namespace LME.Common.Playerjs
                 }
             }
 
-            var helperMatch = ReHelperCall().Match(text);
+            var helperMatch = ReHelperCall.Match(text);
             if (helperMatch.Success)
             {
                 string decoded = DecodeHelperPayload(helperMatch.Groups["fn"].Value, helperMatch.Groups["payload"].Value, contextText);
@@ -154,7 +150,7 @@ namespace LME.Common.Playerjs
             if (string.IsNullOrWhiteSpace(text))
                 return null;
 
-            var match = ReAtobLiteral().Match(text);
+            var match = ReAtobLiteral.Match(text);
             if (!match.Success)
                 return null;
 
@@ -477,7 +473,7 @@ namespace LME.Common.Playerjs
 
         private static string RemoveTrailingCommas(string value)
         {
-            return string.IsNullOrWhiteSpace(value) ? value : ReTrailingComma().Replace(value, "$1");
+            return string.IsNullOrWhiteSpace(value) ? value : ReTrailingComma.Replace(value, "$1");
         }
 
         public static string Nullish(string value)
