@@ -139,12 +139,26 @@ namespace LME.Makhno
                 if (jsonData == null)
                     _onLog("lme_makhno ParsePlayerData: file array not found");
                 else
-                    _onLog($"lme_makhno ParsePlayerData: file array length={jsonData.Length}");
+                    _onLog($"lme_makhno ParsePlayerData: file array length={jsonData.Length}, preview={jsonData.Substring(0, Math.Min(500, jsonData.Length))}");
                 if (!string.IsNullOrEmpty(jsonData))
                 {
                     var voices = ParseVoicesJson(jsonData);
                     var movies = ParseMovieVariantsJson(jsonData);
-                    _onLog($"lme_makhno ParsePlayerData: voices={voices?.Count ?? 0}");
+                    _onLog($"lme_makhno ParsePlayerData: voices={voices?.Count ?? 0}, movies={movies?.Count ?? 0}");
+                    if (voices != null)
+                    {
+                        foreach (var voice in voices)
+                        {
+                            _onLog($"lme_makhno voice: '{voice.Name}', seasons={voice.Seasons?.Count ?? 0}");
+                            if (voice.Seasons != null)
+                            {
+                                foreach (var season in voice.Seasons)
+                                {
+                                    _onLog($"lme_makhno season: '{season.Title}', episodes={season.Episodes?.Count ?? 0}");
+                                }
+                            }
+                        }
+                    }
                     return new PlayerData
                     {
                         File = movies.FirstOrDefault()?.File,
@@ -239,9 +253,21 @@ namespace LME.Makhno
                                 {
                                     string rawTitle = episode["title"]?.ToString();
                                     string file = episode["file"]?.ToString();
+                                    string combined = $"{rawTitle} {file}";
+
+                                    // DEBUG: логимо сирі дані епізоду
+                                    _onLog($"lme_makhno episode raw: title='{rawTitle}' file='{file}'");
 
                                     // Детектуємо лише 4K (решта — FHD за замовчуванням, не маркуємо)
-                                    string qualityTag = Quality4kRegex.IsMatch($"{rawTitle} {file}") ? "[4K]" : null;
+                                    bool is4k = Quality4kRegex.IsMatch(combined);
+                                    string qualityTag = is4k ? "[4K]" : null;
+
+                                    // DEBUG: логимо результат детекції
+                                    if (is4k)
+                                        _onLog($"lme_makhno episode 4K detected: {rawTitle}");
+                                    else
+                                        _onLog($"lme_makhno episode quality: not 4K (FHD assumed)");
+
                                     string displayTitle = string.IsNullOrWhiteSpace(rawTitle)
                                         ? $"Епізод {epIndex}"
                                         : WebUtility.HtmlDecode(rawTitle).Trim();
