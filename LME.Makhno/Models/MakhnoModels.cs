@@ -33,6 +33,7 @@ namespace LME.Makhno.Models
         public string Poster { get; set; }
         public string Subtitle { get; set; }
         public SubtitleTpl Subtitles { get; set; }
+        public string Quality { get; set; }
     }
 
     public class MovieVariant

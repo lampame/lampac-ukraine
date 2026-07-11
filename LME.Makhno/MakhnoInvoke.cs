@@ -18,6 +18,8 @@ namespace LME.Makhno
     {
         private const string WormholeHost = "https://wh.lme.isroot.in/";
 
+        private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private readonly OnlinesSettings _init;
         private readonly IHybridCache _hybridCache;
         private readonly Action<string> _onLog;
@@ -232,17 +234,34 @@ namespace LME.Makhno
                             var episodesArray = seasonGroup["folder"] as JsonArray;
                             if (episodesArray != null)
                             {
+                                int epIndex = 1;
                                 foreach (var episode in episodesArray)
                                 {
+                                    string rawTitle = episode["title"]?.ToString();
+                                    string file = episode["file"]?.ToString();
+
+                                    // Детектуємо лише 4K (решта — FHD за замовчуванням, не маркуємо)
+                                    string qualityTag = Quality4kRegex.IsMatch($"{rawTitle} {file}") ? "[4K]" : null;
+                                    string displayTitle = string.IsNullOrWhiteSpace(rawTitle)
+                                        ? $"Епізод {epIndex}"
+                                        : WebUtility.HtmlDecode(rawTitle).Trim();
+
+                                    if (qualityTag != null && !displayTitle.StartsWith("[4K]", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        displayTitle = $"{qualityTag} {displayTitle}";
+                                    }
+
                                     episodes.Add(new Episode
                                     {
                                         Id = episode["id"]?.ToString(),
-                                        Title = episode["title"]?.ToString(),
-                                        File = episode["file"]?.ToString(),
+                                        Title = displayTitle,
+                                        File = file,
                                         Poster = episode["poster"]?.ToString(),
                                         Subtitle = episode["subtitle"]?.ToString(),
-                                        Subtitles = ApnHelper.ParseSubtitles(episode["subtitle"]?.ToString())
+                                        Subtitles = ApnHelper.ParseSubtitles(episode["subtitle"]?.ToString()),
+                                        Quality = qualityTag
                                     });
+                                    epIndex++;
                                 }
                             }
 
