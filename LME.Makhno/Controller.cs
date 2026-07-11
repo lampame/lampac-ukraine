@@ -39,7 +39,6 @@ namespace LME.Makhno
             var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
-            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "lme_makhno");
             Initialization(init);
 
             OnLog($"lme_makhno: {title} (serial={serial}, s={s}, season={season}, t={t})");
@@ -65,7 +64,6 @@ namespace LME.Makhno
             var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
-            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "lme_makhno");
             Initialization(init);
 
             OnLog($"Makhno Play: {title} (s={s}, season={season}, t={t}, episodeId={episodeId}) play={play}");
@@ -124,7 +122,6 @@ namespace LME.Makhno
             var init = loadKit(ModInit.Makhno);
             if (!init.enable)
                 return OnError();
-            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "lme_makhno");
             Initialization(init);
 
             OnLog($"lme_makhno PlayMovie: {title} ({year}) play={play}");

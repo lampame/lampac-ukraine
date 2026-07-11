@@ -34,7 +34,6 @@ namespace LME.Mikai.Controllers
             if (!init.enable)
                 return Forbid();
 
-            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "Mikai");
             var invoke = new MikaiInvoke(init, hybridCache, OnLog, _proxyManager, httpHydra);
 
             if (checksearch)
@@ -216,7 +215,6 @@ namespace LME.Mikai.Controllers
             if (!init.enable)
                 return Forbid();
 
-            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "Mikai");
             if (string.IsNullOrEmpty(url))
                 return OnError("lme_mikai", refresh_proxy: true);
 

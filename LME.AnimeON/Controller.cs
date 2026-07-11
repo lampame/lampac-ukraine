@@ -36,7 +36,6 @@ namespace LME.AnimeON.Controllers
             if (!init.enable)
                 return Forbid();
 
-            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "AnimeON");
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
 
             if (checksearch)
@@ -385,7 +384,6 @@ namespace LME.AnimeON.Controllers
             if (!init.enable)
                 return Forbid();
 
-            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "AnimeON");
             var invoke = new AnimeONInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
             bool disableAshdiMultivoiceForVod = serial == 1;
             OnLog($"AnimeON Play: url={url}, episode_id={episode_id}, serial={serial}");

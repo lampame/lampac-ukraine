@@ -42,23 +42,6 @@ namespace Shared.Engine
             return false;
         }
 
-        public static string TryGetMagicAshdiHost(JObject conf)
-        {
-            if (conf == null || !conf.TryGetValue("magic_apn", out var magicToken) || magicToken == null)
-                return null;
-
-            if (magicToken.Type == JTokenType.Boolean)
-                return magicToken.Value<bool>() ? DefaultHost : null;
-
-            if (magicToken.Type == JTokenType.String)
-                return NormalizeHost(magicToken.Value<string>());
-
-            if (magicToken.Type != JTokenType.Object)
-                return null;
-
-            return NormalizeHost(((JObject)magicToken).Value<string>("ashdi"));
-        }
-
         public static void ApplyInitConf(bool enabled, string host, BaseSettings init, bool useDefaultHostWhenEmpty = false)
         {
             if (init == null)

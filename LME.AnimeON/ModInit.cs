@@ -30,7 +30,6 @@ namespace LME.AnimeON
 
         public static OnlinesSettings AnimeON;
         public static bool ApnHostProvided;
-        public static string MagicApnAshdiHost;
 
         public static OnlinesSettings Settings
         {
@@ -59,15 +58,9 @@ namespace LME.AnimeON
             };
             var defaults = JObject.FromObject(AnimeON);
             defaults["enabled"] = true;
-            defaults["magic_apn"] = new JObject()
-            {
-                ["ashdi"] = ApnHelper.DefaultHost
-            };
 
             var conf = ModuleInvoke.Init("LME.AnimeON", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
-            MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
-            conf.Remove("magic_apn");
             conf.Remove("apn");
             conf.Remove("apn_host");
             AnimeON = conf.ToObject<OnlinesSettings>();

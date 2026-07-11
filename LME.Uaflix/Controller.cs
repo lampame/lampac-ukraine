@@ -38,7 +38,6 @@ namespace LME.Uaflix.Controllers
                 return badInitMsg;
 
             var init = this.init;
-            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "lme_uaflix");
             OnLog($"lme_uaflix: === UAFLIX INDEX START ===");
             OnLog($"lme_uaflix: Index: title={title}, serial={serial}, s={s}, play={play}, href={href}, checksearch={checksearch}");
             OnLog($"lme_uaflix: Index: kinopoisk_id={kinopoisk_id}, imdb_id={imdb_id}, id={id}");

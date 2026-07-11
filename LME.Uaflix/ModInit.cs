@@ -24,7 +24,6 @@ namespace LME.Uaflix
         public static UaflixSettings UaFlix;
 
         public static bool ApnHostProvided;
-        public static string MagicApnAshdiHost;
 
         public static UaflixSettings Settings
         {
@@ -57,15 +56,9 @@ namespace LME.Uaflix
 
             var defaults = JObject.FromObject(UaFlix);
             defaults["enabled"] = true;
-            defaults["magic_apn"] = new JObject()
-            {
-                ["ashdi"] = ApnHelper.DefaultHost
-            };
 
             var conf = ModuleInvoke.Init("LME.Uaflix", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
-            MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
-            conf.Remove("magic_apn");
             conf.Remove("apn");
             conf.Remove("apn_host");
             UaFlix = conf.ToObject<UaflixSettings>();

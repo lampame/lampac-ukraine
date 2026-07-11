@@ -31,8 +31,6 @@ namespace LME.KlonFUN.Controllers
             if (!init.enable)
                 return Forbid();
 
-            ApnExtensions.TryEnableMagicApn(HttpContext, host, init, requestInfo, ModInit.MagicApnAshdiHost, OnLog, "KlonFUN");
-
             var invoke = new KlonFUNInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
 
             if (checksearch)

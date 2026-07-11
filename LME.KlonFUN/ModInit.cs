@@ -24,7 +24,6 @@ namespace LME.KlonFUN
 
         public static ModuleConfig KlonFUN;
         public static bool ApnHostProvided;
-        public static string MagicApnAshdiHost;
 
         public static ModuleConfig Settings
         {
@@ -61,15 +60,9 @@ namespace LME.KlonFUN
 
             var defaults = JObject.FromObject(KlonFUN);
             defaults["enabled"] = true;
-            defaults["magic_apn"] = new JObject()
-            {
-                ["ashdi"] = ApnHelper.DefaultHost
-            };
 
             var conf = ModuleInvoke.Init("LME.KlonFUN", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
-            MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
-            conf.Remove("magic_apn");
             conf.Remove("apn");
             conf.Remove("apn_host");
             KlonFUN = conf.ToObject<ModuleConfig>();

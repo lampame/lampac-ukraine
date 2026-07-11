@@ -95,10 +95,7 @@ git clone https://github.com/lampame/lampac-ukraine.git .
       "socks5://adress:port"
     ]
   },
-  "displayindex": 1,
-  "magic_apn": {
-    "ashdi": "https://proxy.com/proxy.php?url={encodeurl}"
-  }
+  "displayindex": 1
 }
 ```
 
@@ -106,8 +103,6 @@ git clone https://github.com/lampame/lampac-ukraine.git .
 - `webcorshost` + `useproxy`: працюють разом (парсинг через CORS-хост, мережевий вихід може йти через проксі).
 - `webcorshost` + `streamproxy`: не конфліктують (CORS для парсингу, `streamproxy` для потоків).
 - `apn` + `apn_host`: звичайний APN для всіх стрім-посилань модуля.
-- `magic_apn.ashdi` використовується лише для Ashdi-посилань і лише коли значення не порожнє.
-- `webcorshost` + `magic_apn`: не конфліктують.
 
 ### Звичайний APN (`apn`)
 
@@ -133,7 +128,6 @@ git clone https://github.com/lampame/lampac-ukraine.git .
 Нотатки:
 - Якщо `apn: false`, APN вимикається.
 - Якщо `apn: true`, береться `apn_host` (для `Bamboo`, `NMoonAnime`, `StarLight`, `UafilmME` за порожнього `apn_host` підставляється дефолтний хост).
-- Якщо задані і `apn`, і `magic_apn`, вони можуть працювати разом: `magic_apn` втручається тільки для Ashdi-посилань.
 
 ### Приклад конфігурації `LME.JackTor`
 
@@ -304,10 +298,7 @@ Example for `LME.Uaflix`:
       "socks5://adress:port"
     ]
   },
-  "displayindex": 1,
-  "magic_apn": {
-    "ashdi": "https://proxy.com/proxy.php?url={encodeurl}"
-  }
+  "displayindex": 1
 }
 ```
 
@@ -315,8 +306,6 @@ Parameter compatibility:
 - `webcorshost` + `useproxy`: can be used together.
 - `webcorshost` + `streamproxy`: no conflict.
 - `apn` + `apn_host`: regular APN for all stream links in the module.
-- `magic_apn.ashdi` is used only for Ashdi links and only when non-empty.
-- `webcorshost` + `magic_apn`: no conflict.
 
 ### Regular APN (`apn`)
 
@@ -342,7 +331,6 @@ Short form:
 Notes:
 - If `apn: false`, APN is disabled.
 - If `apn: true`, `apn_host` is used (for `Bamboo`, `NMoonAnime`, `StarLight`, `UafilmME`, default host is used when `apn_host` is empty).
-- If both `apn` and `magic_apn` are set, they can work together: `magic_apn` applies only to Ashdi links.
 
 ### Source/player availability check script
 

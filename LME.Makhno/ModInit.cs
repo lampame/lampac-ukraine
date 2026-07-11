@@ -28,7 +28,6 @@ namespace LME.Makhno
 
         public static OnlinesSettings Makhno;
         public static bool ApnHostProvided;
-        public static string MagicApnAshdiHost;
 
         public static OnlinesSettings Settings
         {
@@ -55,15 +54,9 @@ namespace LME.Makhno
             };
             var defaults = JObject.FromObject(Makhno);
             defaults["enabled"] = true;
-            defaults["magic_apn"] = new JObject()
-            {
-                ["ashdi"] = ApnHelper.DefaultHost
-            };
 
             var conf = ModuleInvoke.Init("LME.Makhno", defaults) ?? defaults;
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
-            MagicApnAshdiHost = ApnHelper.TryGetMagicAshdiHost(conf);
-            conf.Remove("magic_apn");
             if (hasApn)
             {
                 conf.Remove("apn");
