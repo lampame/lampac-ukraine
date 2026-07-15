@@ -159,6 +159,11 @@ namespace LME.UAKino.Controllers
             {
                 return await HandleMovie(init, voices, title, original_title, rjson, invoke);
             }
+            }
+            catch (OperationCanceledException)
+            {
+                return OnError("lme_uakino", refresh_proxy: false);
+            }
         }
 
         /// <summary>Вибір сезону для багатосезонного серіалу</summary>
@@ -258,11 +263,6 @@ namespace LME.UAKino.Controllers
             return rjson
                 ? Content(movie_tpl.ToJson(), "application/json; charset=utf-8")
                 : Content(movie_tpl.ToHtml(), "text/html; charset=utf-8");
-            }
-            catch (OperationCanceledException)
-            {
-                return OnError("lme_uakino", refresh_proxy: false);
-            }
         }
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)
