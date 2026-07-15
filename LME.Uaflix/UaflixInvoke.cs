@@ -304,7 +304,7 @@ namespace LME.Uaflix
             if (_hybridCache.TryGetValue(memKey, out EpisodePlayerInfo cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<EpisodePlayerInfo>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<EpisodePlayerInfo>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out EpisodePlayerInfo hit))
                     return hit;
@@ -753,7 +753,7 @@ namespace LME.Uaflix
                 return cached;
             }
 
-            return await SingleFlightCache.GetOrCreateAsync<SerialAggregatedStructure>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<SerialAggregatedStructure>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out SerialAggregatedStructure hit))
                     return hit;
@@ -942,7 +942,7 @@ namespace LME.Uaflix
             if (_hybridCache.TryGetValue(memKey, out PaginationInfo cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<PaginationInfo>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<PaginationInfo>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out PaginationInfo hit))
                     return hit;
@@ -1036,7 +1036,7 @@ namespace LME.Uaflix
             if (_hybridCache.TryGetValue(memKey, out List<EpisodeLinkInfo> cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<List<EpisodeLinkInfo>>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<List<EpisodeLinkInfo>>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out List<EpisodeLinkInfo> hit))
                     return hit;
@@ -1176,7 +1176,7 @@ namespace LME.Uaflix
                 return cached;
             }
 
-            return await SingleFlightCache.GetOrCreateAsync<SerialAggregatedStructure>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<SerialAggregatedStructure>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out SerialAggregatedStructure hit))
                     return hit;
@@ -1326,7 +1326,7 @@ namespace LME.Uaflix
             if (_hybridCache.TryGetValue(memKey, out List<VoiceInfo> cached))
                 return CloneVoices(cached);
 
-            return await SingleFlightCache.GetOrCreateAsync<List<VoiceInfo>>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<List<VoiceInfo>>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out List<VoiceInfo> hit))
                     return CloneVoices(hit);
@@ -1470,7 +1470,7 @@ namespace LME.Uaflix
             if (_hybridCache.TryGetValue(memKey, out List<SearchResult> cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<List<SearchResult>>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<List<SearchResult>>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out List<SearchResult> hit))
                     return hit;
@@ -1675,7 +1675,7 @@ namespace LME.Uaflix
             if (_hybridCache.TryGetValue(memKey, out SearchMeta cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<SearchMeta>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<SearchMeta>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out SearchMeta hit))
                     return hit;
@@ -1960,7 +1960,7 @@ namespace LME.Uaflix
             if (_hybridCache.TryGetValue(memKey, out FilmInfo res))
                 return res;
 
-            return await SingleFlightCache.GetOrCreateAsync<FilmInfo>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<FilmInfo>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out FilmInfo hit))
                     return hit;
@@ -2042,7 +2042,7 @@ namespace LME.Uaflix
             if (_hybridCache.TryGetValue(memKey, out PaginationInfo res))
                 return res;
 
-            return await SingleFlightCache.GetOrCreateAsync<PaginationInfo>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<PaginationInfo>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out PaginationInfo hit))
                     return hit;
