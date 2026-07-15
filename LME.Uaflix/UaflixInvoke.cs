@@ -814,69 +814,16 @@ namespace LME.Uaflix
                                     continue;
                                 }
 
-                                foreach (var voice in voices)
-                                {
-                                    if (voice == null || string.IsNullOrWhiteSpace(voice.Name))
-                                        continue;
-
-                                    if (!structure.Voices.TryGetValue(voice.Name, out var existingVoice))
-                                    {
-                                        existingVoice = new VoiceInfo
-                                        {
-                                            Name = voice.Name,
-                                            DisplayName = voice.DisplayName,
-                                            PlayerType = voice.PlayerType,
-                                            Seasons = new Dictionary<int, List<EpisodeInfo>>()
-                                        };
-                                        structure.Voices[voice.Name] = existingVoice;
-                                    }
-
-                                    if (voice.Seasons != null)
-                                    {
-                                        foreach (var s in voice.Seasons)
-                                        {
-                                            if (s.Value != null && s.Value.Any())
-                                                existingVoice.Seasons[s.Key] = s.Value;
-                                        }
-                                    }
-                                }
+                                MergeVoices(structure, voices);
+                                _onLog($"AggregateSerialStructure: Parsed serial player {seasonProbe.PlayerType}, voices={voices.Count}");
+                                continue;
                             }
-                            else if (seasonProbe.PlayerType == "zetvideo-vod")
+
+                            if (seasonProbe.PlayerType == "ashdi-vod" || seasonProbe.PlayerType == "zetvideo-vod")
                             {
-                                string voiceKey = "Zetvideo";
-                                if (!structure.Voices.TryGetValue(voiceKey, out var existingVoice))
-                                {
-                                    existingVoice = new VoiceInfo
-                                    {
-                                        Name = voiceKey,
-                                        DisplayName = "Zetvideo",
-                                        PlayerType = "zetvideo-vod",
-                                        Seasons = new Dictionary<int, List<EpisodeInfo>>()
-                                    };
-                                    structure.Voices[voiceKey] = existingVoice;
-                                }
-
-                                var episodes = new List<EpisodeInfo>();
-                                foreach (var ep in seasonGroup.Value.OrderBy(e => e.episode))
-                                {
-                                    if (ep == null || string.IsNullOrWhiteSpace(ep.url))
-                                        continue;
-
-                                    var epProbe = await ProbeEpisodePlayer(ep.url);
-                                    if (epProbe != null && !string.IsNullOrWhiteSpace(epProbe.IframeUrl))
-                                    {
-                                        episodes.Add(new EpisodeInfo
-                                        {
-                                            Number = ep.episode,
-                                            Title = ep.title,
-                                            File = epProbe.IframeUrl,
-                                            ZetvideoIframeUrls = epProbe.ZetvideoIframeUrls
-                                        });
-                                    }
-                                }
-
-                                if (episodes.Any())
-                                    existingVoice.Seasons[season] = episodes;
+                                AddVodSeasonEpisodes(structure, seasonProbe.PlayerType, season, seasonGroup.Value);
+                                _onLog($"AggregateSerialStructure: Added vod season {season}, episodes={seasonGroup.Value.Count}");
+                                continue;
                             }
                         }
                     }
@@ -1680,47 +1627,6 @@ namespace LME.Uaflix
                 if (_hybridCache.TryGetValue(memKey, out SearchMeta hit))
                     return hit;
 
-                try
-                {
-                    var headers = new List<HeadersModel>()
-                    {
-                        new HeadersModel("User-Agent", "Mozilla/5.0"),
-                        new HeadersModel("Referer", _init.host)
-                    };
-
-                    string html = await GetHtml(url, headers);
-                    if (!string.IsNullOrWhiteSpace(html))
-                    {
-                        var doc = new HtmlDocument();
-                        doc.LoadHtml(html);
-
-                        var yearNode = doc.DocumentNode.SelectSingleNode("//li[contains(@class, 'vis')]//span[contains(@class, 'year')]");
-                        int year = ExtractYear(yearNode?.InnerText);
-                        if (year <= 0)
-                        {
-                            var createdNode = doc.DocumentNode.SelectSingleNode("//*[@itemprop='dateCreated']");
-                            year = ExtractYear(createdNode?.GetAttributeValue("content", null) ?? createdNode?.InnerText);
-                        }
-
-                        meta.Year = year; // Wait, is meta variable declared? Yes, var meta = new SearchMeta... but wait, meta was declared inside, now it's inside lambda but we can declare it. Let's see:
-                        // meta is defined as local variable or return value?
-                        // Let's look at original code:
-                        // var meta = new SearchMeta { ... };
-                        // So yes, we can define var meta inside lambda.
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _onLog($"LoadSearchMeta error: {ex.Message}");
-                }
-
-                // Wait, where is return?
-                // Let's write the whole body properly:
-                // var meta = new SearchMeta { ... };
-                // ...
-                // _hybridCache.Set(memKey, meta, CacheHelper.CacheTime(60));
-                // return meta;
-                // Let's write it down:
                 var meta = new SearchMeta
                 {
                     Category = ExtractCategoryFromUrl(url)
