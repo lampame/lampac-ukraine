@@ -20,7 +20,7 @@ namespace LME.KlonFUN
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 2.1;
+        public static double Version => 2.2;
 
         public static ModuleConfig KlonFUN;
         public static bool ApnHostProvided;
