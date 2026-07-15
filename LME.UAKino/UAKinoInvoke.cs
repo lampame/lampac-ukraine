@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using LME.UAKino.Models;
@@ -11,6 +12,7 @@ using Shared;
 using Shared.Engine;
 using Shared.Models;
 using Shared.Models.Online.Settings;
+using LME.Shared.Engine;
 
 namespace LME.UAKino
 {
@@ -31,112 +33,127 @@ namespace LME.UAKino
             _httpHydra = httpHydra;
         }
 
-        public async Task<List<SearchResult>> Search(string title, string original_title, int year, string imdb_id)
+        public async Task<List<SearchResult>> Search(string title, string original_title, int year, string imdb_id, CancellationToken ct = default)
         {
             string query = BuildSearchQuery(title, original_title, imdb_id);
             if (string.IsNullOrEmpty(query))
                 return null;
 
             string memKey = $"UAKino:search:{query}";
+            // ponytail: single-flight — factory виконається рівно 1 раз при паралельних запитах
             if (_hybridCache.TryGetValue(memKey, out List<SearchResult> cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<List<SearchResult>>(memKey, async token =>
             {
-                _onLog?.Invoke($"UAKino search: {query}");
+                // double-check після отримання lock
+                if (_hybridCache.TryGetValue(memKey, out List<SearchResult> hit))
+                    return hit;
 
-                string url = $"{_init.host}/engine/lazydev/dle_search/ajax.php";
-                string body = $"story={HttpUtility.UrlEncode(query)}&thisUrl=/ua/";
-
-                var headers = new List<HeadersModel>()
+                try
                 {
-                    new HeadersModel("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3 Safari/605.1.15"),
-                    new HeadersModel("Referer", $"{_init.host}/ua/"),
-                    new HeadersModel("X-Requested-With", "XMLHttpRequest"),
-                    new HeadersModel("Origin", _init.host),
-                    new HeadersModel("Accept", "*/*"),
-                    new HeadersModel("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-                };
+                    _onLog?.Invoke($"UAKino search: {query}");
 
-                string json = await Http.Post(_init.cors(url), body, headers: headers, proxy: _proxyManager.Get());
-                if (string.IsNullOrEmpty(json))
+                    string url = $"{_init.host}/engine/lazydev/dle_search/ajax.php";
+                    string body = $"story={HttpUtility.UrlEncode(query)}&thisUrl=/ua/";
+
+                    var headers = new List<HeadersModel>()
+                    {
+                        new HeadersModel("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3 Safari/605.1.15"),
+                        new HeadersModel("Referer", $"{_init.host}/ua/"),
+                        new HeadersModel("X-Requested-With", "XMLHttpRequest"),
+                        new HeadersModel("Origin", _init.host),
+                        new HeadersModel("Accept", "*/*"),
+                        new HeadersModel("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                    };
+
+                    string json = await Http.Post(_init.cors(url), body, headers: headers, proxy: _proxyManager.Get());
+                    if (string.IsNullOrEmpty(json))
+                        return null;
+
+                    using var jsonDoc = JsonDocument.Parse(json);
+                    if (!jsonDoc.RootElement.TryGetProperty("content", out JsonElement contentElem))
+                        return null;
+
+                    string html = contentElem.GetString();
+                    if (string.IsNullOrEmpty(html))
+                        return null;
+
+                    var htmlDoc = new HtmlDocument();
+                    htmlDoc.LoadHtml(html);
+
+                    var rawItems = ParseRawItems(htmlDoc);
+                    var results = GroupByShow(rawItems);
+
+                    if (results.Count > 0)
+                        _hybridCache.Set(memKey, results, CacheHelper.CacheTime(20));
+
+                    return results;
+                }
+                catch (Exception ex)
+                {
+                    _onLog?.Invoke($"UAKino search error: {ex.Message}");
                     return null;
-
-                using var jsonDoc = JsonDocument.Parse(json);
-                if (!jsonDoc.RootElement.TryGetProperty("content", out JsonElement contentElem))
-                    return null;
-
-                string html = contentElem.GetString();
-                if (string.IsNullOrEmpty(html))
-                    return null;
-
-                var htmlDoc = new HtmlDocument();
-                htmlDoc.LoadHtml(html);
-
-                var rawItems = ParseRawItems(htmlDoc);
-                var results = GroupByShow(rawItems);
-
-                if (results.Count > 0)
-                    _hybridCache.Set(memKey, results, CacheHelper.CacheTime(20));
-
-                return results;
-            }
-            catch (Exception ex)
-            {
-                _onLog?.Invoke($"UAKino search error: {ex.Message}");
-                return null;
-            }
+                }
+            }, ct);
         }
 
         /// <summary>
         /// Отримати плейлист (озвучки + епізоди) за news_id
         /// </summary>
-        public async Task<List<VoiceGroup>> GetPlaylist(string newsId)
+        public async Task<List<VoiceGroup>> GetPlaylist(string newsId, CancellationToken ct = default)
         {
             if (string.IsNullOrEmpty(newsId))
                 return null;
 
             string memKey = $"UAKino:playlist:{newsId}";
+            // ponytail: single-flight — найдорожчий виклик (парсинг плейлиста), гарантуємо 1 HTTP-запит
             if (_hybridCache.TryGetValue(memKey, out List<VoiceGroup> cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<List<VoiceGroup>>(memKey, async token =>
             {
-                _onLog?.Invoke($"UAKino playlist: {newsId}");
+                if (_hybridCache.TryGetValue(memKey, out List<VoiceGroup> hit))
+                    return hit;
 
-                string url = $"{_init.host}/engine/ajax/playlists.php?news_id={newsId}&xfield=playlist";
-
-                var headers = new List<HeadersModel>()
+                try
                 {
-                    new HeadersModel("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3 Safari/605.1.15"),
-                    new HeadersModel("Referer", $"{_init.host}/{newsId}-"),
-                    new HeadersModel("X-Requested-With", "XMLHttpRequest"),
-                    new HeadersModel("Accept", "application/json, text/javascript, */*; q=0.01")
-                };
+                    _onLog?.Invoke($"UAKino playlist: {newsId}");
 
-                string json = await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
-                if (string.IsNullOrEmpty(json))
+                    string url = $"{_init.host}/engine/ajax/playlists.php?news_id={newsId}&xfield=playlist";
+
+                    var headers = new List<HeadersModel>()
+                    {
+                        new HeadersModel("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3 Safari/605.1.15"),
+                        new HeadersModel("Referer", $"{_init.host}/{newsId}-"),
+                        new HeadersModel("X-Requested-With", "XMLHttpRequest"),
+                        new HeadersModel("Accept", "application/json, text/javascript, */*; q=0.01")
+                    };
+
+                    string json = await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
+                    if (string.IsNullOrEmpty(json))
+                        return null;
+
+                    using var jsonDoc = JsonDocument.Parse(json);
+                    if (!jsonDoc.RootElement.TryGetProperty("response", out JsonElement responseElem))
+                        return null;
+
+                    string html = responseElem.GetString();
+                    if (string.IsNullOrEmpty(html))
+                        return null;
+
+                    var voices = ParsePlaylistHtml(html);
+                    if (voices.Count > 0)
+                        _hybridCache.Set(memKey, voices, CacheHelper.CacheTime(30));
+
+                    return voices;
+                }
+                catch (Exception ex)
+                {
+                    _onLog?.Invoke($"UAKino playlist error: {ex.Message}");
                     return null;
-
-                using var jsonDoc = JsonDocument.Parse(json);
-                if (!jsonDoc.RootElement.TryGetProperty("response", out JsonElement responseElem))
-                    return null;
-
-                string html = responseElem.GetString();
-                if (string.IsNullOrEmpty(html))
-                    return null;
-
-                var voices = ParsePlaylistHtml(html);
-                if (voices.Count > 0)
-                    _hybridCache.Set(memKey, voices, CacheHelper.CacheTime(30));
-
-                return voices;
-            }
-            catch (Exception ex)
-            {
-                _onLog?.Invoke($"UAKino playlist error: {ex.Message}");
-                return null;
-            }
+                }
+            }, ct);
         }
 
         /// <summary>
