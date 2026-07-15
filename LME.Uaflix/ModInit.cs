@@ -19,7 +19,7 @@ namespace LME.Uaflix
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 5.3;
+        public static double Version => 5.4;
 
         public static UaflixSettings UaFlix;
 

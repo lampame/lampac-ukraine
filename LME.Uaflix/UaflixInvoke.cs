@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Shared;
 using Shared.Models.Online.Settings;
@@ -15,6 +16,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using LME.Shared.Engine;
 
 namespace LME.Uaflix
 {
@@ -298,55 +300,62 @@ namespace LME.Uaflix
 
             // v2 — зміна кеш-ключа для інвалідації старих даних без ZetvideoIframeUrls
             string memKey = $"lme_uaflix:episode-player-v2:{pageUrl}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out EpisodePlayerInfo cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<EpisodePlayerInfo>(memKey, async token =>
             {
-                var headers = new List<HeadersModel>()
+                if (_hybridCache.TryGetValue(memKey, out EpisodePlayerInfo hit))
+                    return hit;
+
+                try
                 {
-                    new HeadersModel("User-Agent", "Mozilla/5.0"),
-                    new HeadersModel("Referer", _init.host)
-                };
+                    var headers = new List<HeadersModel>()
+                    {
+                        new HeadersModel("User-Agent", "Mozilla/5.0"),
+                        new HeadersModel("Referer", _init.host)
+                    };
 
-                string html = await GetHtml(pageUrl, headers);
-                if (string.IsNullOrWhiteSpace(html))
-                    return null;
+                    string html = await GetHtml(pageUrl, headers);
+                    if (string.IsNullOrWhiteSpace(html))
+                        return null;
 
-                var doc = new HtmlDocument();
-                doc.LoadHtml(html);
+                    var doc = new HtmlDocument();
+                    doc.LoadHtml(html);
 
-                string iframeUrl = ExtractIframeUrl(doc);
-                string playerType = DeterminePlayerType(iframeUrl);
+                    string iframeUrl = ExtractIframeUrl(doc);
+                    string playerType = DeterminePlayerType(iframeUrl);
 
-                // Витягуємо всі zetvideo iframe для підтримки кількох перекладів
-                List<string> zetvideoIframeUrls = null;
-                if (playerType == "zetvideo-vod")
-                {
-                    var allIframes = ExtractAllIframeUrls(doc);
-                    var zetIframes = allIframes
-                        .Where(u => u != null && u.Contains("zetvideo.net"))
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .ToList();
-                    if (zetIframes.Count > 1)
-                        zetvideoIframeUrls = zetIframes;
+                    // Витягуємо всі zetvideo iframe для підтримки кількох перекладів
+                    List<string> zetvideoIframeUrls = null;
+                    if (playerType == "zetvideo-vod")
+                    {
+                        var allIframes = ExtractAllIframeUrls(doc);
+                        var zetIframes = allIframes
+                            .Where(u => u != null && u.Contains("zetvideo.net"))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+                        if (zetIframes.Count > 1)
+                            zetvideoIframeUrls = zetIframes;
+                    }
+
+                    var info = new EpisodePlayerInfo
+                    {
+                        IframeUrl = iframeUrl,
+                        PlayerType = playerType,
+                        ZetvideoIframeUrls = zetvideoIframeUrls
+                    };
+
+                    _hybridCache.Set(memKey, info, CacheHelper.CacheTime(20));
+                    return info;
                 }
-
-                var info = new EpisodePlayerInfo
+                catch (Exception ex)
                 {
-                    IframeUrl = iframeUrl,
-                    PlayerType = playerType,
-                    ZetvideoIframeUrls = zetvideoIframeUrls
-                };
-
-                _hybridCache.Set(memKey, info, CacheHelper.CacheTime(20));
-                return info;
-            }
-            catch (Exception ex)
-            {
-                _onLog($"ProbeEpisodePlayer error ({pageUrl}): {ex.Message}");
-                return null;
-            }
+                    _onLog($"ProbeEpisodePlayer error ({pageUrl}): {ex.Message}");
+                    return null;
+                }
+            });
         }
 
         private async Task<EpisodePlayerInfo> ProbeSeasonPlayer(List<EpisodeLinkInfo> seasonEpisodes)
@@ -737,164 +746,168 @@ namespace LME.Uaflix
         public async Task<SerialAggregatedStructure> AggregateSerialStructure(string serialUrl)
         {
             string memKey = $"lme_uaflix:aggregated:{serialUrl}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out SerialAggregatedStructure cached))
             {
                 _onLog($"AggregateSerialStructure: Using cached structure for {serialUrl}");
                 return cached;
             }
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<SerialAggregatedStructure>(memKey, async token =>
             {
-                if (string.IsNullOrEmpty(serialUrl) || !Uri.IsWellFormedUriString(serialUrl, UriKind.Absolute))
+                if (_hybridCache.TryGetValue(memKey, out SerialAggregatedStructure hit))
+                    return hit;
+
+                try
                 {
-                    _onLog($"AggregateSerialStructure: Invalid URL: {serialUrl}");
-                    return null;
-                }
-
-                var paginationInfo = await GetPaginationInfo(serialUrl);
-
-                var structure = new SerialAggregatedStructure
-                {
-                    SerialUrl = serialUrl,
-                    Voices = new Dictionary<string, VoiceInfo>(),
-                    AllEpisodes = paginationInfo?.Episodes ?? new List<EpisodeLinkInfo>()
-                };
-
-                var serialPlayersProcessed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                bool hasPaginationEpisodes = paginationInfo?.Episodes != null && paginationInfo.Episodes.Any();
-
-                if (hasPaginationEpisodes)
-                {
-                    var episodesBySeason = paginationInfo.Episodes
-                        .GroupBy(e => e.season)
-                        .ToDictionary(g => g.Key, g => g.ToList());
-
-                    _onLog($"AggregateSerialStructure: Processing {episodesBySeason.Count} seasons");
-
-                    foreach (var seasonGroup in episodesBySeason)
+                    if (string.IsNullOrEmpty(serialUrl) || !Uri.IsWellFormedUriString(serialUrl, UriKind.Absolute))
                     {
-                        int season = seasonGroup.Key;
-                        _onLog($"AggregateSerialStructure: Processing season {season}");
-
-                        var seasonProbe = await ProbeSeasonPlayer(seasonGroup.Value);
-                        if (seasonProbe == null || string.IsNullOrWhiteSpace(seasonProbe.PlayerType))
-                        {
-                            _onLog($"AggregateSerialStructure: Season {season} has no supported player");
-                            continue;
-                        }
-
-                        if (seasonProbe.PlayerType == "ashdi-serial" || seasonProbe.PlayerType == "zetvideo-serial")
-                        {
-                            string serialKey = NormalizeSerialPlayerKey(seasonProbe.PlayerType, seasonProbe.IframeUrl);
-                            if (!serialPlayersProcessed.Add(serialKey))
-                            {
-                                _onLog($"AggregateSerialStructure: Serial player already parsed for season {season}: {serialKey}");
-                                continue;
-                            }
-
-                            var voices = await ParseMultiEpisodePlayer(seasonProbe.IframeUrl, seasonProbe.PlayerType);
-                            if (voices == null || voices.Count == 0)
-                            {
-                                _onLog($"AggregateSerialStructure: No voices in serial player for season {season}");
-                                continue;
-                            }
-
-                            MergeVoices(structure, voices);
-                            _onLog($"AggregateSerialStructure: Parsed serial player {seasonProbe.PlayerType}, voices={voices.Count}");
-                            continue;
-                        }
-
-                        if (seasonProbe.PlayerType == "ashdi-vod" || seasonProbe.PlayerType == "zetvideo-vod")
-                        {
-                            AddVodSeasonEpisodes(structure, seasonProbe.PlayerType, season, seasonGroup.Value);
-                            _onLog($"AggregateSerialStructure: Added vod season {season}, episodes={seasonGroup.Value.Count}");
-                            continue;
-                        }
-
-                        _onLog($"AggregateSerialStructure: Unsupported player {seasonProbe.PlayerType} for season {season}");
-                    }
-                }
-                else
-                {
-                    _onLog($"AggregateSerialStructure: No episodes from pagination for {serialUrl}, fallback to page iframe");
-
-                    var serialProbe = await ProbeEpisodePlayer(serialUrl);
-                    if (serialProbe == null || string.IsNullOrWhiteSpace(serialProbe.PlayerType))
-                    {
-                        _onLog($"AggregateSerialStructure: Fallback probe failed for {serialUrl}");
+                        _onLog($"AggregateSerialStructure: Invalid URL: {serialUrl}");
                         return null;
                     }
 
-                    if (serialProbe.PlayerType == "ashdi-serial" || serialProbe.PlayerType == "zetvideo-serial")
-                    {
-                        var voices = await ParseMultiEpisodePlayer(serialProbe.IframeUrl, serialProbe.PlayerType);
-                        if (voices == null || voices.Count == 0)
-                        {
-                            _onLog($"AggregateSerialStructure: Fallback serial player has no voices for {serialUrl}");
-                            return null;
-                        }
+                    var paginationInfo = await GetPaginationInfo(serialUrl);
 
-                        MergeVoices(structure, voices);
-                        _onLog($"AggregateSerialStructure: Fallback serial player parsed, voices={voices.Count}");
-                    }
-                    else if (serialProbe.PlayerType == "ashdi-vod" || serialProbe.PlayerType == "zetvideo-vod")
+                    var structure = new SerialAggregatedStructure
                     {
-                        // Копіюємо zetvideoIframeUrls якщо є
-                        List<string> zetvideoUrls = null;
-                        if (serialProbe.ZetvideoIframeUrls != null && serialProbe.ZetvideoIframeUrls.Count > 0)
-                            zetvideoUrls = serialProbe.ZetvideoIframeUrls;
+                        SerialUrl = serialUrl,
+                        Voices = new Dictionary<string, VoiceInfo>(),
+                        AllEpisodes = paginationInfo?.Episodes ?? new List<EpisodeLinkInfo>()
+                    };
 
-                        var syntheticEpisodes = new List<EpisodeLinkInfo>
+                    var serialPlayersProcessed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    bool hasPaginationEpisodes = paginationInfo?.Episodes != null && paginationInfo.Episodes.Any();
+
+                    if (hasPaginationEpisodes)
+                    {
+                        var episodesBySeason = paginationInfo.Episodes
+                            .GroupBy(e => e.season)
+                            .ToDictionary(g => g.Key, g => g.ToList());
+
+                        _onLog($"AggregateSerialStructure: Processing {episodesBySeason.Count} seasons");
+
+                        foreach (var seasonGroup in episodesBySeason)
                         {
-                            new EpisodeLinkInfo
+                            int season = seasonGroup.Key;
+                            _onLog($"AggregateSerialStructure: Processing season {season}");
+
+                            var seasonProbe = await ProbeSeasonPlayer(seasonGroup.Value);
+                            if (seasonProbe == null || string.IsNullOrWhiteSpace(seasonProbe.PlayerType))
                             {
-                                url = serialUrl,
-                                title = "Епізод 1",
-                                season = 1,
-                                episode = 1,
-                                iframeUrl = serialProbe.IframeUrl,
-                                playerType = serialProbe.PlayerType,
-                                zetvideoIframeUrls = zetvideoUrls
+                                _onLog($"AggregateSerialStructure: Season {season} has no supported player");
+                                continue;
                             }
-                        };
 
-                        structure.AllEpisodes = syntheticEpisodes;
-                        AddVodSeasonEpisodes(structure, serialProbe.PlayerType, 1, syntheticEpisodes);
+                            if (seasonProbe.PlayerType == "ashdi-serial" || seasonProbe.PlayerType == "zetvideo-serial")
+                            {
+                                string serialKey = NormalizeSerialPlayerKey(seasonProbe.PlayerType, seasonProbe.IframeUrl);
+                                if (!serialPlayersProcessed.Add(serialKey))
+                                {
+                                    _onLog($"AggregateSerialStructure: Serial player already parsed for season {season}: {serialKey}");
+                                    continue;
+                                }
+
+                                var voices = await ParseMultiEpisodePlayer(seasonProbe.IframeUrl, seasonProbe.PlayerType);
+                                if (voices == null || voices.Count == 0)
+                                {
+                                    _onLog($"AggregateSerialStructure: No voices in serial player for season {season}");
+                                    continue;
+                                }
+
+                                foreach (var voice in voices)
+                                {
+                                    if (voice == null || string.IsNullOrWhiteSpace(voice.Name))
+                                        continue;
+
+                                    if (!structure.Voices.TryGetValue(voice.Name, out var existingVoice))
+                                    {
+                                        existingVoice = new VoiceInfo
+                                        {
+                                            Name = voice.Name,
+                                            DisplayName = voice.DisplayName,
+                                            PlayerType = voice.PlayerType,
+                                            Seasons = new Dictionary<int, List<EpisodeInfo>>()
+                                        };
+                                        structure.Voices[voice.Name] = existingVoice;
+                                    }
+
+                                    if (voice.Seasons != null)
+                                    {
+                                        foreach (var s in voice.Seasons)
+                                        {
+                                            if (s.Value != null && s.Value.Any())
+                                                existingVoice.Seasons[s.Key] = s.Value;
+                                        }
+                                    }
+                                }
+                            }
+                            else if (seasonProbe.PlayerType == "zetvideo-vod")
+                            {
+                                string voiceKey = "Zetvideo";
+                                if (!structure.Voices.TryGetValue(voiceKey, out var existingVoice))
+                                {
+                                    existingVoice = new VoiceInfo
+                                    {
+                                        Name = voiceKey,
+                                        DisplayName = "Zetvideo",
+                                        PlayerType = "zetvideo-vod",
+                                        Seasons = new Dictionary<int, List<EpisodeInfo>>()
+                                    };
+                                    structure.Voices[voiceKey] = existingVoice;
+                                }
+
+                                var episodes = new List<EpisodeInfo>();
+                                foreach (var ep in seasonGroup.Value.OrderBy(e => e.episode))
+                                {
+                                    if (ep == null || string.IsNullOrWhiteSpace(ep.url))
+                                        continue;
+
+                                    var epProbe = await ProbeEpisodePlayer(ep.url);
+                                    if (epProbe != null && !string.IsNullOrWhiteSpace(epProbe.IframeUrl))
+                                    {
+                                        episodes.Add(new EpisodeInfo
+                                        {
+                                            Number = ep.episode,
+                                            Title = ep.title,
+                                            File = epProbe.IframeUrl,
+                                            ZetvideoIframeUrls = epProbe.ZetvideoIframeUrls
+                                        });
+                                    }
+                                }
+
+                                if (episodes.Any())
+                                    existingVoice.Seasons[season] = episodes;
+                            }
+                        }
                     }
-                    else
+
+                    if (!structure.Voices.Any())
                     {
-                        _onLog($"AggregateSerialStructure: Fallback player is not supported for serial: {serialProbe.PlayerType}");
+                        _onLog($"AggregateSerialStructure: No voices found after aggregation for {serialUrl}");
                         return null;
                     }
-                }
 
-                if (!structure.Voices.Any())
-                {
-                    _onLog($"AggregateSerialStructure: No voices found after aggregation for {serialUrl}");
-                    return null;
-                }
+                    NormalizeUaflixVoiceNames(structure);
 
-                NormalizeUaflixVoiceNames(structure);
+                    // Edge Case 9: Перевірка наявності епізодів у озвучках
+                    bool hasEpisodes = structure.Voices.Values.Any(v => v.Seasons.Values.Any(s => s.Any()));
+                    if (!hasEpisodes)
+                    {
+                        _onLog($"AggregateSerialStructure: No episodes found in any voice for {serialUrl}");
+                        _onLog($"AggregateSerialStructure: Voices count: {structure.Voices.Count}");
+                        foreach (var voice in structure.Voices)
+                        {
+                            _onLog($"  Voice {voice.Key}: {voice.Value.Seasons.Sum(s => s.Value.Count)} total episodes");
+                        }
+                        return null;
+                    }
 
-                // Edge Case 9: Перевірка наявності епізодів у озвучках
-                bool hasEpisodes = structure.Voices.Values.Any(v => v.Seasons.Values.Any(s => s.Any()));
-                if (!hasEpisodes)
-                {
-                    _onLog($"AggregateSerialStructure: No episodes found in any voice for {serialUrl}");
-                    _onLog($"AggregateSerialStructure: Voices count: {structure.Voices.Count}");
+                    _hybridCache.Set(memKey, structure, CacheHelper.CacheTime(40));
+                    _onLog($"AggregateSerialStructure: Cached structure with {structure.Voices.Count} total voices");
+
+                    // Детальне логування структури для діагностики
                     foreach (var voice in structure.Voices)
                     {
-                        _onLog($"  Voice {voice.Key}: {voice.Value.Seasons.Sum(s => s.Value.Count)} total episodes");
-                    }
-                    return null;
-                }
-
-                _hybridCache.Set(memKey, structure, CacheHelper.CacheTime(40));
-                _onLog($"AggregateSerialStructure: Cached structure with {structure.Voices.Count} total voices");
-
-                // Детальне логування структури для діагностики
-                foreach (var voice in structure.Voices)
-                {
                     _onLog($"  Voice: {voice.Key} ({voice.Value.PlayerType}) - Seasons: {voice.Value.Seasons.Count}");
                     foreach (var season in voice.Value.Seasons)
                     {
@@ -908,13 +921,14 @@ namespace LME.Uaflix
                     }
                 }
 
-                return structure;
-            }
-            catch (Exception ex)
-            {
-                _onLog($"AggregateSerialStructure error: {ex.Message}");
-                return null;
-            }
+                    return structure;
+                }
+                catch (Exception ex)
+                {
+                    _onLog($"AggregateSerialStructure error: {ex.Message}");
+                    return null;
+                }
+            });
         }
         
         #endregion
@@ -924,85 +938,92 @@ namespace LME.Uaflix
         public async Task<PaginationInfo> GetSeasonIndex(string serialUrl)
         {
             string memKey = $"lme_uaflix:season-index:{serialUrl}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out PaginationInfo cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<PaginationInfo>(memKey, async token =>
             {
-                if (string.IsNullOrWhiteSpace(serialUrl) || !Uri.IsWellFormedUriString(serialUrl, UriKind.Absolute))
-                    return null;
+                if (_hybridCache.TryGetValue(memKey, out PaginationInfo hit))
+                    return hit;
 
-                var headers = new List<HeadersModel>()
+                try
                 {
-                    new HeadersModel("User-Agent", "Mozilla/5.0"),
-                    new HeadersModel("Referer", _init.host)
-                };
+                    if (string.IsNullOrWhiteSpace(serialUrl) || !Uri.IsWellFormedUriString(serialUrl, UriKind.Absolute))
+                        return null;
 
-                string html = await GetHtml(serialUrl, headers);
-                if (string.IsNullOrWhiteSpace(html))
-                    return null;
+                    var headers = new List<HeadersModel>()
+                    {
+                        new HeadersModel("User-Agent", "Mozilla/5.0"),
+                        new HeadersModel("Referer", _init.host)
+                    };
 
-                var doc = new HtmlDocument();
-                doc.LoadHtml(html);
+                    string html = await GetHtml(serialUrl, headers);
+                    if (string.IsNullOrWhiteSpace(html))
+                        return null;
 
-                var result = new PaginationInfo
-                {
-                    SerialUrl = serialUrl
-                };
+                    var doc = new HtmlDocument();
+                    doc.LoadHtml(html);
 
-                var seasonNodes = doc.DocumentNode.SelectNodes("//div[contains(@class, 'sez-wr')]//a");
-                if (seasonNodes == null)
-                    seasonNodes = doc.DocumentNode.SelectNodes("//div[contains(@class, 'fss-box')]//a");
+                    var result = new PaginationInfo
+                    {
+                        SerialUrl = serialUrl
+                    };
 
-                if (seasonNodes == null || seasonNodes.Count == 0)
-                {
-                    // Якщо явного списку сезонів немає, вважаємо що є один сезон.
-                    result.Seasons[1] = 1;
-                    result.SeasonUrls[1] = serialUrl;
+                    var seasonNodes = doc.DocumentNode.SelectNodes("//div[contains(@class, 'sez-wr')]//a");
+                    if (seasonNodes == null)
+                        seasonNodes = doc.DocumentNode.SelectNodes("//div[contains(@class, 'fss-box')]//a");
+
+                    if (seasonNodes == null || seasonNodes.Count == 0)
+                    {
+                        // Якщо явного списку сезонів немає, вважаємо що є один сезон.
+                        result.Seasons[1] = 1;
+                        result.SeasonUrls[1] = serialUrl;
+                        _hybridCache.Set(memKey, result, CacheHelper.CacheTime(40));
+                        return result;
+                    }
+
+                    foreach (var node in seasonNodes)
+                    {
+                        string href = node.GetAttributeValue("href", null);
+                        string seasonUrl = ToAbsoluteUrl(href);
+                        if (string.IsNullOrWhiteSpace(seasonUrl))
+                            continue;
+
+                        string tabText = WebUtility.HtmlDecode(node.InnerText ?? string.Empty);
+                        if (!IsSeasonTabLink(seasonUrl, tabText))
+                            continue;
+
+                        int season = ExtractSeasonNumber(seasonUrl, tabText);
+                        if (season <= 0)
+                            continue;
+
+                        if (!result.SeasonUrls.TryGetValue(season, out string existing))
+                        {
+                            result.SeasonUrls[season] = seasonUrl;
+                            result.Seasons[season] = 1;
+                            continue;
+                        }
+
+                        if (IsPreferableSeasonUrl(existing, seasonUrl, season))
+                            result.SeasonUrls[season] = seasonUrl;
+                    }
+
+                    if (result.SeasonUrls.Count == 0)
+                    {
+                        result.Seasons[1] = 1;
+                        result.SeasonUrls[1] = serialUrl;
+                    }
+
                     _hybridCache.Set(memKey, result, CacheHelper.CacheTime(40));
                     return result;
                 }
-
-                foreach (var node in seasonNodes)
+                catch (Exception ex)
                 {
-                    string href = node.GetAttributeValue("href", null);
-                    string seasonUrl = ToAbsoluteUrl(href);
-                    if (string.IsNullOrWhiteSpace(seasonUrl))
-                        continue;
-
-                    string tabText = WebUtility.HtmlDecode(node.InnerText ?? string.Empty);
-                    if (!IsSeasonTabLink(seasonUrl, tabText))
-                        continue;
-
-                    int season = ExtractSeasonNumber(seasonUrl, tabText);
-                    if (season <= 0)
-                        continue;
-
-                    if (!result.SeasonUrls.TryGetValue(season, out string existing))
-                    {
-                        result.SeasonUrls[season] = seasonUrl;
-                        result.Seasons[season] = 1;
-                        continue;
-                    }
-
-                    if (IsPreferableSeasonUrl(existing, seasonUrl, season))
-                        result.SeasonUrls[season] = seasonUrl;
+                    _onLog($"GetSeasonIndex error: {ex.Message}");
+                    return null;
                 }
-
-                if (result.SeasonUrls.Count == 0)
-                {
-                    result.Seasons[1] = 1;
-                    result.SeasonUrls[1] = serialUrl;
-                }
-
-                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(40));
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _onLog($"GetSeasonIndex error: {ex.Message}");
-                return null;
-            }
+            });
         }
 
         public async Task<List<EpisodeLinkInfo>> GetSeasonEpisodes(string serialUrl, int season)
@@ -1011,60 +1032,67 @@ namespace LME.Uaflix
                 return new List<EpisodeLinkInfo>();
 
             string memKey = $"lme_uaflix:season-episodes:{serialUrl}:{season}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out List<EpisodeLinkInfo> cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<List<EpisodeLinkInfo>>(memKey, async token =>
             {
-                var headers = new List<HeadersModel>()
+                if (_hybridCache.TryGetValue(memKey, out List<EpisodeLinkInfo> hit))
+                    return hit;
+
+                try
                 {
-                    new HeadersModel("User-Agent", "Mozilla/5.0"),
-                    new HeadersModel("Referer", _init.host)
-                };
-
-                var index = await GetSeasonIndex(serialUrl);
-                string seasonUrl = index?.SeasonUrls != null && index.SeasonUrls.TryGetValue(season, out string mapped)
-                    ? mapped
-                    : serialUrl;
-
-                if (string.IsNullOrWhiteSpace(seasonUrl))
-                    seasonUrl = serialUrl;
-
-                string html = await GetHtml(seasonUrl, headers);
-                if (string.IsNullOrWhiteSpace(html) && !string.Equals(seasonUrl, serialUrl, StringComparison.OrdinalIgnoreCase))
-                    html = await GetHtml(serialUrl, headers);
-
-                if (string.IsNullOrWhiteSpace(html))
-                    return new List<EpisodeLinkInfo>();
-
-                var result = ParseSeasonEpisodesFromHtml(html, season);
-                if (result.Count == 0 && !string.Equals(seasonUrl, serialUrl, StringComparison.OrdinalIgnoreCase))
-                {
-                    string serialHtml = await GetHtml(serialUrl, headers);
-                    if (!string.IsNullOrWhiteSpace(serialHtml))
-                        result = ParseSeasonEpisodesFromHtml(serialHtml, season);
-                }
-
-                if (result.Count == 0 && season == 1 && string.Equals(seasonUrl, serialUrl, StringComparison.OrdinalIgnoreCase))
-                {
-                    // Fallback для сторінок без окремих епізодів.
-                    result.Add(new EpisodeLinkInfo
+                    var headers = new List<HeadersModel>()
                     {
-                        url = serialUrl,
-                        title = "Епізод 1",
-                        season = 1,
-                        episode = 1
-                    });
-                }
+                        new HeadersModel("User-Agent", "Mozilla/5.0"),
+                        new HeadersModel("Referer", _init.host)
+                    };
 
-                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(20));
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _onLog($"GetSeasonEpisodes error: {ex.Message}");
-                return new List<EpisodeLinkInfo>();
-            }
+                    var index = await GetSeasonIndex(serialUrl);
+                    string seasonUrl = index?.SeasonUrls != null && index.SeasonUrls.TryGetValue(season, out string mapped)
+                        ? mapped
+                        : serialUrl;
+
+                    if (string.IsNullOrWhiteSpace(seasonUrl))
+                        seasonUrl = serialUrl;
+
+                    string html = await GetHtml(seasonUrl, headers);
+                    if (string.IsNullOrWhiteSpace(html) && !string.Equals(seasonUrl, serialUrl, StringComparison.OrdinalIgnoreCase))
+                        html = await GetHtml(serialUrl, headers);
+
+                    if (string.IsNullOrWhiteSpace(html))
+                        return new List<EpisodeLinkInfo>();
+
+                    var result = ParseSeasonEpisodesFromHtml(html, season);
+                    if (result.Count == 0 && !string.Equals(seasonUrl, serialUrl, StringComparison.OrdinalIgnoreCase))
+                    {
+                        string serialHtml = await GetHtml(serialUrl, headers);
+                        if (!string.IsNullOrWhiteSpace(serialHtml))
+                            result = ParseSeasonEpisodesFromHtml(serialHtml, season);
+                    }
+
+                    if (result.Count == 0 && season == 1 && string.Equals(seasonUrl, serialUrl, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Fallback для сторінок без окремих епізодів.
+                        result.Add(new EpisodeLinkInfo
+                        {
+                            url = serialUrl,
+                            title = "Епізод 1",
+                            season = 1,
+                            episode = 1
+                        });
+                    }
+
+                    _hybridCache.Set(memKey, result, CacheHelper.CacheTime(20));
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    _onLog($"GetSeasonEpisodes error: {ex.Message}");
+                    return new List<EpisodeLinkInfo>();
+                }
+            });
         }
 
         List<EpisodeLinkInfo> ParseSeasonEpisodesFromHtml(string html, int season)
@@ -1141,161 +1169,175 @@ namespace LME.Uaflix
 
             // v3 — інвалідація старих структур, що містили прем'єрні серії
             string memKey = $"lme_uaflix:season-structure-v3:{serialUrl}:{season}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out SerialAggregatedStructure cached))
             {
                 _onLog($"GetSeasonStructure: Using cached structure for season={season}, url={serialUrl}");
                 return cached;
             }
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<SerialAggregatedStructure>(memKey, async token =>
             {
-                var seasonEpisodes = await GetSeasonEpisodes(serialUrl, season);
-                if (seasonEpisodes == null || seasonEpisodes.Count == 0)
-                {
-                    _onLog($"GetSeasonStructure: No episodes for season={season}, url={serialUrl}");
-                    return null;
-                }
+                if (_hybridCache.TryGetValue(memKey, out SerialAggregatedStructure hit))
+                    return hit;
 
-                var structure = new SerialAggregatedStructure
+                try
                 {
-                    SerialUrl = serialUrl,
-                    AllEpisodes = seasonEpisodes
-                };
+                    var seasonEpisodes = await GetSeasonEpisodes(serialUrl, season);
+                    if (seasonEpisodes == null || seasonEpisodes.Count == 0)
+                    {
+                        _onLog($"GetSeasonStructure: No episodes for season={season}, url={serialUrl}");
+                        return null;
+                    }
 
-                var seasonProbe = await ProbeSeasonPlayer(seasonEpisodes);
-                if (seasonProbe == null || string.IsNullOrWhiteSpace(seasonProbe.PlayerType))
-                {
-                    // fallback: інколи плеєр є лише на головній сторінці
-                    seasonProbe = await ProbeEpisodePlayer(serialUrl);
+                    var structure = new SerialAggregatedStructure
+                    {
+                        SerialUrl = serialUrl,
+                        AllEpisodes = seasonEpisodes
+                    };
+
+                    var seasonProbe = await ProbeSeasonPlayer(seasonEpisodes);
                     if (seasonProbe == null || string.IsNullOrWhiteSpace(seasonProbe.PlayerType))
                     {
-                        _onLog($"GetSeasonStructure: unsupported player for season={season}");
-                        return null;
-                    }
-                }
-
-                if (seasonProbe.PlayerType == "ashdi-serial" || seasonProbe.PlayerType == "zetvideo-serial")
-                {
-                    var voices = await ParseMultiEpisodePlayerCached(seasonProbe.IframeUrl, seasonProbe.PlayerType);
-                    foreach (var voice in voices)
-                    {
-                        if (voice?.Seasons == null || !voice.Seasons.TryGetValue(season, out List<EpisodeInfo> seasonVoiceEpisodes) || seasonVoiceEpisodes == null || seasonVoiceEpisodes.Count == 0)
-                            continue;
-
-                        structure.Voices[voice.DisplayName] = new VoiceInfo
+                        // fallback: інколи плеєр є лише на головній сторінці
+                        seasonProbe = await ProbeEpisodePlayer(serialUrl);
+                        if (seasonProbe == null || string.IsNullOrWhiteSpace(seasonProbe.PlayerType))
                         {
-                            Name = voice.Name,
-                            PlayerType = voice.PlayerType,
-                            DisplayName = voice.DisplayName,
-                            Seasons = new Dictionary<int, List<EpisodeInfo>>
-                            {
-                                [season] = seasonVoiceEpisodes
-                                    .Where(ep => ep != null && !string.IsNullOrWhiteSpace(ep.File))
-                                    .Select(ep => new EpisodeInfo
-                                    {
-                                        Number = ep.Number,
-                                        Title = ep.Title,
-                                        File = ep.File,
-                                        Id = ep.Id,
-                                        Poster = ep.Poster,
-                                        Subtitle = ep.Subtitle
-                                    })
-                                    .ToList()
-                            }
-                        };
-                    }
-                }
-                else if (seasonProbe.PlayerType == "ashdi-vod" || seasonProbe.PlayerType == "zetvideo-vod")
-                {
-                    // Відфільтровуємо прем'єрні епізоди (ще не вийшли) перед додаванням у структуру
-                    var seasonAvailable = seasonEpisodes.Where(e => !e.IsPremiere).ToList();
-                    int filteredCount = seasonEpisodes.Count - seasonAvailable.Count;
-                    if (filteredCount > 0)
-                        _onLog($"GetSeasonStructure: Відфільтровано {filteredCount} прем'єрних епізодів із сезону {season}");
-                    if (seasonAvailable.Count == 0)
-                    {
-                        _onLog($"GetSeasonStructure: Усі епізоди сезону {season} є прем'єрами, повертаю null");
-                        return null;
+                            _onLog($"GetSeasonStructure: unsupported player for season={season}");
+                            return null;
+                        }
                     }
 
-                    // Створюємо базовий голос (перший плеєр)
-                    AddVodSeasonEpisodes(structure, seasonProbe.PlayerType, season, seasonAvailable);
-
-                    // Якщо є додаткові zetvideo плеєри — створюємо окремий голос для кожного
-                    if (seasonAvailable.Count > 0)
+                    if (seasonProbe.PlayerType == "ashdi-serial" || seasonProbe.PlayerType == "zetvideo-serial")
                     {
-                        var firstEp = seasonAvailable.FirstOrDefault(e => e.zetvideoIframeUrls != null && e.zetvideoIframeUrls.Count > 1);
-                        if (firstEp != null)
+                        var voices = await ParseMultiEpisodePlayerCached(seasonProbe.IframeUrl, seasonProbe.PlayerType);
+                        foreach (var voice in voices)
                         {
-                            // Додаткові плеєри починаються з індексу 1
-                            for (int extraIdx = 1; extraIdx < firstEp.zetvideoIframeUrls.Count; extraIdx++)
+                            if (voice?.Seasons == null || !voice.Seasons.TryGetValue(season, out List<EpisodeInfo> seasonVoiceEpisodes) || seasonVoiceEpisodes == null || seasonVoiceEpisodes.Count == 0)
+                                continue;
+
+                            structure.Voices[voice.DisplayName] = new VoiceInfo
                             {
-                                string extraVoiceName = GetZetvideoVoiceName(extraIdx);
-                                _onLog($"GetSeasonStructure: створюю додатковий голос '{extraVoiceName}' для zetvideo плеєра #{extraIdx + 1}");
-
-                                var extraEpisodes = seasonAvailable
-                                    .OrderBy(ep => ep.episode)
-                                    .Select(ep => new EpisodeInfo
-                                    {
-                                        Number = ep.episode,
-                                        Title = ep.title,
-                                        File = ep.url,
-                                        Id = ep.url,
-                                        Poster = null,
-                                        Subtitle = null
-                                    })
-                                    .ToList();
-
-                                structure.Voices[extraVoiceName] = new VoiceInfo
+                                Name = voice.Name,
+                                PlayerType = voice.PlayerType,
+                                DisplayName = voice.DisplayName,
+                                Seasons = new Dictionary<int, List<EpisodeInfo>>
                                 {
-                                    Name = extraVoiceName,
-                                    PlayerType = seasonProbe.PlayerType,
-                                    DisplayName = extraVoiceName,
-                                    Seasons = new Dictionary<int, List<EpisodeInfo>>
+                                    [season] = seasonVoiceEpisodes
+                                        .Where(ep => ep != null && !string.IsNullOrWhiteSpace(ep.File))
+                                        .Select(ep => new EpisodeInfo
+                                        {
+                                            Number = ep.Number,
+                                            Title = ep.Title,
+                                            File = ep.File,
+                                            Id = ep.Id,
+                                            Poster = ep.Poster,
+                                            Subtitle = ep.Subtitle
+                                        })
+                                        .ToList()
+                                }
+                            };
+                        }
+                    }
+                    else if (seasonProbe.PlayerType == "ashdi-vod" || seasonProbe.PlayerType == "zetvideo-vod")
+                    {
+                        // Відфільтровуємо прем'єрні епізоди (ще не вийшли) перед додаванням у структуру
+                        var seasonAvailable = seasonEpisodes.Where(e => !e.IsPremiere).ToList();
+                        int filteredCount = seasonEpisodes.Count - seasonAvailable.Count;
+                        if (filteredCount > 0)
+                            _onLog($"GetSeasonStructure: Відфільтровано {filteredCount} прем'єрних епізодів із сезону {season}");
+                        if (seasonAvailable.Count == 0)
+                        {
+                            _onLog($"GetSeasonStructure: Усі епізоди сезону {season} є прем'єрами, повертаю null");
+                            return null;
+                        }
+
+                        // Створюємо базовий голос (перший плеєр)
+                        AddVodSeasonEpisodes(structure, seasonProbe.PlayerType, season, seasonAvailable);
+
+                        // Якщо є додаткові zetvideo плеєри — створюємо окремий голос для кожного
+                        if (seasonAvailable.Count > 0)
+                        {
+                            var firstEp = seasonAvailable.FirstOrDefault(e => e.zetvideoIframeUrls != null && e.zetvideoIframeUrls.Count > 1);
+                            if (firstEp != null)
+                            {
+                                // Додаткові плеєри починаються з індексу 1
+                                for (int extraIdx = 1; extraIdx < firstEp.zetvideoIframeUrls.Count; extraIdx++)
+                                {
+                                    string extraVoiceName = GetZetvideoVoiceName(extraIdx);
+                                    _onLog($"GetSeasonStructure: створюю додатковий голос '{extraVoiceName}' для zetvideo плеєра #{extraIdx + 1}");
+
+                                    var extraEpisodes = seasonAvailable
+                                        .OrderBy(ep => ep.episode)
+                                        .Select(ep => new EpisodeInfo
+                                        {
+                                            Number = ep.episode,
+                                            Title = ep.title,
+                                            File = ep.url,
+                                            Id = ep.url,
+                                            Poster = null,
+                                            Subtitle = null
+                                        })
+                                        .ToList();
+
+                                    structure.Voices[extraVoiceName] = new VoiceInfo
                                     {
-                                        [season] = extraEpisodes
-                                    }
-                                };
+                                        Name = extraVoiceName,
+                                        PlayerType = seasonProbe.PlayerType,
+                                        DisplayName = extraVoiceName,
+                                        Seasons = new Dictionary<int, List<EpisodeInfo>>
+                                        {
+                                            [season] = extraEpisodes
+                                        }
+                                    };
+                                }
                             }
                         }
                     }
+                    else
+                    {
+                        _onLog($"GetSeasonStructure: player '{seasonProbe.PlayerType}' is not supported");
+                        return null;
+                    }
+
+                    if (!structure.Voices.Any())
+                    {
+                        _onLog($"GetSeasonStructure: voices are empty for season={season}, url={serialUrl}");
+                        return null;
+                    }
+
+                    NormalizeUaflixVoiceNames(structure);
+                    _hybridCache.Set(memKey, structure, CacheHelper.CacheTime(30));
+                    return structure;
                 }
-                else
+                catch (Exception ex)
                 {
-                    _onLog($"GetSeasonStructure: player '{seasonProbe.PlayerType}' is not supported");
+                    _onLog($"GetSeasonStructure error: {ex.Message}");
                     return null;
                 }
-
-                if (!structure.Voices.Any())
-                {
-                    _onLog($"GetSeasonStructure: voices are empty for season={season}, url={serialUrl}");
-                    return null;
-                }
-
-                NormalizeUaflixVoiceNames(structure);
-                _hybridCache.Set(memKey, structure, CacheHelper.CacheTime(30));
-                return structure;
-            }
-            catch (Exception ex)
-            {
-                _onLog($"GetSeasonStructure error: {ex.Message}");
-                return null;
-            }
+            });
         }
 
         async Task<List<VoiceInfo>> ParseMultiEpisodePlayerCached(string iframeUrl, string playerType)
         {
             string serialKey = NormalizeSerialPlayerKey(playerType, iframeUrl);
             string memKey = $"lme_uaflix:player-voices:{playerType}:{serialKey}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out List<VoiceInfo> cached))
                 return CloneVoices(cached);
 
-            var parsed = await ParseMultiEpisodePlayer(iframeUrl, playerType);
-            if (parsed == null || parsed.Count == 0)
-                return new List<VoiceInfo>();
+            return await SingleFlightCache.GetOrCreateAsync<List<VoiceInfo>>(memKey, async token =>
+            {
+                if (_hybridCache.TryGetValue(memKey, out List<VoiceInfo> hit))
+                    return CloneVoices(hit);
 
-            _hybridCache.Set(memKey, parsed, CacheHelper.CacheTime(40));
-            return CloneVoices(parsed);
+                var parsed = await ParseMultiEpisodePlayer(iframeUrl, playerType);
+                if (parsed == null || parsed.Count == 0)
+                    return new List<VoiceInfo>();
+
+                _hybridCache.Set(memKey, parsed, CacheHelper.CacheTime(40));
+                return CloneVoices(parsed);
+            });
         }
 
         static List<VoiceInfo> CloneVoices(List<VoiceInfo> voices)
@@ -1424,126 +1466,133 @@ namespace LME.Uaflix
         {
             bool allowAnime = IsAnimeRequest(title, original_title, original_language, source);
             string memKey = $"lme_uaflix:search:{kinopoisk_id}:{imdb_id}:{serial}:{year}:{allowAnime}:{title}:{original_title}:{search_query}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out List<SearchResult> cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<List<SearchResult>>(memKey, async token =>
             {
-                var queries = new List<string>()
+                if (_hybridCache.TryGetValue(memKey, out List<SearchResult> hit))
+                    return hit;
+
+                try
                 {
-                    original_title,
-                    title,
-                    search_query
-                }
-                .Where(q => !string.IsNullOrWhiteSpace(q))
-                .Select(q => q.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-                if (queries.Count == 0)
-                    return null;
-
-                var headers = new List<HeadersModel>()
-                {
-                    new HeadersModel("User-Agent", "Mozilla/5.0"),
-                    new HeadersModel("Referer", _init.host)
-                };
-
-                var uniqueByUrl = new Dictionary<string, SearchResult>(StringComparer.OrdinalIgnoreCase);
-                foreach (string query in queries)
-                {
-                    string searchUrl = $"{_init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(query)}";
-                    string searchHtml = await GetHtml(searchUrl, headers);
-                    if (string.IsNullOrWhiteSpace(searchHtml))
-                        continue;
-
-                    var doc = new HtmlDocument();
-                    doc.LoadHtml(searchHtml);
-
-                    var filmNodes = doc.DocumentNode.SelectNodes("//a[contains(@class, 'sres-wrap')]");
-                    if (filmNodes == null || filmNodes.Count == 0)
-                        continue;
-
-                    foreach (var filmNode in filmNodes)
+                    var queries = new List<string>()
                     {
-                        try
-                        {
-                            var h2Node = filmNode.SelectSingleNode(".//h2") ?? filmNode.SelectSingleNode(".//h3");
-                            if (h2Node == null)
-                                continue;
-
-                            string filmUrl = filmNode.GetAttributeValue("href", "");
-                            if (string.IsNullOrWhiteSpace(filmUrl))
-                                continue;
-
-                            if (!filmUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                                filmUrl = _init.host + filmUrl;
-
-                            if (uniqueByUrl.ContainsKey(filmUrl))
-                                continue;
-
-                            var descNode = filmNode.SelectSingleNode(".//div[contains(@class, 'sres-desc')]") ??
-                                           filmNode.SelectSingleNode(".//span[contains(@class, 'year')]");
-                            int filmYear = ExtractYear(descNode?.InnerText);
-
-                            var posterNode = filmNode.SelectSingleNode(".//img[@src]") ??
-                                            filmNode.SelectSingleNode(".//img[@data-src]");
-                            string posterUrl = posterNode?.GetAttributeValue("src", "") ?? posterNode?.GetAttributeValue("data-src", "");
-                            if (!string.IsNullOrEmpty(posterUrl) && !posterUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                                posterUrl = _init.host + posterUrl;
-
-                            string category = ExtractCategoryFromUrl(filmUrl);
-                            bool isAnime = string.Equals(category, "anime", StringComparison.OrdinalIgnoreCase);
-
-                            uniqueByUrl[filmUrl] = new SearchResult
-                            {
-                                Title = WebUtility.HtmlDecode(h2Node.InnerText?.Trim() ?? string.Empty),
-                                Url = filmUrl,
-                                Year = filmYear,
-                                PosterUrl = posterUrl,
-                                Category = category,
-                                IsAnime = isAnime
-                            };
-                        }
-                        catch (Exception ex)
-                        {
-                            _onLog($"Search: Error processing film node: {ex.Message}");
-                        }
+                        original_title,
+                        title,
+                        search_query
                     }
-                }
-
-                if (uniqueByUrl.Count == 0)
-                    return null;
-
-                var results = uniqueByUrl.Values.ToList();
-                results = FilterByContentType(results, serial, allowAnime);
-                if (results.Count == 0)
-                    return null;
-
-                await EnrichSearchResults(results, year);
-
-                foreach (var result in results)
-                {
-                    result.TitleMatched = HasStrongTitleMatch(result, title, original_title);
-                    result.YearMatched = year > 0 && result.Year == year;
-                    result.MatchScore = BuildMatchScore(result, title, original_title, year, serial, allowAnime);
-                }
-
-                results = results
-                    .OrderByDescending(r => r.MatchScore)
-                    .ThenByDescending(r => r.TitleMatched)
-                    .ThenByDescending(r => r.YearMatched)
-                    .ThenBy(r => r.Title)
+                    .Where(q => !string.IsNullOrWhiteSpace(q))
+                    .Select(q => q.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                _hybridCache.Set(memKey, results, CacheHelper.CacheTime(20));
-                return results;
-            }
-            catch (Exception ex)
-            {
-                _onLog($"lme_uaflix: search error: {ex.Message}");
-                return null;
-            }
+                    if (queries.Count == 0)
+                        return null;
+
+                    var headers = new List<HeadersModel>()
+                    {
+                        new HeadersModel("User-Agent", "Mozilla/5.0"),
+                        new HeadersModel("Referer", _init.host)
+                    };
+
+                    var uniqueByUrl = new Dictionary<string, SearchResult>(StringComparer.OrdinalIgnoreCase);
+                    foreach (string query in queries)
+                    {
+                        string searchUrl = $"{_init.host}/index.php?do=search&subaction=search&story={System.Web.HttpUtility.UrlEncode(query)}";
+                        string searchHtml = await GetHtml(searchUrl, headers);
+                        if (string.IsNullOrWhiteSpace(searchHtml))
+                            continue;
+
+                        var doc = new HtmlDocument();
+                        doc.LoadHtml(searchHtml);
+
+                        var filmNodes = doc.DocumentNode.SelectNodes("//a[contains(@class, 'sres-wrap')]");
+                        if (filmNodes == null || filmNodes.Count == 0)
+                            continue;
+
+                        foreach (var filmNode in filmNodes)
+                        {
+                            try
+                            {
+                                var h2Node = filmNode.SelectSingleNode(".//h2") ?? filmNode.SelectSingleNode(".//h3");
+                                if (h2Node == null)
+                                    continue;
+
+                                string filmUrl = filmNode.GetAttributeValue("href", "");
+                                if (string.IsNullOrWhiteSpace(filmUrl))
+                                    continue;
+
+                                if (!filmUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                                    filmUrl = _init.host + filmUrl;
+
+                                if (uniqueByUrl.ContainsKey(filmUrl))
+                                    continue;
+
+                                var descNode = filmNode.SelectSingleNode(".//div[contains(@class, 'sres-desc')]") ??
+                                               filmNode.SelectSingleNode(".//span[contains(@class, 'year')]");
+                                int filmYear = ExtractYear(descNode?.InnerText);
+
+                                var posterNode = filmNode.SelectSingleNode(".//img[@src]") ??
+                                                filmNode.SelectSingleNode(".//img[@data-src]");
+                                string posterUrl = posterNode?.GetAttributeValue("src", "") ?? posterNode?.GetAttributeValue("data-src", "");
+                                if (!string.IsNullOrEmpty(posterUrl) && !posterUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                                    posterUrl = _init.host + posterUrl;
+
+                                string category = ExtractCategoryFromUrl(filmUrl);
+                                bool isAnime = string.Equals(category, "anime", StringComparison.OrdinalIgnoreCase);
+
+                                uniqueByUrl[filmUrl] = new SearchResult
+                                {
+                                    Title = WebUtility.HtmlDecode(h2Node.InnerText?.Trim() ?? string.Empty),
+                                    Url = filmUrl,
+                                    Year = filmYear,
+                                    PosterUrl = posterUrl,
+                                    Category = category,
+                                    IsAnime = isAnime
+                                };
+                            }
+                            catch (Exception ex)
+                            {
+                                _onLog($"Search: Error processing film node: {ex.Message}");
+                            }
+                        }
+                    }
+
+                    if (uniqueByUrl.Count == 0)
+                        return null;
+
+                    var results = uniqueByUrl.Values.ToList();
+                    results = FilterByContentType(results, serial, allowAnime);
+                    if (results.Count == 0)
+                        return null;
+
+                    await EnrichSearchResults(results, year);
+
+                    foreach (var result in results)
+                    {
+                        result.TitleMatched = HasStrongTitleMatch(result, title, original_title);
+                        result.YearMatched = year > 0 && result.Year == year;
+                        result.MatchScore = BuildMatchScore(result, title, original_title, year, serial, allowAnime);
+                    }
+
+                    results = results
+                        .OrderByDescending(r => r.MatchScore)
+                        .ThenByDescending(r => r.TitleMatched)
+                        .ThenByDescending(r => r.YearMatched)
+                        .ThenBy(r => r.Title)
+                        .ToList();
+
+                    _hybridCache.Set(memKey, results, CacheHelper.CacheTime(20));
+                    return results;
+                }
+                catch (Exception ex)
+                {
+                    _onLog($"lme_uaflix: search error: {ex.Message}");
+                    return null;
+                }
+            });
         }
 
         public bool IsAnimeRequest(string title, string originalTitle, string originalLanguage, string source)
@@ -1622,47 +1671,95 @@ namespace LME.Uaflix
         private async Task<SearchMeta> LoadSearchMeta(string url)
         {
             string memKey = $"lme_uaflix:searchmeta:{url}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out SearchMeta cached))
                 return cached;
 
-            var meta = new SearchMeta
+            return await SingleFlightCache.GetOrCreateAsync<SearchMeta>(memKey, async token =>
             {
-                Category = ExtractCategoryFromUrl(url)
-            };
-            meta.IsAnime = string.Equals(meta.Category, "anime", StringComparison.OrdinalIgnoreCase);
+                if (_hybridCache.TryGetValue(memKey, out SearchMeta hit))
+                    return hit;
 
-            try
-            {
-                var headers = new List<HeadersModel>()
+                try
                 {
-                    new HeadersModel("User-Agent", "Mozilla/5.0"),
-                    new HeadersModel("Referer", _init.host)
-                };
-
-                string html = await GetHtml(url, headers);
-                if (!string.IsNullOrWhiteSpace(html))
-                {
-                    var doc = new HtmlDocument();
-                    doc.LoadHtml(html);
-
-                    var yearNode = doc.DocumentNode.SelectSingleNode("//li[contains(@class, 'vis')]//span[contains(@class, 'year')]");
-                    int year = ExtractYear(yearNode?.InnerText);
-                    if (year <= 0)
+                    var headers = new List<HeadersModel>()
                     {
-                        var createdNode = doc.DocumentNode.SelectSingleNode("//*[@itemprop='dateCreated']");
-                        year = ExtractYear(createdNode?.GetAttributeValue("content", null) ?? createdNode?.InnerText);
+                        new HeadersModel("User-Agent", "Mozilla/5.0"),
+                        new HeadersModel("Referer", _init.host)
+                    };
+
+                    string html = await GetHtml(url, headers);
+                    if (!string.IsNullOrWhiteSpace(html))
+                    {
+                        var doc = new HtmlDocument();
+                        doc.LoadHtml(html);
+
+                        var yearNode = doc.DocumentNode.SelectSingleNode("//li[contains(@class, 'vis')]//span[contains(@class, 'year')]");
+                        int year = ExtractYear(yearNode?.InnerText);
+                        if (year <= 0)
+                        {
+                            var createdNode = doc.DocumentNode.SelectSingleNode("//*[@itemprop='dateCreated']");
+                            year = ExtractYear(createdNode?.GetAttributeValue("content", null) ?? createdNode?.InnerText);
+                        }
+
+                        meta.Year = year; // Wait, is meta variable declared? Yes, var meta = new SearchMeta... but wait, meta was declared inside, now it's inside lambda but we can declare it. Let's see:
+                        // meta is defined as local variable or return value?
+                        // Let's look at original code:
+                        // var meta = new SearchMeta { ... };
+                        // So yes, we can define var meta inside lambda.
                     }
-
-                    meta.Year = year;
                 }
-            }
-            catch (Exception ex)
-            {
-                _onLog($"LoadSearchMeta error: {ex.Message}");
-            }
+                catch (Exception ex)
+                {
+                    _onLog($"LoadSearchMeta error: {ex.Message}");
+                }
 
-            _hybridCache.Set(memKey, meta, CacheHelper.CacheTime(60));
-            return meta;
+                // Wait, where is return?
+                // Let's write the whole body properly:
+                // var meta = new SearchMeta { ... };
+                // ...
+                // _hybridCache.Set(memKey, meta, CacheHelper.CacheTime(60));
+                // return meta;
+                // Let's write it down:
+                var meta = new SearchMeta
+                {
+                    Category = ExtractCategoryFromUrl(url)
+                };
+                meta.IsAnime = string.Equals(meta.Category, "anime", StringComparison.OrdinalIgnoreCase);
+
+                try
+                {
+                    var headers = new List<HeadersModel>()
+                    {
+                        new HeadersModel("User-Agent", "Mozilla/5.0"),
+                        new HeadersModel("Referer", _init.host)
+                    };
+
+                    string html = await GetHtml(url, headers);
+                    if (!string.IsNullOrWhiteSpace(html))
+                    {
+                        var doc = new HtmlDocument();
+                        doc.LoadHtml(html);
+
+                        var yearNode = doc.DocumentNode.SelectSingleNode("//li[contains(@class, 'vis')]//span[contains(@class, 'year')]");
+                        int year = ExtractYear(yearNode?.InnerText);
+                        if (year <= 0)
+                        {
+                            var createdNode = doc.DocumentNode.SelectSingleNode("//*[@itemprop='dateCreated']");
+                            year = ExtractYear(createdNode?.GetAttributeValue("content", null) ?? createdNode?.InnerText);
+                        }
+
+                        meta.Year = year;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _onLog($"LoadSearchMeta error: {ex.Message}");
+                }
+
+                _hybridCache.Set(memKey, meta, CacheHelper.CacheTime(60));
+                return meta;
+            });
         }
 
         private List<SearchResult> FilterByContentType(List<SearchResult> input, int serial, bool allowAnime)
@@ -1859,194 +1956,208 @@ namespace LME.Uaflix
         public async Task<FilmInfo> GetFilmInfo(string filmUrl)
         {
             string memKey = $"lme_uaflix:filminfo:{filmUrl}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out FilmInfo res))
                 return res;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<FilmInfo>(memKey, async token =>
             {
-                var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
-                var filmHtml = await GetHtml(filmUrl, headers);
-                var doc = new HtmlDocument();
-                doc.LoadHtml(filmHtml);
-                
-                var result = new FilmInfo
+                if (_hybridCache.TryGetValue(memKey, out FilmInfo hit))
+                    return hit;
+
+                try
                 {
-                    Url = filmUrl
-                };
-                
-                var titleNode = doc.DocumentNode.SelectSingleNode("//h1[@class='h1-title']");
-                if (titleNode != null)
-                {
-                    result.Title = titleNode.InnerText.Trim();
-                }
-                
-                var metaDuration = doc.DocumentNode.SelectSingleNode("//meta[@property='og:video:duration']");
-                if (metaDuration != null)
-                {
-                    string durationStr = metaDuration.GetAttributeValue("content", "");
-                    if (int.TryParse(durationStr, out int duration))
+                    var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
+                    var filmHtml = await GetHtml(filmUrl, headers);
+                    var doc = new HtmlDocument();
+                    doc.LoadHtml(filmHtml);
+
+                    var result = new FilmInfo
                     {
-                        result.Duration = duration;
-                    }
-                }
-                
-                var metaActors = doc.DocumentNode.SelectSingleNode("//meta[@property='og:video:actor']");
-                if (metaActors != null)
-                {
-                    string actorsStr = metaActors.GetAttributeValue("content", "");
-                    result.Actors = actorsStr.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                                          .Select(a => a.Trim())
-                                          .ToList();
-                }
-                
-                var metaDirector = doc.DocumentNode.SelectSingleNode("//meta[@property='og:video:director']");
-                if (metaDirector != null)
-                {
-                    result.Director = metaDirector.GetAttributeValue("content", "");
-                }
-                
-                var descNode = doc.DocumentNode.SelectSingleNode("//div[@id='main-descr']//div[@itemprop='description']");
-                if (descNode != null)
-                {
-                    result.Description = descNode.InnerText.Trim();
-                }
-                
-                var posterNode = doc.DocumentNode.SelectSingleNode("//img[@itemprop='image']");
-                if (posterNode != null)
-                {
-                    result.PosterUrl = posterNode.GetAttributeValue("src", "");
-                    if (!result.PosterUrl.StartsWith("http") && !string.IsNullOrEmpty(result.PosterUrl))
+                        Url = filmUrl
+                    };
+
+                    var titleNode = doc.DocumentNode.SelectSingleNode("//h1[@class='h1-title']");
+                    if (titleNode != null)
                     {
-                        result.PosterUrl = _init.host + result.PosterUrl;
+                        result.Title = titleNode.InnerText.Trim();
                     }
+
+                    var metaDuration = doc.DocumentNode.SelectSingleNode("//meta[@property='og:video:duration']");
+                    if (metaDuration != null)
+                    {
+                        string durationStr = metaDuration.GetAttributeValue("content", "");
+                        if (int.TryParse(durationStr, out int duration))
+                        {
+                            result.Duration = duration;
+                        }
+                    }
+
+                    var metaActors = doc.DocumentNode.SelectSingleNode("//meta[@property='og:video:actor']");
+                    if (metaActors != null)
+                    {
+                        string actorsStr = metaActors.GetAttributeValue("content", "");
+                        result.Actors = actorsStr.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                                              .Select(a => a.Trim())
+                                              .ToList();
+                    }
+
+                    var metaDirector = doc.DocumentNode.SelectSingleNode("//meta[@property='og:video:director']");
+                    if (metaDirector != null)
+                    {
+                        result.Director = metaDirector.GetAttributeValue("content", "");
+                    }
+
+                    var descNode = doc.DocumentNode.SelectSingleNode("//div[@id='main-descr']//div[@itemprop='description']");
+                    if (descNode != null)
+                    {
+                        result.Description = descNode.InnerText.Trim();
+                    }
+
+                    var posterNode = doc.DocumentNode.SelectSingleNode("//img[@itemprop='image']");
+                    if (posterNode != null)
+                    {
+                        result.PosterUrl = posterNode.GetAttributeValue("src", "");
+                        if (!result.PosterUrl.StartsWith("http") && !string.IsNullOrEmpty(result.PosterUrl))
+                        {
+                            result.PosterUrl = _init.host + result.PosterUrl;
+                        }
+                    }
+
+                    _hybridCache.Set(memKey, result, CacheHelper.CacheTime(60));
+                    return result;
                 }
-                
-                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(60));
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _onLog($"lme_uaflix: GetFilmInfo error: {ex.Message}");
-            }
-            return null;
+                catch (Exception ex)
+                {
+                    _onLog($"lme_uaflix: GetFilmInfo error: {ex.Message}");
+                }
+                return null;
+            });
         }
 
         public async Task<PaginationInfo> GetPaginationInfo(string filmUrl)
         {
             string memKey = $"lme_uaflix:pagination:{filmUrl}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out PaginationInfo res))
                 return res;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<PaginationInfo>(memKey, async token =>
             {
-                var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
-                var filmHtml = await GetHtml(filmUrl, headers);
-                var filmDoc = new HtmlDocument();
-                filmDoc.LoadHtml(filmHtml);
-                
-                var paginationInfo = new PaginationInfo
-                {
-                    SerialUrl = filmUrl
-                };
+                if (_hybridCache.TryGetValue(memKey, out PaginationInfo hit))
+                    return hit;
 
-                var allEpisodes = new List<EpisodeLinkInfo>();
-                var seasonUrls = new HashSet<string>();
-
-                var seasonNodes = filmDoc.DocumentNode.SelectNodes("//div[contains(@class, 'sez-wr')]//a");
-                if (seasonNodes == null)
-                    seasonNodes = filmDoc.DocumentNode.SelectNodes("//div[contains(@class, 'fss-box')]//a");
-                if (seasonNodes != null && seasonNodes.Count > 0)
+                try
                 {
-                    foreach (var node in seasonNodes)
+                    var headers = new List<HeadersModel>() { new HeadersModel("User-Agent", "Mozilla/5.0"), new HeadersModel("Referer", _init.host) };
+                    var filmHtml = await GetHtml(filmUrl, headers);
+                    var filmDoc = new HtmlDocument();
+                    filmDoc.LoadHtml(filmHtml);
+
+                    var paginationInfo = new PaginationInfo
                     {
-                        string pageUrl = node.GetAttributeValue("href", null);
-                        if (!string.IsNullOrEmpty(pageUrl))
-                        {
-                            if (!pageUrl.StartsWith("http"))
-                                pageUrl = _init.host + pageUrl;
-                            
-                            seasonUrls.Add(pageUrl);
-                        }
-                    }
-                }
-                else
-                {
-                    seasonUrls.Add(filmUrl);
-                }
+                        SerialUrl = filmUrl
+                    };
 
-                var safeSeasonUrls = seasonUrls.ToList();
-                if (safeSeasonUrls.Count == 0)
-                    return null;
+                    var allEpisodes = new List<EpisodeLinkInfo>();
+                    var seasonUrls = new HashSet<string>();
 
-                var seasonTasks = safeSeasonUrls.Select(url => GetHtml(url, headers));
-                var seasonPagesHtml = await Task.WhenAll(seasonTasks);
-
-                foreach (var html in seasonPagesHtml)
-                {
-                    var pageDoc = new HtmlDocument();
-                    pageDoc.LoadHtml(html);
-
-                    var episodeNodes = pageDoc.DocumentNode.SelectNodes("//div[contains(@class, 'frels')]//a[contains(@class, 'vi-img')]");
-                    if (episodeNodes != null)
+                    var seasonNodes = filmDoc.DocumentNode.SelectNodes("//div[contains(@class, 'sez-wr')]//a");
+                    if (seasonNodes == null)
+                        seasonNodes = filmDoc.DocumentNode.SelectNodes("//div[contains(@class, 'fss-box')]//a");
+                    if (seasonNodes != null && seasonNodes.Count > 0)
                     {
-                        foreach (var episodeNode in episodeNodes)
+                        foreach (var node in seasonNodes)
                         {
-                            string episodeUrl = episodeNode.GetAttributeValue("href", "");
-                            if (!episodeUrl.StartsWith("http"))
-                                episodeUrl = _init.host + episodeUrl;
-
-                            var match = Regex.Match(episodeUrl, @"season-(\d+).*?episode-(\d+)");
-                            if (match.Success)
-                    {
-                        var ep = new EpisodeLinkInfo
-                        {
-                            url = episodeUrl,
-                            title = episodeNode.SelectSingleNode(".//div[@class='vi-rate']")?.InnerText.Trim() ?? $"Епізод {match.Groups[2].Value}",
-                            season = int.Parse(match.Groups[1].Value),
-                            episode = int.Parse(match.Groups[2].Value)
-                        };
-
-                        // Перевірка на «Прем'єра» — епізод ще не вийшов
-                        var viDesc = episodeNode.SelectSingleNode(".//div[contains(@class, 'vi-desc')]");
-                        if (viDesc != null)
-                        {
-                            var viTitle = viDesc.SelectSingleNode(".//div[contains(@class, 'vi-title')]");
-                            string descText = viTitle?.InnerText?.Trim() ?? string.Empty;
-                            if (descText.IndexOf("Прем'єра", StringComparison.OrdinalIgnoreCase) >= 0)
+                            string pageUrl = node.GetAttributeValue("href", null);
+                            if (!string.IsNullOrEmpty(pageUrl))
                             {
-                                ep.IsPremiere = true;
-                                _onLog($"GetPaginationInfo: Серія {ep.episode} позначена як прем'єра: '{descText}'");
+                                if (!pageUrl.StartsWith("http"))
+                                    pageUrl = _init.host + pageUrl;
+
+                                seasonUrls.Add(pageUrl);
                             }
                         }
-
-                        allEpisodes.Add(ep);
                     }
+                    else
+                    {
+                        seasonUrls.Add(filmUrl);
+                    }
+
+                    var safeSeasonUrls = seasonUrls.ToList();
+                    if (safeSeasonUrls.Count == 0)
+                        return null;
+
+                    var seasonTasks = safeSeasonUrls.Select(url => GetHtml(url, headers));
+                    var seasonPagesHtml = await Task.WhenAll(seasonTasks);
+
+                    foreach (var html in seasonPagesHtml)
+                    {
+                        var pageDoc = new HtmlDocument();
+                        pageDoc.LoadHtml(html);
+
+                        var episodeNodes = pageDoc.DocumentNode.SelectNodes("//div[contains(@class, 'frels')]//a[contains(@class, 'vi-img')]");
+                        if (episodeNodes != null)
+                        {
+                            foreach (var episodeNode in episodeNodes)
+                            {
+                                string episodeUrl = episodeNode.GetAttributeValue("href", "");
+                                if (!episodeUrl.StartsWith("http"))
+                                    episodeUrl = _init.host + episodeUrl;
+
+                                var match = Regex.Match(episodeUrl, @"season-(\d+).*?episode-(\d+)");
+                                if (match.Success)
+                                {
+                                    var ep = new EpisodeLinkInfo
+                                    {
+                                        url = episodeUrl,
+                                        title = episodeNode.SelectSingleNode(".//div[@class='vi-rate']")?.InnerText.Trim() ?? $"Епізод {match.Groups[2].Value}",
+                                        season = int.Parse(match.Groups[1].Value),
+                                        episode = int.Parse(match.Groups[2].Value)
+                                    };
+
+                                    // Перевірка на «Прем'єра» — епізод ще не вийшов
+                                    var viDesc = episodeNode.SelectSingleNode(".//div[contains(@class, 'vi-desc')]");
+                                    if (viDesc != null)
+                                    {
+                                        var viTitle = viDesc.SelectSingleNode(".//div[contains(@class, 'vi-title')]");
+                                        string descText = viTitle?.InnerText?.Trim() ?? string.Empty;
+                                        if (descText.IndexOf("Прем'єра", StringComparison.OrdinalIgnoreCase) >= 0)
+                                        {
+                                            ep.IsPremiere = true;
+                                            _onLog($"GetPaginationInfo: Серія {ep.episode} позначена як прем'єра: '{descText}'");
+                                        }
+                                    }
+
+                                    allEpisodes.Add(ep);
+                                }
+                            }
                         }
                     }
-                }
 
-                paginationInfo.Episodes = allEpisodes.OrderBy(e => e.season).ThenBy(e => e.episode).ToList();
+                    paginationInfo.Episodes = allEpisodes.OrderBy(e => e.season).ThenBy(e => e.episode).ToList();
 
-                if (paginationInfo.Episodes.Any())
-                {
-                    var uniqueSeasons = paginationInfo.Episodes.Select(e => e.season).Distinct().OrderBy(se => se);
-                    foreach (var season in uniqueSeasons)
+                    if (paginationInfo.Episodes.Any())
                     {
-                        paginationInfo.Seasons[season] = 1;
+                        var uniqueSeasons = paginationInfo.Episodes.Select(e => e.season).Distinct().OrderBy(se => se);
+                        foreach (var season in uniqueSeasons)
+                        {
+                            paginationInfo.Seasons[season] = 1;
+                        }
+                    }
+
+                    if (paginationInfo.Episodes.Count > 0)
+                    {
+                        _hybridCache.Set(memKey, paginationInfo, CacheHelper.CacheTime(20));
+                        return paginationInfo;
                     }
                 }
-
-                if (paginationInfo.Episodes.Count > 0)
+                catch (Exception ex)
                 {
-                    _hybridCache.Set(memKey, paginationInfo, CacheHelper.CacheTime(20));
-                    return paginationInfo;
+                    _onLog($"lme_uaflix: GetPaginationInfo error: {ex.Message}");
                 }
-            }
-            catch (Exception ex)
-            {
-                _onLog($"lme_uaflix: GetPaginationInfo error: {ex.Message}");
-            }
-            return null;
+                return null;
+            });
         }
         
         public async Task<LME.Uaflix.Models.PlayResult> ParseEpisode(string url)
