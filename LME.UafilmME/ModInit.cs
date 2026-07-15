@@ -19,7 +19,7 @@ namespace LME.UafilmME
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 1.2;
+        public static double Version => 1.3;
 
         public static OnlinesSettings UafilmME;
         public static bool ApnHostProvided;

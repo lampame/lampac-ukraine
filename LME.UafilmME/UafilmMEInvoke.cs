@@ -73,7 +73,7 @@ namespace LME.UafilmME
             if (_hybridCache.TryGetValue(memKey, out UafilmTitleDetails cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<UafilmTitleDetails>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<UafilmTitleDetails>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out UafilmTitleDetails hit))
                     return hit;
@@ -102,7 +102,7 @@ namespace LME.UafilmME
             if (_hybridCache.TryGetValue(memKey, out List<UafilmSeasonItem> cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<List<UafilmSeasonItem>>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<List<UafilmSeasonItem>>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out List<UafilmSeasonItem> hit))
                     return hit;
@@ -162,7 +162,7 @@ namespace LME.UafilmME
             if (_hybridCache.TryGetValue(memKey, out List<UafilmEpisodeItem> cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<List<UafilmEpisodeItem>>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<List<UafilmEpisodeItem>>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out List<UafilmEpisodeItem> hit))
                     return hit;
@@ -219,7 +219,7 @@ namespace LME.UafilmME
             if (_hybridCache.TryGetValue(memKey, out UafilmWatchInfo cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<UafilmWatchInfo>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<UafilmWatchInfo>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out UafilmWatchInfo hit))
                     return hit;
@@ -275,7 +275,7 @@ namespace LME.UafilmME
             if (_hybridCache.TryGetValue(memKey, out List<UafilmSearchItem> cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<List<UafilmSearchItem>>(memKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<List<UafilmSearchItem>>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out List<UafilmSearchItem> hit))
                     return hit;
