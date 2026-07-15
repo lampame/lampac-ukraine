@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Shared;
@@ -11,6 +12,7 @@ using Shared.Engine;
 using Shared.Models;
 using Shared.Models.Online.Settings;
 using LME.UafilmME.Models;
+using LME.Shared.Engine;
 
 namespace LME.UafilmME
 {
@@ -67,113 +69,134 @@ namespace LME.UafilmME
         public async Task<UafilmTitleDetails> GetTitleDetails(long titleId)
         {
             string memKey = $"UafilmME:title:{titleId}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out UafilmTitleDetails cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<UafilmTitleDetails>(memKey, async token =>
             {
-                string json = await ApiGet($"titles/{titleId}?loader=titlePage", $"{_init.host}/titles/{titleId}");
-                var title = ParseTitleDetails(json);
-                if (title != null)
-                    _hybridCache.Set(memKey, title, CacheHelper.CacheTime(30, init: _init));
+                if (_hybridCache.TryGetValue(memKey, out UafilmTitleDetails hit))
+                    return hit;
 
-                return title;
-            }
-            catch (Exception ex)
-            {
-                _onLog?.Invoke($"UafilmME: помилка отримання title {titleId}: {ex.Message}");
-                return null;
-            }
+                try
+                {
+                    string json = await ApiGet($"titles/{titleId}?loader=titlePage", $"{_init.host}/titles/{titleId}");
+                    var title = ParseTitleDetails(json);
+                    if (title != null)
+                        _hybridCache.Set(memKey, title, CacheHelper.CacheTime(30, init: _init));
+
+                    return title;
+                }
+                catch (Exception ex)
+                {
+                    _onLog?.Invoke($"UafilmME: помилка отримання title {titleId}: {ex.Message}");
+                    return null;
+                }
+            });
         }
 
         public async Task<List<UafilmSeasonItem>> GetAllSeasons(long titleId)
         {
             string memKey = $"UafilmME:seasons:{titleId}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out List<UafilmSeasonItem> cached))
                 return cached;
 
-            var all = new List<UafilmSeasonItem>();
-            int currentPage = 1;
-            int guard = 0;
-
-            while (currentPage > 0 && guard < 100)
+            return await SingleFlightCache.GetOrCreateAsync<List<UafilmSeasonItem>>(memKey, async token =>
             {
-                guard++;
-                var page = await GetSeasonsPage(titleId, currentPage);
-                if (page.Items.Count == 0)
-                    break;
+                if (_hybridCache.TryGetValue(memKey, out List<UafilmSeasonItem> hit))
+                    return hit;
 
-                all.AddRange(page.Items);
+                var all = new List<UafilmSeasonItem>();
+                int currentPage = 1;
+                int guard = 0;
 
-                if (page.NextPage.HasValue && page.NextPage.Value != currentPage)
-                    currentPage = page.NextPage.Value;
-                else
-                    break;
-            }
-
-            var result = all
-                .GroupBy(s => s.Number)
-                .Select(g => g.OrderByDescending(x => x.EpisodesCount).First())
-                .OrderBy(s => s.Number)
-                .ToList();
-
-            if (result.Count == 0)
-            {
-                var title = await GetTitleDetails(titleId);
-                if (title?.SeasonsCount > 0)
+                while (currentPage > 0 && guard < 100)
                 {
-                    for (int i = 1; i <= title.SeasonsCount; i++)
+                    guard++;
+                    var page = await GetSeasonsPage(titleId, currentPage);
+                    if (page.Items.Count == 0)
+                        break;
+
+                    all.AddRange(page.Items);
+
+                    if (page.NextPage.HasValue && page.NextPage.Value != currentPage)
+                        currentPage = page.NextPage.Value;
+                    else
+                        break;
+                }
+
+                var result = all
+                    .GroupBy(s => s.Number)
+                    .Select(g => g.OrderByDescending(x => x.EpisodesCount).First())
+                    .OrderBy(s => s.Number)
+                    .ToList();
+
+                if (result.Count == 0)
+                {
+                    var titleDetails = await GetTitleDetails(titleId);
+                    if (titleDetails?.SeasonsCount > 0)
                     {
-                        result.Add(new UafilmSeasonItem()
+                        for (int i = 1; i <= titleDetails.SeasonsCount; i++)
                         {
-                            Number = i,
-                            EpisodesCount = 0
-                        });
+                            result.Add(new UafilmSeasonItem()
+                            {
+                                Number = i,
+                                EpisodesCount = 0
+                            });
+                        }
                     }
                 }
-            }
 
-            if (result.Count > 0)
-                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(60, init: _init));
+                if (result.Count > 0)
+                    _hybridCache.Set(memKey, result, CacheHelper.CacheTime(60, init: _init));
 
-            return result;
+                return result;
+            });
         }
 
         public async Task<List<UafilmEpisodeItem>> GetSeasonEpisodes(long titleId, int season)
         {
             string memKey = $"UafilmME:episodes:{titleId}:{season}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out List<UafilmEpisodeItem> cached))
                 return cached;
 
-            var all = new List<UafilmEpisodeItem>();
-            int currentPage = 1;
-            int guard = 0;
-
-            while (currentPage > 0 && guard < 200)
+            return await SingleFlightCache.GetOrCreateAsync<List<UafilmEpisodeItem>>(memKey, async token =>
             {
-                guard++;
-                var page = await GetEpisodesPage(titleId, season, currentPage);
-                if (page.Items.Count == 0)
-                    break;
+                if (_hybridCache.TryGetValue(memKey, out List<UafilmEpisodeItem> hit))
+                    return hit;
 
-                all.AddRange(page.Items);
+                var all = new List<UafilmEpisodeItem>();
+                int currentPage = 1;
+                int guard = 0;
 
-                if (page.NextPage.HasValue && page.NextPage.Value != currentPage)
-                    currentPage = page.NextPage.Value;
-                else
-                    break;
-            }
+                while (currentPage > 0 && guard < 200)
+                {
+                    guard++;
+                    var page = await GetEpisodesPage(titleId, season, currentPage);
+                    if (page.Items.Count == 0)
+                        break;
 
-            var result = all
-                .GroupBy(e => e.Id)
-                .Select(g => g.First())
-                .OrderBy(e => e.EpisodeNumber)
-                .ToList();
+                    all.AddRange(page.Items);
 
-            if (result.Count > 0)
-                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(30, init: _init));
+                    if (page.NextPage.HasValue && page.NextPage.Value != currentPage)
+                        currentPage = page.NextPage.Value;
+                    else
+                        break;
+                }
 
-            return result;
+                var result = all
+                    .GroupBy(e => e.Id)
+                    .Select(g => g.First())
+                    .OrderBy(e => e.EpisodeNumber)
+                    .ToList();
+
+                if (result.Count > 0)
+                    _hybridCache.Set(memKey, result, CacheHelper.CacheTime(30, init: _init));
+
+                return result;
+            });
         }
 
         public async Task<List<UafilmVideoItem>> GetMovieVideos(long titleId)
@@ -192,23 +215,30 @@ namespace LME.UafilmME
                 return null;
 
             string memKey = $"UafilmME:watch:{videoId}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out UafilmWatchInfo cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<UafilmWatchInfo>(memKey, async token =>
             {
-                string json = await ApiGet($"watch/{videoId}", _init.host);
-                var watch = ParseWatchInfo(json);
-                if (watch?.Video != null)
-                    _hybridCache.Set(memKey, watch, CacheHelper.CacheTime(7, init: _init));
+                if (_hybridCache.TryGetValue(memKey, out UafilmWatchInfo hit))
+                    return hit;
 
-                return watch;
-            }
-            catch (Exception ex)
-            {
-                _onLog?.Invoke($"UafilmME: помилка отримання watch/{videoId}: {ex.Message}");
-                return null;
-            }
+                try
+                {
+                    string json = await ApiGet($"watch/{videoId}", _init.host);
+                    var watch = ParseWatchInfo(json);
+                    if (watch?.Video != null)
+                        _hybridCache.Set(memKey, watch, CacheHelper.CacheTime(7, init: _init));
+
+                    return watch;
+                }
+                catch (Exception ex)
+                {
+                    _onLog?.Invoke($"UafilmME: помилка отримання watch/{videoId}: {ex.Message}");
+                    return null;
+                }
+            });
         }
 
         public List<UafilmVideoItem> CollectPlayableVideos(UafilmWatchInfo watch)
@@ -241,17 +271,24 @@ namespace LME.UafilmME
         private async Task<List<UafilmSearchItem>> SearchByQuery(string query)
         {
             string memKey = $"UafilmME:search:{query}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(memKey, out List<UafilmSearchItem> cached))
                 return cached;
 
-            string encoded = HttpUtility.UrlEncode(query);
-            string json = await ApiGet($"search/{encoded}?loader=searchPage", $"{_init.host}/search/{encoded}");
-            var items = ParseSearchResults(json);
+            return await SingleFlightCache.GetOrCreateAsync<List<UafilmSearchItem>>(memKey, async token =>
+            {
+                if (_hybridCache.TryGetValue(memKey, out List<UafilmSearchItem> hit))
+                    return hit;
 
-            if (items.Count > 0)
-                _hybridCache.Set(memKey, items, CacheHelper.CacheTime(20, init: _init));
+                string encoded = HttpUtility.UrlEncode(query);
+                string json = await ApiGet($"search/{encoded}?loader=searchPage", $"{_init.host}/search/{encoded}");
+                var items = ParseSearchResults(json);
 
-            return items;
+                if (items.Count > 0)
+                    _hybridCache.Set(memKey, items, CacheHelper.CacheTime(20, init: _init));
+
+                return items;
+            });
         }
 
         private async Task<(List<UafilmSeasonItem> Items, int? NextPage)> GetSeasonsPage(long titleId, int page)
