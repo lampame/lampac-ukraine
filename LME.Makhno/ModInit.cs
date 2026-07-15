@@ -24,7 +24,7 @@ namespace LME.Makhno
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 3.1;
+        public static double Version => 3.2;
 
         public static OnlinesSettings Makhno;
         public static bool ApnHostProvided;
