@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
+using Shared.Services.Hybrid;
 
 namespace LME.Shared.Engine
 {
@@ -22,9 +23,15 @@ namespace LME.Shared.Engine
 
         public static async Task<T> GetOrCreateAsync<T>(
             string key,
+            IHybridCache hybridCache,
             Func<CancellationToken, Task<T>> factory,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            int negativeCacheSeconds = 60)
         {
+            string negKey = $"neg:{key}";
+            if (hybridCache != null && hybridCache.TryGetValue(negKey, out string isNeg) && isNeg == "timeout")
+                return default;
+
             var entry = _entries.GetOrAdd(key, _ => new Entry());
             Interlocked.Increment(ref entry.Waiters);
             try
@@ -32,7 +39,16 @@ namespace LME.Shared.Engine
                 await entry.Sem.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
+                    if (hybridCache != null && hybridCache.TryGetValue(negKey, out string isNegInside) && isNegInside == "timeout")
+                        return default;
+
                     return await factory(ct).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is OperationCanceledException || ex is TaskCanceledException || (ex.Message != null && ex.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (hybridCache != null)
+                        hybridCache.Set(negKey, "timeout", TimeSpan.FromSeconds(negativeCacheSeconds));
+                    throw;
                 }
                 finally
                 {
