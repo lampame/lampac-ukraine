@@ -39,7 +39,7 @@ namespace LME.UafilmME
             {
                 displayname = "UAFilmME",
                 displayindex = 0,
-                proxy = new Shared.Models.Base.ProxySettings()
+                proxy = new global::Shared.Models.Base.ProxySettings()
                 {
                     useAuth = true,
                     username = "",

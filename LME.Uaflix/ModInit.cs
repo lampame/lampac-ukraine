@@ -45,7 +45,7 @@ namespace LME.Uaflix
                 displayindex = 0,
                 login = null,
                 passwd = null,
-                proxy = new Shared.Models.Base.ProxySettings()
+                proxy = new global::Shared.Models.Base.ProxySettings()
                 {
                     useAuth = true,
                     username = "a",
