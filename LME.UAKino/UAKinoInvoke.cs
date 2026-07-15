@@ -40,12 +40,20 @@ namespace LME.UAKino
                 return null;
 
             string memKey = $"UAKino:search:{query}";
+            string negKey = $"neg:{memKey}";
+
+            if (_hybridCache.TryGetValue(negKey, out string isNeg) && isNeg == "timeout")
+                return null;
+
             // ponytail: single-flight — factory виконається рівно 1 раз при паралельних запитах
             if (_hybridCache.TryGetValue(memKey, out List<SearchResult> cached))
                 return cached;
 
             return await SingleFlightCache.GetOrCreateAsync<List<SearchResult>>(memKey, async token =>
             {
+                if (_hybridCache.TryGetValue(negKey, out string isNegInside) && isNegInside == "timeout")
+                    return null;
+
                 // double-check після отримання lock
                 if (_hybridCache.TryGetValue(memKey, out List<SearchResult> hit))
                     return hit;
@@ -90,6 +98,12 @@ namespace LME.UAKino
 
                     return results;
                 }
+                catch (Exception ex) when (ex is OperationCanceledException || ex is TaskCanceledException || ex.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+                {
+                    _onLog?.Invoke($"UAKino search timeout/cancelled error: {ex.Message}");
+                    _hybridCache.Set(negKey, "timeout", TimeSpan.FromSeconds(60));
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _onLog?.Invoke($"UAKino search error: {ex.Message}");
@@ -107,12 +121,20 @@ namespace LME.UAKino
                 return null;
 
             string memKey = $"UAKino:playlist:{newsId}";
+            string negKey = $"neg:{memKey}";
+
+            if (_hybridCache.TryGetValue(negKey, out string isNeg) && isNeg == "timeout")
+                return null;
+
             // ponytail: single-flight — найдорожчий виклик (парсинг плейлиста), гарантуємо 1 HTTP-запит
             if (_hybridCache.TryGetValue(memKey, out List<VoiceGroup> cached))
                 return cached;
 
             return await SingleFlightCache.GetOrCreateAsync<List<VoiceGroup>>(memKey, async token =>
             {
+                if (_hybridCache.TryGetValue(negKey, out string isNegInside) && isNegInside == "timeout")
+                    return null;
+
                 if (_hybridCache.TryGetValue(memKey, out List<VoiceGroup> hit))
                     return hit;
 
@@ -147,6 +169,12 @@ namespace LME.UAKino
                         _hybridCache.Set(memKey, voices, CacheHelper.CacheTime(30));
 
                     return voices;
+                }
+                catch (Exception ex) when (ex is OperationCanceledException || ex is TaskCanceledException || ex.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+                {
+                    _onLog?.Invoke($"UAKino playlist timeout/cancelled error: {ex.Message}");
+                    _hybridCache.Set(negKey, "timeout", TimeSpan.FromSeconds(60));
+                    throw;
                 }
                 catch (Exception ex)
                 {

@@ -24,7 +24,7 @@ namespace LME.UAKino
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 1.1;
+        public static double Version => 1.2;
 
         public static OnlinesSettings UAKino;
         public static bool ApnHostProvided;
