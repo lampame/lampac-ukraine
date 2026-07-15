@@ -48,7 +48,7 @@ namespace LME.KlonFUN
             if (_hybridCache.TryGetValue(cacheKey, out List<SearchResult> cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<List<SearchResult>>(cacheKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<List<SearchResult>>(cacheKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(cacheKey, out List<SearchResult> hit))
                     return hit;
@@ -117,7 +117,7 @@ namespace LME.KlonFUN
             if (_hybridCache.TryGetValue(cacheKey, out KlonItem cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<KlonItem>(cacheKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<KlonItem>(cacheKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(cacheKey, out KlonItem hit))
                     return hit;
@@ -191,7 +191,7 @@ namespace LME.KlonFUN
             if (_hybridCache.TryGetValue(cacheKey, out List<MovieStream> cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<List<MovieStream>>(cacheKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<List<MovieStream>>(cacheKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(cacheKey, out List<MovieStream> hit))
                     return hit;
@@ -266,7 +266,7 @@ namespace LME.KlonFUN
             if (_hybridCache.TryGetValue(cacheKey, out SerialStructure cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<SerialStructure>(cacheKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<SerialStructure>(cacheKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(cacheKey, out SerialStructure hit))
                     return hit;
@@ -384,7 +384,7 @@ namespace LME.KlonFUN
             if (_hybridCache.TryGetValue(cacheKey, out List<SearchResult> cached))
                 return cached;
 
-            return await SingleFlightCache.GetOrCreateAsync<List<SearchResult>>(cacheKey, async token =>
+            return await SingleFlightCache.GetOrCreateAsync<List<SearchResult>>(cacheKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(cacheKey, out List<SearchResult> hit))
                     return hit;
