@@ -291,7 +291,16 @@ namespace LME.AniWorld
                 _onLog?.Invoke($"AniWorld Dailymotion auto url: {autoUrl}");
 
                 // Парсинг M3U8 для отримання всіх якостей
-                var qualitiesList = await ParseM3U8Qualities(autoUrl);
+                // Додаємо dmV1st як Cookie для CDN (Dailymotion використовує для авторизації)
+                string dmV1st = null;
+                if (autoUrl.Contains("dmV1st="))
+                {
+                    var v1stMatch = Regex.Match(autoUrl, @"dmV1st=([A-Fa-f0-9]+)");
+                    if (v1stMatch.Success)
+                        dmV1st = v1stMatch.Groups[1].Value;
+                }
+
+                var qualitiesList = await ParseM3U8Qualities(autoUrl, dmV1st);
                 if (qualitiesList == null || qualitiesList.Count == 0)
                 {
                     // Fallback: повертаємо auto quality
@@ -311,7 +320,7 @@ namespace LME.AniWorld
         /// <summary>
         /// Парсинг M3U8 маніфесту для отримання якостей
         /// </summary>
-        private async Task<List<(string quality, string url)>> ParseM3U8Qualities(string m3u8Url)
+        private async Task<List<(string quality, string url)>> ParseM3U8Qualities(string m3u8Url, string dmV1st = null)
         {
             try
             {
@@ -323,6 +332,15 @@ namespace LME.AniWorld
                     new HeadersModel("User-Agent", "Mozilla/5.0"),
                     new HeadersModel("Referer", "https://www.dailymotion.com/")
                 };
+
+                // Dailymotion CDN може вимагати v1st cookie для авторизації
+                if (!string.IsNullOrEmpty(dmV1st))
+                {
+                    headers.Add(new HeadersModel("Cookie", $"v1st={dmV1st}"));
+                    _onLog?.Invoke($"AniWorld M3U8 with cookie: v1st={dmV1st}");
+                }
+
+                _onLog?.Invoke($"AniWorld M3U8 fetch: {m3u8Url}");
                 string content = await Http.Get(m3u8Url, headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(content))
                 {
