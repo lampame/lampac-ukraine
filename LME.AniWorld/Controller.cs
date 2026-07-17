@@ -58,19 +58,43 @@ namespace LME.AniWorld.Controllers
                 if (searchResults == null || searchResults.Count == 0)
                     return OnError("lme_aniworld", refresh_proxy: true);
 
-                if (searchResults.Count > 1)
+                if (searchResults.Count == 1)
                 {
-                    var similar_tpl = new SimilarTpl(searchResults.Count);
-                    foreach (var res in searchResults)
-                    {
-                        string link = $"{host}/lite/lme_aniworld?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={res.Id}";
-                        similar_tpl.Append($"{res.Title} ({res.ReleaseYear})", res.MediaType, string.Empty, link);
-                    }
-
-                    return rjson ? Content(similar_tpl.ToJson(), "application/json; charset=utf-8") : Content(similar_tpl.ToHtml(), "text/html; charset=utf-8");
+                    // Один результат — одразу переходимо до епізодів
+                    catalogId = searchResults[0].Id;
                 }
+                else
+                {
+                    // Перевіряємо, чи всі результати мають однаковий original_title
+                    // Якщо так — це багатосезонний тайтл, показуємо SeasonTpl
+                    var sameTitle = searchResults.All(r =>
+                        r.OriginalTitle.Equals(searchResults[0].OriginalTitle, StringComparison.OrdinalIgnoreCase));
 
-                catalogId = searchResults[0].Id;
+                    if (sameTitle)
+                    {
+                        // Багатосезонний тайтл — показуємо сезони
+                        var season_tpl = new SeasonTpl(searchResults.Count);
+                        foreach (var res in searchResults)
+                        {
+                            string link = $"{host}/lite/lme_aniworld?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={res.Id}";
+                            season_tpl.Append(res.Title, link, res.ReleaseYear.ToString());
+                        }
+
+                        return rjson ? Content(season_tpl.ToJson(), "application/json; charset=utf-8") : Content(season_tpl.ToHtml(), "text/html; charset=utf-8");
+                    }
+                    else
+                    {
+                        // Різні тайтли — показуємо SimilarTpl
+                        var similar_tpl = new SimilarTpl(searchResults.Count);
+                        foreach (var res in searchResults)
+                        {
+                            string link = $"{host}/lite/lme_aniworld?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial={serial}&href={res.Id}";
+                            similar_tpl.Append($"{res.Title} ({res.ReleaseYear})", res.MediaType, string.Empty, link);
+                        }
+
+                        return rjson ? Content(similar_tpl.ToJson(), "application/json; charset=utf-8") : Content(similar_tpl.ToHtml(), "text/html; charset=utf-8");
+                    }
+                }
             }
 
             var detail = await invoke.GetDetail(catalogId);
