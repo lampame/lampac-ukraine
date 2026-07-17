@@ -32,7 +32,7 @@ namespace LME.AniWorld
             {
                 displayname = "AniWorld",
                 displayindex = 0,
-                group = "Anime",
+                group = 0,
                 group_hide = false
             };
             var defaults = JObject.FromObject(AniWorld);
