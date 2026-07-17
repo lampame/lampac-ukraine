@@ -213,7 +213,8 @@ namespace LME.AniWorld.Controllers
                 var streamQuality = new StreamQualityTpl();
                 foreach (var (quality, url) in qualities)
                 {
-                    string proxiedUrl = BuildStreamUrl(init, url);
+                    // Dailymotion завжди через стрімпроксі (force_streamproxy: true)
+                    string proxiedUrl = HostStreamProxy(init, url, force_streamproxy: true);
                     streamQuality.Append(proxiedUrl, quality);
                 }
 
