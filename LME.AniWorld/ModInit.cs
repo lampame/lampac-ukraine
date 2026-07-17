@@ -28,7 +28,7 @@ namespace LME.AniWorld
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            AniWorld = new OnlinesSettings("LME.AniWorld", "https://aniworldua.com", streamproxy: false, useproxy: false)
+            AniWorld = new OnlinesSettings("LME.AniWorld", "https://api.aniworldua.com/", streamproxy: false, useproxy: false)
             {
                 displayname = "AniWorld",
                 displayindex = 0,
