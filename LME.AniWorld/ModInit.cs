@@ -28,12 +28,19 @@ namespace LME.AniWorld
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            AniWorld = new OnlinesSettings("LME.AniWorld", "https://api.aniworldua.com", streamproxy: false, useproxy: false)
+            AniWorld = new OnlinesSettings("LME.AniWorld", "https://api.aniworldua.com", streamproxy: false, useproxy: true)
             {
                 displayname = "AniWorld",
                 displayindex = 0,
                 group = 0,
-                group_hide = false
+                group_hide = false,
+                proxy = new Shared.Models.Base.ProxySettings()
+                {
+                    useAuth = true,
+                    username = "",
+                    password = "",
+                    list = new string[] { "socks5://ip:port" }
+                }
             };
             var defaults = JObject.FromObject(AniWorld);
             defaults["enabled"] = true;
