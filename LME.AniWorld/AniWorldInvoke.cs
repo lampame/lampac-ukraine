@@ -310,16 +310,15 @@ namespace LME.AniWorld
                 // Зберігаємо dmvk до CDN запиту — CDN може перезаписати її при 403
                 var savedDmvk = dmvkCookie?.Value;
 
-                // Крок 2: Завантажуємо M3U8 маніфест з CDN (тією ж сесією)
+                // Крок 2: Завантажуємо M3U8 маніфест з CDN
                 _onLog?.Invoke($"AniWorld M3U8 fetch: {autoUrl}");
 
                 var m3u8Response = await client.GetAsync(autoUrl);
                 
-                // CDN встановлює dmvk куку тільки при першому 403. Робимо retry з кукою.
+                // CDN повертає 403 — робимо retry з відновленням dmvk
                 if (m3u8Response.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 {
-                    _onLog?.Invoke($"AniWorld M3U8 HTTP 403, retrying with dmvk cookie...");
-                    // Відновлюємо оригінальну dmvk (CDN замінює її на нову при 403)
+                    _onLog?.Invoke($"AniWorld M3U8 HTTP 403, retrying with saved dmvk...");
                     if (!string.IsNullOrEmpty(savedDmvk))
                     {
                         cookieContainer.Add(new Uri("https://cdndirector.dailymotion.com"), 
@@ -330,7 +329,7 @@ namespace LME.AniWorld
 
                 if (!m3u8Response.IsSuccessStatusCode)
                 {
-                    _onLog?.Invoke($"AniWorld M3U8 error: HTTP {(int)m3u8Response.StatusCode}");
+                    _onLog?.Invoke($"AniWorld M3U8 error: HTTP {(int)m3u8Response.StatusCode} - Dailymotion CDN blocked, returning auto URL as fallback");
                     // Fallback: повертаємо auto quality через HostStreamProxy
                     var fallbackList = new List<(string, string)> { ("auto", autoUrl) };
                     _hybridCache.Set(memKey, fallbackList, CacheHelper.CacheTime(5, init: _init));
