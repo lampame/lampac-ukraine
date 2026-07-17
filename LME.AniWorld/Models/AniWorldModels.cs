@@ -11,7 +11,7 @@ namespace LME.AniWorld.Models
         public int Count { get; set; }
         
         [JsonPropertyName("results")]
-        public List<CatalogItem> Results { get; set; }
+        public List<CatalogItem> Results { get; set; } = new();
     }
     
     public class CatalogItem
@@ -70,7 +70,7 @@ namespace LME.AniWorld.Models
         public string MediaType { get; set; }
         
         [JsonPropertyName("episodes")]
-        public List<EpisodeDetail> Episodes { get; set; }
+        public List<EpisodeDetail> Episodes { get; set; } = new();
     }
     
     public class EpisodeDetail
