@@ -247,7 +247,14 @@ namespace LME.AniWorld
                 };
 
                 _onLog?.Invoke($"AniWorld Dailymotion metadata: {metadataUrl}");
-                string json = await HttpHelper.GetAsync(_httpHydra, _init, metadataUrl, headers, _proxyManager);
+
+                // Metadata API через Http.Get напряму (не hydra), щоб проксі (якщо налаштовано) використовувався
+                var mdHeaders = new List<HeadersModel>()
+                {
+                    new HeadersModel("User-Agent", "Mozilla/5.0"),
+                    new HeadersModel("Referer", "https://www.dailymotion.com/")
+                };
+                string json = await Http.Get(metadataUrl, headers: mdHeaders, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(json))
                 {
                     _onLog?.Invoke($"AniWorld Dailymotion metadata: empty response");
