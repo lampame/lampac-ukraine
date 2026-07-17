@@ -114,6 +114,8 @@ namespace LME.AniWorld.Controllers
                     .OrderBy(e => e.Episode)
                     .ToList();
 
+                OnLog($"AniWorld episodes: count={sortedEpisodes.Count}, first={sortedEpisodes.FirstOrDefault()?.Episode}, last={sortedEpisodes.LastOrDefault()?.Episode}");
+
                 var episode_tpl = new EpisodeTpl();
                 foreach (var ep in sortedEpisodes)
                 {

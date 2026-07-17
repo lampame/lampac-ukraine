@@ -134,6 +134,13 @@ namespace LME.AniWorld
                 if (detail == null)
                     return null;
 
+                _onLog?.Invoke($"AniWorld detail: id={detail.Id}, title={detail.Title}, episodes={detail.Episodes?.Count ?? 0}");
+                if (detail.Episodes != null && detail.Episodes.Count > 0)
+                {
+                    var first = detail.Episodes[0];
+                    _onLog?.Invoke($"AniWorld detail: first episode id={first.Id}, episode={first.Episode}");
+                }
+
                 _hybridCache.Set(memKey, detail, CacheHelper.CacheTime(30, init: _init));
                 return detail;
             }
