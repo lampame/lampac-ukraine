@@ -379,7 +379,12 @@ namespace LME.AniWorld
                 _onLog?.Invoke($"AniWorld Mediadelivery embed: {embedUrl}");
                 string html = await HttpHelper.GetAsync(_httpHydra, _init, embedUrl, headers, _proxyManager);
                 if (string.IsNullOrEmpty(html))
+                {
+                    _onLog?.Invoke($"AniWorld Mediadelivery error: empty response");
                     return null;
+                }
+
+                _onLog?.Invoke($"AniWorld Mediadelivery html length: {html.Length}");
 
                 // Парсинг HTML для пошуку bunny-stream-video
                 var doc = new HtmlDocument();
@@ -387,11 +392,20 @@ namespace LME.AniWorld
 
                 var bunnyVideo = doc.DocumentNode.SelectSingleNode("//bunny-stream-video[@content-src]");
                 if (bunnyVideo == null)
+                {
+                    // Спробуємо альтернативний селектор
+                    var anyVideo = doc.DocumentNode.SelectSingleNode("//bunny-stream-video");
+                    var videoTag = doc.DocumentNode.SelectSingleNode("//video[@src]");
+                    _onLog?.Invoke($"AniWorld Mediadelivery parse: bunnyVideo={bunnyVideo != null}, anyBunnyVideo={anyVideo != null}, videoTag={videoTag != null}");
                     return null;
+                }
 
                 string contentSrc = bunnyVideo.GetAttributeValue("content-src", "");
                 if (string.IsNullOrEmpty(contentSrc))
+                {
+                    _onLog?.Invoke($"AniWorld Mediadelivery error: content-src empty");
                     return null;
+                }
 
                 _onLog?.Invoke($"AniWorld Mediadelivery stream: {contentSrc}");
                 return contentSrc;
