@@ -118,12 +118,21 @@ namespace LME.AniWorld.Controllers
 
                 OnLog($"AniWorld episodes: count={sortedEpisodes.Count}, first={sortedEpisodes.FirstOrDefault()?.Episode}, last={sortedEpisodes.LastOrDefault()?.Episode}");
 
+                // Витягуємо номер сезону з назви (напр. "Сезон 4" → 4)
+                // Якщо не знайдено — використовуємо 1
+                int seasonNumber = ExtractSeasonNumber(detail.Title);
+                if (seasonNumber <= 0)
+                    seasonNumber = 1;
+                string seasonStr = seasonNumber.ToString();
+
+                OnLog($"AniWorld episodes: season={seasonStr}, from title='{detail.Title}'");
+
                 var episode_tpl = new EpisodeTpl();
                 foreach (var ep in sortedEpisodes)
                 {
                     string episodeName = $"Серія {ep.Episode}";
                     string callUrl = $"{host}/lite/lme_aniworld/play?episode_id={ep.Id}&title={HttpUtility.UrlEncode(title ?? original_title)}";
-                    episode_tpl.Append(episodeName, title ?? original_title, "1", ep.Episode.ToString("D2"), accsArgs(callUrl), "call");
+                    episode_tpl.Append(episodeName, title ?? original_title, seasonStr, ep.Episode.ToString("D2"), accsArgs(callUrl), "call");
                 }
 
                 if (rjson)
