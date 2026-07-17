@@ -195,11 +195,17 @@ namespace LME.AniWorld.Controllers
 
             if (episodeSource.Type == StreamType.Dailymotion)
             {
+                OnLog($"AniWorld Play Dailymotion: source={episodeSource.Url}");
+
                 // Dailymotion — отримуємо якості
                 string videoId = AniWorldInvoke.ExtractDailymotionVideoId(episodeSource.Url);
                 if (string.IsNullOrEmpty(videoId))
+                {
+                    OnLog($"AniWorld Play: cannot extract videoId from {episodeSource.Url}");
                     return OnError("lme_aniworld", refresh_proxy: true);
+                }
 
+                OnLog($"AniWorld Play Dailymotion: videoId={videoId}");
                 var qualities = await invoke.GetDailymotionQualities(videoId);
                 if (qualities == null || qualities.Count == 0)
                     return OnError("lme_aniworld", refresh_proxy: true);
@@ -220,6 +226,8 @@ namespace LME.AniWorld.Controllers
             }
             else if (episodeSource.Type == StreamType.Mediadelivery)
             {
+                OnLog($"AniWorld Play Mediadelivery: source={episodeSource.Url}");
+
                 // Mediadelivery — прямий URL
                 string streamUrl = await invoke.GetMediadeliveryStreamUrl(episodeSource.Url);
                 if (string.IsNullOrEmpty(streamUrl))
@@ -229,6 +237,7 @@ namespace LME.AniWorld.Controllers
                 return UpdateService.Validate(Content(json, "application/json; charset=utf-8"));
             }
 
+            OnLog($"AniWorld Play: unknown stream type {episodeSource.Type} for url={episodeSource.Url}");
             return OnError("lme_aniworld", refresh_proxy: true);
         }
 

@@ -216,7 +216,8 @@ namespace LME.AniWorld
             // Формати URL:
             // https://www.dailymotion.com/video/k2gLPRjxWV04mHHKtiC
             // https://geo.dailymotion.com/video/k2gLPRjxWV04mHHKtiC
-            var match = Regex.Match(url, @"dailymotion\.com/video/([a-zA-Z0-9]+)");
+            // https://geo.dailymotion.com/player.html?video=k4vDOAeWBP5m4XEViMg
+            var match = Regex.Match(url, @"dailymotion\.com/(?:video|player\.html\?video)=?([a-zA-Z0-9]+)");
             if (match.Success)
                 return match.Groups[1].Value;
 
