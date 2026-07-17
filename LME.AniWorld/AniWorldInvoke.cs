@@ -258,12 +258,11 @@ namespace LME.AniWorld
                 client.DefaultRequestHeaders.Add("Referer", "https://www.dailymotion.com/");
 
                 // Крок 0: "Прогрів" — запит до CDN для отримання сесійної куки dmvk
-                // Використовуємо неіснуючий шлях для отримання 403 з кукою
-                _onLog?.Invoke($"AniWorld Dailymotion: warming up session on CDN...");
+                // Використовуємо неіснуючий шлях для отримання 403/404 з dmvk кукою
+                _onLog?.Invoke($"AniWorld Dailymotion: warming up session...");
                 var warmupResponse = await client.GetAsync("https://cdndirector.dailymotion.com/cdn/manifest/test");
                 _onLog?.Invoke($"AniWorld Dailymotion warmup: HTTP {(int)warmupResponse.StatusCode}");
 
-                // Перевіряємо dmvk куку (має бути встановлена навіть на 403)
                 var dmvkCookie = cookieContainer.GetCookies(new Uri("https://cdndirector.dailymotion.com"))["dmvk"];
                 _onLog?.Invoke($"AniWorld Dailymotion warmup: dmvk={(dmvkCookie != null ? dmvkCookie.Value.Substring(0, Math.Min(10, dmvkCookie.Value.Length)) + "..." : "none")}");
 
@@ -308,6 +307,9 @@ namespace LME.AniWorld
 
                 _onLog?.Invoke($"AniWorld Dailymotion auto url: {autoUrl}");
 
+                // Зберігаємо dmvk до CDN запиту — CDN може перезаписати її при 403
+                var savedDmvk = dmvkCookie?.Value;
+
                 // Крок 2: Завантажуємо M3U8 маніфест з CDN (тією ж сесією)
                 _onLog?.Invoke($"AniWorld M3U8 fetch: {autoUrl}");
 
@@ -317,6 +319,12 @@ namespace LME.AniWorld
                 if (m3u8Response.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 {
                     _onLog?.Invoke($"AniWorld M3U8 HTTP 403, retrying with dmvk cookie...");
+                    // Відновлюємо оригінальну dmvk (CDN замінює її на нову при 403)
+                    if (!string.IsNullOrEmpty(savedDmvk))
+                    {
+                        cookieContainer.Add(new Uri("https://cdndirector.dailymotion.com"), 
+                            new System.Net.Cookie("dmvk", savedDmvk, "/", ".dailymotion.com"));
+                    }
                     m3u8Response = await client.GetAsync(autoUrl);
                 }
 
