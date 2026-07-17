@@ -74,10 +74,11 @@ namespace LME.AniWorld
                     // Перевірка release_year
                     bool yearMatch = year == 0 || item.ReleaseYear == year;
 
-                    // Перевірка media_type (serial==1 → ONA/TVA, serial!=1 → MOVIE)
+                    // Для серіалів: ONA або TVA
+                    // Для фільмів: MOVIE або будь-який інший тип (якщо серіал не вказаний)
                     bool typeMatch = serial == 1
-                        ? item.MediaType != "MOVIE"
-                        : item.MediaType == "MOVIE";
+                        ? (item.MediaType == "ONA" || item.MediaType == "TVA")
+                        : true;
 
                     if (titleMatch && yearMatch && typeMatch)
                     {
@@ -367,7 +368,7 @@ namespace LME.AniWorld
                 var headers = new List<HeadersModel>()
                 {
                     new HeadersModel("User-Agent", "Mozilla/5.0"),
-                    new HeadersModel("Referer", "https://www.dailymotion.com/")
+                    new HeadersModel("Referer", _init.host)
                 };
 
                 _onLog?.Invoke($"AniWorld Mediadelivery embed: {embedUrl}");

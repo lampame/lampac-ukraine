@@ -131,6 +131,5 @@ namespace LME.AniWorld.Models
         public string OriginalTitle { get; set; }
         public int ReleaseYear { get; set; }
         public string MediaType { get; set; }
-        public string PosterUrl { get; set; }
     }
 }
