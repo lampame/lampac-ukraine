@@ -257,6 +257,15 @@ namespace LME.AniWorld
                 client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0");
                 client.DefaultRequestHeaders.Add("Referer", "https://www.dailymotion.com/");
 
+                // Крок 0: "Прогрів" — запит до Dailymotion для отримання сесійної куки dmvk
+                // Без цієї куки CDN повертає 403 (E005)
+                _onLog?.Invoke($"AniWorld Dailymotion: warming up session...");
+                var warmupResponse = await client.GetAsync("https://www.dailymotion.com/");
+                _onLog?.Invoke($"AniWorld Dailymotion warmup: HTTP {(int)warmupResponse.StatusCode}");
+                // Виводимо вміст dmvk куки якщо встановлена
+                var dmvkCookie = cookieContainer.GetCookies(new Uri("https://www.dailymotion.com"))["dmvk"];
+                _onLog?.Invoke($"AniWorld Dailymotion warmup: dmvk={(dmvkCookie != null ? dmvkCookie.Value.Substring(0, Math.Min(10, dmvkCookie.Value.Length)) + "..." : "none")}");
+
                 // Крок 1: Завантажуємо metadata API
                 string metadataUrl = $"https://www.dailymotion.com/player/metadata/video/{videoId}";
                 _onLog?.Invoke($"AniWorld Dailymotion metadata: {metadataUrl}");
