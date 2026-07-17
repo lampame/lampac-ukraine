@@ -238,42 +238,44 @@ namespace LME.AniWorld
 
             try
             {
-                string metadataUrl = $"https://www.dailymotion.com/player/metadata/video/{videoId}";
-
-                var headers = new List<HeadersModel>()
+                // Dailymotion вимагає сесійні куки (dmvk). Створюємо HttpClient з CookieContainer
+                // для збереження сесії між metadata API та CDN запитами
+                var cookieContainer = new System.Net.CookieContainer();
+                var handler = new HttpClientHandler
                 {
-                    new HeadersModel("User-Agent", "Mozilla/5.0"),
-                    new HeadersModel("Referer", "https://www.dailymotion.com/")
+                    CookieContainer = cookieContainer,
+                    AllowAutoRedirect = true
                 };
 
-                _onLog?.Invoke($"AniWorld Dailymotion metadata: {metadataUrl}");
-
-                // Metadata API через Http.Get напряму (не hydra), щоб проксі (якщо налаштовано) використовувався
-                var mdHeaders = new List<HeadersModel>()
-                {
-                    new HeadersModel("User-Agent", "Mozilla/5.0"),
-                    new HeadersModel("Referer", "https://www.dailymotion.com/")
-                };
-
+                // Налаштовуємо проксі якщо є
                 var dmProxy = _proxyManager.Get();
+                if (dmProxy != null)
+                    handler.Proxy = dmProxy;
+
+                using var client = new HttpClient(handler);
+                client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0");
+                client.DefaultRequestHeaders.Add("Referer", "https://www.dailymotion.com/");
+
+                // Крок 1: Завантажуємо metadata API
+                string metadataUrl = $"https://www.dailymotion.com/player/metadata/video/{videoId}";
+                _onLog?.Invoke($"AniWorld Dailymotion metadata: {metadataUrl}");
                 _onLog?.Invoke($"AniWorld Dailymotion metadata with proxy: {(dmProxy != null ? dmProxy.Address?.ToString() ?? "yes" : "none")}");
-                string json = await Http.Get(metadataUrl, headers: mdHeaders, proxy: dmProxy);
-                if (string.IsNullOrEmpty(json))
+
+                var mdResponse = await client.GetAsync(metadataUrl);
+                if (!mdResponse.IsSuccessStatusCode)
                 {
-                    _onLog?.Invoke($"AniWorld Dailymotion metadata: empty response");
+                    _onLog?.Invoke($"AniWorld Dailymotion metadata: HTTP {(int)mdResponse.StatusCode}");
                     return null;
                 }
 
+                string json = await mdResponse.Content.ReadAsStringAsync();
                 _onLog?.Invoke($"AniWorld Dailymotion metadata: got json length={json.Length}");
 
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
 
-                // Логуємо stream_formats якщо є
                 if (root.TryGetProperty("stream_formats", out var streamFormats))
-                {
                     _onLog?.Invoke($"AniWorld Dailymotion stream_formats: {streamFormats}");
-                }
 
                 if (!root.TryGetProperty("qualities", out var qualities))
                 {
@@ -293,29 +295,68 @@ namespace LME.AniWorld
 
                 _onLog?.Invoke($"AniWorld Dailymotion auto url: {autoUrl}");
 
-                // Парсинг M3U8 для отримання всіх якостей
-                // Додаємо dmV1st як Cookie для CDN (Dailymotion використовує для авторизації)
-                string dmV1st = null;
-                if (autoUrl.Contains("dmV1st="))
+                // Крок 2: Завантажуємо M3U8 маніфест з CDN (тією ж сесією)
+                _onLog?.Invoke($"AniWorld M3U8 fetch: {autoUrl}");
+
+                var m3u8Response = await client.GetAsync(autoUrl);
+                if (!m3u8Response.IsSuccessStatusCode)
                 {
-                    var v1stMatch = Regex.Match(autoUrl, @"dmV1st=([A-Fa-f0-9]+)");
-                    if (v1stMatch.Success)
-                        dmV1st = v1stMatch.Groups[1].Value;
+                    _onLog?.Invoke($"AniWorld M3U8 error: HTTP {(int)m3u8Response.StatusCode}");
+                    // Fallback: повертаємо auto quality через HostStreamProxy
+                    var fallbackList = new List<(string, string)> { ("auto", autoUrl) };
+                    _hybridCache.Set(memKey, fallbackList, CacheHelper.CacheTime(5, init: _init));
+                    return fallbackList;
                 }
 
-                var qualitiesList = await ParseM3U8Qualities(autoUrl, dmV1st);
-                if (qualitiesList == null || qualitiesList.Count == 0)
+                string content = await m3u8Response.Content.ReadAsStringAsync();
+                if (string.IsNullOrEmpty(content))
                 {
-                    // Fallback: повертаємо auto quality
-                    qualitiesList = new List<(string, string)> { ("auto", autoUrl) };
+                    _onLog?.Invoke($"AniWorld M3U8 error: empty response");
+                    var fallbackList = new List<(string, string)> { ("auto", autoUrl) };
+                    _hybridCache.Set(memKey, fallbackList, CacheHelper.CacheTime(5, init: _init));
+                    return fallbackList;
                 }
 
+                _onLog?.Invoke($"AniWorld M3U8 fetched: {content.Length} chars, starts with: {content.Substring(0, Math.Min(100, content.Length))}");
+
+                // Крок 3: Парсинг M3U8 для отримання всіх якостей
+                var qualitiesList = new List<(string, string)>();
+                var lines = content.Split('\n');
+
+                for (int i = 0; i < lines.Length - 1; i++)
+                {
+                    if (!lines[i].StartsWith("#EXT-X-STREAM-INF:"))
+                        continue;
+
+                    string quality = ExtractQualityFromStreamInf(lines[i]);
+                    string streamUrl = lines[i + 1].Trim();
+
+                    if (string.IsNullOrEmpty(quality) || string.IsNullOrEmpty(streamUrl))
+                        continue;
+
+                    if (!streamUrl.StartsWith("http"))
+                    {
+                        var baseUri = new Uri(autoUrl);
+                        streamUrl = new Uri(baseUri, streamUrl).ToString();
+                    }
+
+                    qualitiesList.Add((quality, streamUrl));
+                    _onLog?.Invoke($"AniWorld M3U8 quality: {quality} -> {streamUrl.Substring(0, Math.Min(80, streamUrl.Length))}...");
+                }
+
+                if (qualitiesList.Count == 0)
+                {
+                    _onLog?.Invoke($"AniWorld M3U8: no #EXT-X-STREAM-INF found, fallback to auto");
+                    qualitiesList.Add(("auto", autoUrl));
+                }
+
+                _onLog?.Invoke($"AniWorld M3U8 parse result: {qualitiesList.Count} qualities found");
                 _hybridCache.Set(memKey, qualitiesList, CacheHelper.CacheTime(5, init: _init));
                 return qualitiesList;
             }
             catch (Exception ex)
             {
-                _onLog?.Invoke($"AniWorld Dailymotion metadata error: {ex.Message}");
+                _onLog?.Invoke($"AniWorld Dailymotion error: {ex.Message}");
                 return null;
             }
         }
