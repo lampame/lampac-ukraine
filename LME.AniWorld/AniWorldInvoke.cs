@@ -297,7 +297,12 @@ namespace LME.AniWorld
                 _onLog?.Invoke($"AniWorld M3U8 fetch: {m3u8Url}");
                 string content = await HttpHelper.GetAsync(_httpHydra, _init, m3u8Url, headers, _proxyManager);
                 if (string.IsNullOrEmpty(content))
+                {
+                    _onLog?.Invoke($"AniWorld M3U8 error: empty response");
                     return null;
+                }
+
+                _onLog?.Invoke($"AniWorld M3U8 fetched: {content.Length} chars, starts with: {content.Substring(0, Math.Min(100, content.Length))}");
 
                 var qualities = new List<(string quality, string url)>();
                 var lines = content.Split('\n');
@@ -319,10 +324,12 @@ namespace LME.AniWorld
                             }
 
                             qualities.Add((quality, streamUrl));
+                            _onLog?.Invoke($"AniWorld M3U8 quality: {quality} -> {streamUrl.Substring(0, Math.Min(80, streamUrl.Length))}...");
                         }
                     }
                 }
 
+                _onLog?.Invoke($"AniWorld M3U8 parse result: {qualities.Count} qualities found");
                 return qualities.Count > 0 ? qualities : null;
             }
             catch (Exception ex)
