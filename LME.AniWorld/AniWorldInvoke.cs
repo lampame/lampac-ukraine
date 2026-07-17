@@ -370,17 +370,21 @@ namespace LME.AniWorld
 
             try
             {
+                // API повертає iframe.mediadelivery.net, але player. повертає HTML з bunny-stream-video
+                // Замінюємо iframe. на player. для отримання правильної HTML структури
+                string fetchUrl = embedUrl.Replace("iframe.mediadelivery.net", "player.mediadelivery.net");
+
                 var headers = new List<HeadersModel>()
                 {
                     new HeadersModel("User-Agent", "Mozilla/5.0"),
                     new HeadersModel("Referer", _init.host)
                 };
 
-                _onLog?.Invoke($"AniWorld Mediadelivery embed: {embedUrl}");
-                string html = await HttpHelper.GetAsync(_httpHydra, _init, embedUrl, headers, _proxyManager);
+                _onLog?.Invoke($"AniWorld Mediadelivery embed: {fetchUrl}");
+                string html = await HttpHelper.GetAsync(_httpHydra, _init, fetchUrl, headers, _proxyManager);
                 if (string.IsNullOrEmpty(html))
                 {
-                    _onLog?.Invoke($"AniWorld Mediadelivery error: empty response");
+                    _onLog?.Invoke($"AniWorld Mediadelivery error: empty response from {fetchUrl}");
                     return null;
                 }
 
@@ -391,24 +395,30 @@ namespace LME.AniWorld
                 doc.LoadHtml(html);
 
                 var bunnyVideo = doc.DocumentNode.SelectSingleNode("//bunny-stream-video[@content-src]");
-                if (bunnyVideo == null)
+                if (bunnyVideo != null)
                 {
-                    // Спробуємо альтернативний селектор
-                    var anyVideo = doc.DocumentNode.SelectSingleNode("//bunny-stream-video");
-                    var videoTag = doc.DocumentNode.SelectSingleNode("//video[@src]");
-                    _onLog?.Invoke($"AniWorld Mediadelivery parse: bunnyVideo={bunnyVideo != null}, anyBunnyVideo={anyVideo != null}, videoTag={videoTag != null}");
-                    return null;
+                    string contentSrc = bunnyVideo.GetAttributeValue("content-src", "");
+                    if (!string.IsNullOrEmpty(contentSrc))
+                    {
+                        _onLog?.Invoke($"AniWorld Mediadelivery stream: {contentSrc}");
+                        return contentSrc;
+                    }
                 }
 
-                string contentSrc = bunnyVideo.GetAttributeValue("content-src", "");
-                if (string.IsNullOrEmpty(contentSrc))
+                // Fallback: парсинг <video><source src="..."> (для iframe. піддомену)
+                var videoSource = doc.DocumentNode.SelectSingleNode("//video/source[@src]");
+                if (videoSource != null)
                 {
-                    _onLog?.Invoke($"AniWorld Mediadelivery error: content-src empty");
-                    return null;
+                    string src = videoSource.GetAttributeValue("src", "");
+                    if (!string.IsNullOrEmpty(src))
+                    {
+                        _onLog?.Invoke($"AniWorld Mediadelivery stream (video source): {src}");
+                        return src;
+                    }
                 }
 
-                _onLog?.Invoke($"AniWorld Mediadelivery stream: {contentSrc}");
-                return contentSrc;
+                _onLog?.Invoke($"AniWorld Mediadelivery parse: nothing found in HTML");
+                return null;
             }
             catch (Exception ex)
             {
