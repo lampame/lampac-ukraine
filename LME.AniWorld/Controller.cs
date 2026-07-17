@@ -151,15 +151,7 @@ namespace LME.AniWorld.Controllers
                 if (episodeSource == null)
                     return OnError("lme_aniworld", refresh_proxy: true);
 
-                if (episodeSource.Type == StreamType.Dailymotion)
-                {
-                    // Dailymotion — відкладений резолв через call
-                    string callUrl = $"{host}/lite/lme_aniworld/play?episode_id={firstEpisode.Id}&title={HttpUtility.UrlEncode(title ?? original_title)}";
-                    var movie_tpl = new MovieTpl(title, original_title);
-                    movie_tpl.Append(title ?? original_title, accsArgs(callUrl), "call");
-                    return rjson ? Content(movie_tpl.ToJson(), "application/json; charset=utf-8") : Content(movie_tpl.ToHtml(), "text/html; charset=utf-8");
-                }
-                else if (episodeSource.Type == StreamType.Mediadelivery)
+                if (episodeSource.Type == StreamType.Mediadelivery)
                 {
                     // Mediadelivery — прямий URL
                     string streamUrl = await invoke.GetMediadeliveryStreamUrl(episodeSource.Url);
@@ -195,35 +187,9 @@ namespace LME.AniWorld.Controllers
 
             if (episodeSource.Type == StreamType.Dailymotion)
             {
-                OnLog($"AniWorld Play Dailymotion: source={episodeSource.Url}");
-
-                // Dailymotion — отримуємо якості
-                string videoId = AniWorldInvoke.ExtractDailymotionVideoId(episodeSource.Url);
-                if (string.IsNullOrEmpty(videoId))
-                {
-                    OnLog($"AniWorld Play: cannot extract videoId from {episodeSource.Url}");
-                    return OnError("lme_aniworld", refresh_proxy: true);
-                }
-
-                OnLog($"AniWorld Play Dailymotion: videoId={videoId}");
-                var qualities = await invoke.GetDailymotionQualities(videoId);
-                if (qualities == null || qualities.Count == 0)
-                    return OnError("lme_aniworld", refresh_proxy: true);
-
-                var streamQuality = new StreamQualityTpl();
-                foreach (var (quality, url) in qualities)
-                {
-                    // Dailymotion завжди через стрімпроксі (force_streamproxy: true)
-                    string proxiedUrl = HostStreamProxy(init, url, force_streamproxy: true);
-                    streamQuality.Append(proxiedUrl, quality);
-                }
-
-                if (!streamQuality.Any())
-                    return OnError("lme_aniworld", refresh_proxy: true);
-
-                var first = streamQuality.Firts();
-                string json = VideoTpl.ToJson("play", first.link, title ?? string.Empty, streamquality: streamQuality);
-                return UpdateService.Validate(Content(json, "application/json; charset=utf-8"));
+                // Dailymotion не підтримується — нові релізи на Mediadelivery
+                OnLog($"AniWorld Play: Dailymotion stream not supported, url={episodeSource.Url}");
+                return OnError("lme_aniworld", refresh_proxy: true);
             }
             else if (episodeSource.Type == StreamType.Mediadelivery)
             {
