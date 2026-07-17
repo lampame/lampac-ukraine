@@ -255,9 +255,9 @@ namespace LME.AniWorld
                     new HeadersModel("Referer", "https://www.dailymotion.com/")
                 };
 
-                string proxyStr = _proxyManager.Get();
-                _onLog?.Invoke($"AniWorld Dailymotion metadata with proxy: {proxyStr ?? "none"}");
-                string json = await Http.Get(metadataUrl, headers: mdHeaders, proxy: proxyStr);
+                var dmProxy = _proxyManager.Get();
+                _onLog?.Invoke($"AniWorld Dailymotion metadata with proxy: {(dmProxy != null ? dmProxy.Address?.ToString() ?? "yes" : "none")}");
+                string json = await Http.Get(metadataUrl, headers: mdHeaders, proxy: dmProxy);
                 if (string.IsNullOrEmpty(json))
                 {
                     _onLog?.Invoke($"AniWorld Dailymotion metadata: empty response");
@@ -344,7 +344,9 @@ namespace LME.AniWorld
                 }
 
                 _onLog?.Invoke($"AniWorld M3U8 fetch: {m3u8Url}");
-                string content = await Http.Get(m3u8Url, headers: headers, proxy: _proxyManager.Get());
+                var m3u8Proxy = _proxyManager.Get();
+                _onLog?.Invoke($"AniWorld M3U8 proxy: {(m3u8Proxy != null ? m3u8Proxy.Address?.ToString() ?? "yes" : "none")}");
+                string content = await Http.Get(m3u8Url, headers: headers, proxy: m3u8Proxy);
                 if (string.IsNullOrEmpty(content))
                 {
                     _onLog?.Invoke($"AniWorld M3U8 error: empty response");
