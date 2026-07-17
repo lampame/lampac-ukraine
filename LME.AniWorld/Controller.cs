@@ -53,6 +53,8 @@ namespace LME.AniWorld.Controllers
                 catalogId = parsedId;
             }
 
+            OnLog($"AniWorld Index: href={href}, catalogId={catalogId}, serial={serial}, s={s}");
+
             if (catalogId == 0)
             {
                 var searchResults = await invoke.Search(original_title, year, serial);
