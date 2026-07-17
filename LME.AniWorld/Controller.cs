@@ -79,43 +79,28 @@ namespace LME.AniWorld.Controllers
 
             if (serial == 1)
             {
-                var seasons = AniWorldInvoke.GroupEpisodesBySeason(detail.Episodes);
-                if (seasons.Count == 0)
-                    return OnError("lme_aniworld", refresh_proxy: true);
+                // API повертає плоский список епізодів без сезонів
+                // Сортуємо по номеру епізоду (від меньшого до більшого)
+                var sortedEpisodes = detail.Episodes
+                    .OrderBy(e => e.Episode)
+                    .ToList();
 
-                if (s == -1)
+                var episode_tpl = new EpisodeTpl();
+                foreach (var ep in sortedEpisodes)
                 {
-                    var season_tpl = new SeasonTpl(seasons.Count);
-                    foreach (var season in seasons)
-                    {
-                        string link = $"{host}/lite/lme_aniworld?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={season.SeasonNumber}&href={catalogId}";
-                        season_tpl.Append($"Сезон {season.SeasonNumber}", link, season.SeasonNumber.ToString());
-                    }
-
-                    return rjson ? Content(season_tpl.ToJson(), "application/json; charset=utf-8") : Content(season_tpl.ToHtml(), "text/html; charset=utf-8");
+                    string episodeName = $"Епізод {ep.Episode}";
+                    string callUrl = $"{host}/lite/lme_aniworld/play?episode_id={ep.Id}&title={HttpUtility.UrlEncode(title ?? original_title)}";
+                    episode_tpl.Append(episodeName, title ?? original_title, "1", ep.Episode.ToString(), accsArgs(callUrl), "call");
                 }
-                else
-                {
-                    var selectedSeason = seasons.FirstOrDefault(x => x.SeasonNumber == s);
-                    if (selectedSeason == null)
-                        return OnError("lme_aniworld", refresh_proxy: true);
 
-                    var episode_tpl = new EpisodeTpl();
-                    foreach (var ep in selectedSeason.Episodes)
-                    {
-                        string episodeName = !string.IsNullOrEmpty(ep.Title) ? ep.Title : $"Епізод {ep.EpisodeNumber}";
-                        string callUrl = $"{host}/lite/lme_aniworld/play?episode_id={ep.Id}&title={HttpUtility.UrlEncode(title ?? original_title)}";
-                        episode_tpl.Append(episodeName, title ?? original_title, s.ToString(), ep.EpisodeNumber.ToString(), accsArgs(callUrl), "call");
-                    }
+                if (rjson)
+                    return Content(episode_tpl.ToJson(), "application/json; charset=utf-8");
 
-                    if (rjson)
-                        return Content(episode_tpl.ToJson(), "application/json; charset=utf-8");
-
-                    return Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
-                }
+                return Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
             }
             else
             {
+                // Фільм — отримуємо перший епізод
                 var firstEpisode = detail.Episodes.FirstOrDefault();
                 if (firstEpisode == null)
                     return OnError("lme_aniworld", refresh_proxy: true);
@@ -126,6 +111,7 @@ namespace LME.AniWorld.Controllers
 
                 if (episodeSource.Type == StreamType.Dailymotion)
                 {
+                    // Dailymotion — відкладений резолв через call
                     string callUrl = $"{host}/lite/lme_aniworld/play?episode_id={firstEpisode.Id}&title={HttpUtility.UrlEncode(title ?? original_title)}";
                     var movie_tpl = new MovieTpl(title, original_title);
                     movie_tpl.Append(title ?? original_title, accsArgs(callUrl), "call");
@@ -133,6 +119,7 @@ namespace LME.AniWorld.Controllers
                 }
                 else if (episodeSource.Type == StreamType.Mediadelivery)
                 {
+                    // Mediadelivery — прямий URL
                     string streamUrl = await invoke.GetMediadeliveryStreamUrl(episodeSource.Url);
                     if (string.IsNullOrEmpty(streamUrl))
                         return OnError("lme_aniworld", refresh_proxy: true);
@@ -166,6 +153,7 @@ namespace LME.AniWorld.Controllers
 
             if (episodeSource.Type == StreamType.Dailymotion)
             {
+                // Dailymotion — отримуємо якості
                 string videoId = AniWorldInvoke.ExtractDailymotionVideoId(episodeSource.Url);
                 if (string.IsNullOrEmpty(videoId))
                     return OnError("lme_aniworld", refresh_proxy: true);
@@ -190,6 +178,7 @@ namespace LME.AniWorld.Controllers
             }
             else if (episodeSource.Type == StreamType.Mediadelivery)
             {
+                // Mediadelivery — прямий URL
                 string streamUrl = await invoke.GetMediadeliveryStreamUrl(episodeSource.Url);
                 if (string.IsNullOrEmpty(streamUrl))
                     return OnError("lme_aniworld", refresh_proxy: true);

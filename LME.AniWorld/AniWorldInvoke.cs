@@ -398,23 +398,5 @@ namespace LME.AniWorld
             }
         }
 
-        /// <summary>
-        /// Групування епізодів по сезонах
-        /// </summary>
-        public static List<SeasonGroup> GroupEpisodesBySeason(List<EpisodeDetail> episodes)
-        {
-            if (episodes == null || episodes.Count == 0)
-                return new List<SeasonGroup>();
-
-            return episodes
-                .GroupBy(e => e.SeasonNumber)
-                .Select(g => new SeasonGroup
-                {
-                    SeasonNumber = g.Key,
-                    Episodes = g.OrderBy(e => e.EpisodeNumber).ToList()
-                })
-                .OrderBy(s => s.SeasonNumber)
-                .ToList();
-        }
     }
 }

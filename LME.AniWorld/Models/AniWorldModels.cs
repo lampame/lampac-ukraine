@@ -78,14 +78,8 @@ namespace LME.AniWorld.Models
         [JsonPropertyName("id")]
         public int Id { get; set; }
         
-        [JsonPropertyName("season_number")]
-        public int SeasonNumber { get; set; }
-        
-        [JsonPropertyName("episode_number")]
-        public int EpisodeNumber { get; set; }
-        
-        [JsonPropertyName("title")]
-        public string Title { get; set; }
+        [JsonPropertyName("episode")]
+        public int Episode { get; set; }
         
         // SourceUrl НЕ отримується тут — отримується при кліку через GetEpisodeSource
     }
@@ -114,12 +108,6 @@ namespace LME.AniWorld.Models
     {
         public string Url { get; set; }
         public StreamType Type { get; set; }
-    }
-    
-    public class SeasonGroup
-    {
-        public int SeasonNumber { get; set; }
-        public List<EpisodeDetail> Episodes { get; set; } = new();
     }
     
     // === Search Result for SimilarTpl ===
