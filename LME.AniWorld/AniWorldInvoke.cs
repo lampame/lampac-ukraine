@@ -257,12 +257,14 @@ namespace LME.AniWorld
                 client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0");
                 client.DefaultRequestHeaders.Add("Referer", "https://www.dailymotion.com/");
 
-                // Крок 0: "Прогрів" — запит до CDN домену для отримання сесійної куки dmvk
-                // www.dailymotion.com не встановлює dmvk, тільки cdndirector.dailymotion.com
+                // Крок 0: "Прогрів" — запит до CDN для отримання сесійної куки dmvk
+                // Використовуємо неіснуючий шлях для отримання 403 з кукою
                 _onLog?.Invoke($"AniWorld Dailymotion: warming up session on CDN...");
-                var warmupResponse = await client.GetAsync("https://cdndirector.dailymotion.com/");
+                var warmupResponse = await client.GetAsync("https://cdndirector.dailymotion.com/cdn/manifest/test");
                 _onLog?.Invoke($"AniWorld Dailymotion warmup: HTTP {(int)warmupResponse.StatusCode}");
-                var dmvkCookie = cookieContainer.GetCookies(new Uri("https://www.dailymotion.com"))["dmvk"];
+
+                // Перевіряємо dmvk куку (має бути встановлена навіть на 403)
+                var dmvkCookie = cookieContainer.GetCookies(new Uri("https://cdndirector.dailymotion.com"))["dmvk"];
                 _onLog?.Invoke($"AniWorld Dailymotion warmup: dmvk={(dmvkCookie != null ? dmvkCookie.Value.Substring(0, Math.Min(10, dmvkCookie.Value.Length)) + "..." : "none")}");
 
                 // Крок 1: Завантажуємо metadata API
