@@ -249,20 +249,39 @@ namespace LME.AniWorld
                 _onLog?.Invoke($"AniWorld Dailymotion metadata: {metadataUrl}");
                 string json = await HttpHelper.GetAsync(_httpHydra, _init, metadataUrl, headers, _proxyManager);
                 if (string.IsNullOrEmpty(json))
+                {
+                    _onLog?.Invoke($"AniWorld Dailymotion metadata: empty response");
                     return null;
+                }
+
+                _onLog?.Invoke($"AniWorld Dailymotion metadata: got json length={json.Length}");
 
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
 
+                // Логуємо stream_formats якщо є
+                if (root.TryGetProperty("stream_formats", out var streamFormats))
+                {
+                    _onLog?.Invoke($"AniWorld Dailymotion stream_formats: {streamFormats}");
+                }
+
                 if (!root.TryGetProperty("qualities", out var qualities))
+                {
+                    _onLog?.Invoke($"AniWorld Dailymotion: no qualities in response");
                     return null;
+                }
 
                 if (!qualities.TryGetProperty("auto", out var autoArray) || autoArray.GetArrayLength() == 0)
+                {
+                    _onLog?.Invoke($"AniWorld Dailymotion: no auto quality in response");
                     return null;
+                }
 
                 string autoUrl = autoArray[0].GetProperty("url").GetString();
                 if (string.IsNullOrEmpty(autoUrl))
                     return null;
+
+                _onLog?.Invoke($"AniWorld Dailymotion auto url: {autoUrl}");
 
                 // Парсинг M3U8 для отримання всіх якостей
                 var qualitiesList = await ParseM3U8Qualities(autoUrl);
