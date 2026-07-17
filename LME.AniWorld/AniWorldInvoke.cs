@@ -289,13 +289,15 @@ namespace LME.AniWorld
         {
             try
             {
+                _onLog?.Invoke($"AniWorld M3U8 fetch: {m3u8Url}");
+
+                // Використовуємо Http.Get напряму (не через hydra) для збереження сесії
                 var headers = new List<HeadersModel>()
                 {
-                    new HeadersModel("User-Agent", "Mozilla/5.0")
+                    new HeadersModel("User-Agent", "Mozilla/5.0"),
+                    new HeadersModel("Referer", "https://www.dailymotion.com/")
                 };
-
-                _onLog?.Invoke($"AniWorld M3U8 fetch: {m3u8Url}");
-                string content = await HttpHelper.GetAsync(_httpHydra, _init, m3u8Url, headers, _proxyManager);
+                string content = await Http.Get(m3u8Url, headers: headers, proxy: _proxyManager.Get());
                 if (string.IsNullOrEmpty(content))
                 {
                     _onLog?.Invoke($"AniWorld M3U8 error: empty response");
