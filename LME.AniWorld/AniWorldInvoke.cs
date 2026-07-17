@@ -309,6 +309,14 @@ namespace LME.AniWorld
                 _onLog?.Invoke($"AniWorld M3U8 fetch: {autoUrl}");
 
                 var m3u8Response = await client.GetAsync(autoUrl);
+                
+                // CDN встановлює dmvk куку тільки при першому 403. Робимо retry з кукою.
+                if (m3u8Response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    _onLog?.Invoke($"AniWorld M3U8 HTTP 403, retrying with dmvk cookie...");
+                    m3u8Response = await client.GetAsync(autoUrl);
+                }
+
                 if (!m3u8Response.IsSuccessStatusCode)
                 {
                     _onLog?.Invoke($"AniWorld M3U8 error: HTTP {(int)m3u8Response.StatusCode}");
