@@ -63,24 +63,22 @@ namespace LME.AniWorld
                 if (response?.Results == null || response.Results.Count == 0)
                     return null;
 
-                // Фільтрація за original_title, release_year та media_type
+                // Фільтрація за original_title та media_type
+                // Рік НЕ фільтрується — багатосезонні тайтли мають різні роки для кожного сезону
                 var results = new List<AniWorldSearchResult>();
                 foreach (var item in response.Results)
                 {
-                    // Перевірка original_title (точне або часткове збігання)
+                    // Перевірка original_title (точне збігання)
                     bool titleMatch = !string.IsNullOrEmpty(item.OriginalTitle) &&
                                      item.OriginalTitle.Equals(original_title, StringComparison.OrdinalIgnoreCase);
 
-                    // Перевірка release_year
-                    bool yearMatch = year == 0 || item.ReleaseYear == year;
-
-                    // Для серіалів: ONA або TVA
-                    // Для фільмів: MOVIE або будь-який інший тип (якщо серіал не вказаний)
+                    // Для серіалів: ONA, TVA або SPECIAL
+                    // Для фільмів: MOVIE або будь-який інший тип
                     bool typeMatch = serial == 1
-                        ? (item.MediaType == "ONA" || item.MediaType == "TVA")
+                        ? (item.MediaType == "ONA" || item.MediaType == "TVA" || item.MediaType == "SPECIAL")
                         : true;
 
-                    if (titleMatch && yearMatch && typeMatch)
+                    if (titleMatch && typeMatch)
                     {
                         results.Add(new AniWorldSearchResult
                         {
