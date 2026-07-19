@@ -136,8 +136,14 @@ namespace LME.NMoonAnime.Controllers
 
             if (selectedSeason == -1)
             {
-                var seasonTpl = new SeasonTpl(orderedSeasons.Count);
-                foreach (var season in orderedSeasons)
+                // Дедуплікація за номером сезону
+                var uniqueSeasons = orderedSeasons
+                    .GroupBy(s => s.SeasonNumber)
+                    .Select(g => g.First())
+                    .ToList();
+
+                var seasonTpl = new SeasonTpl(uniqueSeasons.Count);
+                foreach (var season in uniqueSeasons)
                 {
                     int seasonNumber = season.SeasonNumber <= 0 ? 1 : season.SeasonNumber;
                     string seasonName = $"Сезон {seasonNumber}";

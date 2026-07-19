@@ -121,34 +121,50 @@ namespace LME.NMoonAnime
                     if (mappings == null || mappings.Count == 0)
                         return null;
 
-                    // Збираємо MAL ID з номерами сезонів з haglund
-                    var malWithSeason = mappings
-                        .Where(m => m.MyAnimeList.HasValue)
-                        .Select(m => new { MalId = m.MyAnimeList.Value.ToString(), Season = m.TheMovieDbSeason ?? 0 })
-                        .GroupBy(x => x.MalId)
-                        .Select(g => g.First())
+                    // Групуємо MAL ID за themoviedb-season
+                    // Пропускаємо themoviedb-season == 0 (окремі ONA/OVA)
+                    var bySeason = mappings
+                        .Where(m => m.MyAnimeList.HasValue && (m.TheMovieDbSeason ?? 0) > 0)
+                        .GroupBy(m => m.TheMovieDbSeason.Value)
+                        .OrderBy(g => g.Key)
                         .ToList();
 
-                    if (malWithSeason.Count == 0)
+                    if (bySeason.Count == 0)
                         return null;
 
-                    _onLog($"NMoonAnime: haglund знайдено {malWithSeason.Count} MAL ID для {imdbId}");
+                    _onLog($"NMoonAnime: haglund знайдено {bySeason.Count} сезонів для {imdbId}");
 
-                    // Шукаємо за кожним MAL ID з передачею номеру сезону
-                    var allSeasons = new List<NMoonAnimeSeasonRef>();
-                    foreach (var item in malWithSeason)
+                    var result = new List<NMoonAnimeSeasonRef>();
+
+                    foreach (var seasonGroup in bySeason)
                     {
-                        var seasons = await SearchByMalId(item.MalId, item.Season);
-                        if (seasons != null && seasons.Count > 0)
-                            allSeasons.AddRange(seasons);
-                    }
+                        int seasonNumber = seasonGroup.Key;
+                        var moonanimeUrls = new List<string>();
 
-                    var result = allSeasons
-                        .Where(s => s != null && !string.IsNullOrWhiteSpace(s.Url))
-                        .GroupBy(s => s.Url, StringComparer.OrdinalIgnoreCase)
-                        .Select(g => g.First())
-                        .OrderBy(s => s.SeasonNumber)
-                        .ToList();
+                        foreach (var mapping in seasonGroup)
+                        {
+                            string malId = mapping.MyAnimeList.Value.ToString();
+                            var titleResponse = await FetchMoonanimeTitleByMalId(malId);
+                            if (titleResponse != null && titleResponse.Id > 0)
+                            {
+                                string url = $"{_init.host.TrimEnd('/')}/title/{titleResponse.Id}";
+                                if (!moonanimeUrls.Contains(url))
+                                    moonanimeUrls.Add(url);
+                            }
+                        }
+
+                        if (moonanimeUrls.Count == 0)
+                            continue;
+
+                        result.Add(new NMoonAnimeSeasonRef
+                        {
+                            SeasonNumber = seasonNumber,
+                            Url = moonanimeUrls[0],
+                            AdditionalUrls = moonanimeUrls.Count > 1
+                                ? moonanimeUrls.Skip(1).ToList()
+                                : new List<string>()
+                        });
+                    }
 
                     if (result.Count > 0)
                     {
@@ -170,35 +186,50 @@ namespace LME.NMoonAnime
         /// Отримання moonanime ID за MAL ID.
         /// v6.0 API повертає flat дані з полем id (moonanime internal ID).
         /// </summary>
-        private async Task<List<NMoonAnimeSeasonRef>> SearchByMalId(string malId, int seasonHint = 0)
+        private async Task<MoonAnimeTitleResponse> FetchMoonanimeTitleByMalId(string malId)
         {
-            string memKey = $"NMoonAnime:mal:{malId}";
-            if (_hybridCache.TryGetValue(memKey, out List<NMoonAnimeSeasonRef> cached))
-            {
-                // Оновлюємо номер сезону якщо є хінт
-                if (seasonHint > 0)
-                {
-                    foreach (var s in cached)
-                        if (s.SeasonNumber <= 0) s.SeasonNumber = seasonHint;
-                }
+            string memKey = $"NMoonAnime:mal-title:{malId}";
+            if (_hybridCache.TryGetValue(memKey, out MoonAnimeTitleResponse cached))
                 return cached;
-            }
 
             try
             {
                 string url = $"{_init.host.TrimEnd('/')}/api/6.0/title/by/mal_id/{malId}?api_key={ApiToken}";
-                _onLog($"NMoonAnime: запит по MAL ID {url}");
-
                 string json = await HttpHelper.GetAsync(_httpHydra, _init, url, DefaultHeaders(), _proxyManager);
                 if (string.IsNullOrWhiteSpace(json))
                     return null;
 
                 var response = JsonSerializer.Deserialize<MoonAnimeTitleResponse>(json, _jsonOptions);
+                if (response != null && response.Id > 0)
+                    _hybridCache.Set(memKey, response, CacheHelper.CacheTime(10, init: _init));
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _onLog($"NMoonAnime: помилка отримання title за MAL ID {malId} - {ex.Message}");
+                return null;
+            }
+        }
+
+        private async Task<List<NMoonAnimeSeasonRef>> SearchByMalId(string malId, int seasonHint = 0)
+        {
+            string memKey = $"NMoonAnime:mal:{malId}";
+            if (_hybridCache.TryGetValue(memKey, out List<NMoonAnimeSeasonRef> cached))
+            {
+                if (seasonHint > 0)
+                    foreach (var s in cached)
+                        if (s.SeasonNumber <= 0) s.SeasonNumber = seasonHint;
+                return cached;
+            }
+
+            try
+            {
+                var response = await FetchMoonanimeTitleByMalId(malId);
                 if (response == null || response.Id <= 0)
                     return null;
 
                 int seasonNumber = seasonHint > 0 ? seasonHint : 1;
-
                 var seasons = new List<NMoonAnimeSeasonRef>
                 {
                     new NMoonAnimeSeasonRef
@@ -323,7 +354,7 @@ namespace LME.NMoonAnime
             if (season == null || string.IsNullOrWhiteSpace(season.Url))
                 return null;
 
-            string memKey = $"NMoonAnime:season:{season.Url}";
+            string memKey = $"NMoonAnime:season:{season.Url}:{string.Join(",", season.AdditionalUrls ?? new List<string>())}";
             return await SingleFlightCache.GetOrCreateAsync<NMoonAnimeSeasonContent>(memKey, _hybridCache, async token =>
             {
                 if (_hybridCache.TryGetValue(memKey, out NMoonAnimeSeasonContent hit))
@@ -331,12 +362,33 @@ namespace LME.NMoonAnime
 
                 try
                 {
+                    // Завантажуємо основний URL
                     _onLog($"NMoonAnime: завантаження сезону {season.Url}");
                     string html = await HttpHelper.GetAsync(_httpHydra, _init, season.Url, DefaultHeaders(), _proxyManager);
                     if (string.IsNullOrWhiteSpace(html))
                         return null;
 
                     var content = ParseSeasonPage(html, season.SeasonNumber, season.Url);
+
+                    // Завантажуємо додаткові URL (частини сезону) та об'єднуємо епізоди
+                    var allUrls = season.AdditionalUrls ?? new List<string>();
+                    foreach (var additionalUrl in allUrls)
+                    {
+                        if (string.IsNullOrWhiteSpace(additionalUrl))
+                            continue;
+
+                        _onLog($"NMoonAnime: завантаження додаткової частини {additionalUrl}");
+                        string additionalHtml = await HttpHelper.GetAsync(_httpHydra, _init, additionalUrl, DefaultHeaders(), _proxyManager);
+                        if (string.IsNullOrWhiteSpace(additionalHtml))
+                            continue;
+
+                        var additionalContent = ParseSeasonPage(additionalHtml, season.SeasonNumber, additionalUrl);
+                        if (additionalContent != null && additionalContent.Voices.Count > 0)
+                        {
+                            MergeSeasonContent(content, additionalContent);
+                        }
+                    }
+
                     if (content != null)
                         _hybridCache.Set(memKey, content, CacheHelper.CacheTime(20, init: _init));
 
@@ -348,6 +400,48 @@ namespace LME.NMoonAnime
                     return null;
                 }
             }, default, negativeCacheSeconds: 60);
+        }
+
+        /// <summary>
+        /// Об'єднує контент двох частин сезону.
+        /// Додає епізоди з additional в voices основного контенту.
+        /// </summary>
+        private void MergeSeasonContent(NMoonAnimeSeasonContent primary, NMoonAnimeSeasonContent additional)
+        {
+            if (primary == null || additional == null)
+                return;
+
+            foreach (var additionalVoice in additional.Voices)
+            {
+                if (additionalVoice == null)
+                    continue;
+
+                // Шукаємо відповідну озвучку в основному контенті
+                var existingVoice = primary.Voices
+                    .FirstOrDefault(v => v.Name == additionalVoice.Name);
+
+                if (existingVoice != null && existingVoice.Episodes != null && additionalVoice.Episodes != null)
+                {
+                    // Об'єднуємо епізоди, уникаючи дублікатів за номером
+                    var existingNumbers = new HashSet<int>(existingVoice.Episodes.Select(e => e.Number));
+                    foreach (var ep in additionalVoice.Episodes)
+                    {
+                        if (!existingNumbers.Contains(ep.Number))
+                        {
+                            existingVoice.Episodes.Add(ep);
+                            existingNumbers.Add(ep.Number);
+                        }
+                    }
+                    existingVoice.Episodes = existingVoice.Episodes
+                        .OrderBy(e => e.Number <= 0 ? int.MaxValue : e.Number)
+                        .ToList();
+                }
+                else if (existingVoice == null)
+                {
+                    // Нова озвучка — додаємо
+                    primary.Voices.Add(additionalVoice);
+                }
+            }
         }
 
         private NMoonAnimeSeasonContent ParseSeasonPage(string html, int seasonNumber, string seasonUrl)

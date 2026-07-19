@@ -130,6 +130,9 @@ namespace LME.NMoonAnime.Models
 
         [JsonPropertyName("url")]
         public string Url { get; set; }
+
+        /// <summary>Додаткові URL для сезонів що складаються з частин</summary>
+        public List<string> AdditionalUrls { get; set; } = new();
     }
 
     public class NMoonAnimeSeasonContent
