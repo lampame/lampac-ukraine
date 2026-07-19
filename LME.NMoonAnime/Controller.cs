@@ -25,7 +25,7 @@ namespace LME.NMoonAnime.Controllers
 
         [HttpGet]
         [Route("lite/lme_nmoonanime")]
-        public async Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string mal_id, string t, int s = -1, bool rjson = false, bool checksearch = false)
+        public async Task<ActionResult> Index(long id, string imdb_id, long kinopoisk_id, string title, string original_title, string original_language, int year, string source, int serial, string account_email, string mal_id, string t, int s = -1, bool rjson = false, bool checksearch = false, bool nocache = false)
         {
             await UpdateService.ConnectAsync(host);
 
@@ -36,7 +36,7 @@ namespace LME.NMoonAnime.Controllers
             if (string.IsNullOrEmpty(init.token))
                 return OnError("lme_nmoonanime", gbcache: false, refresh_proxy: false);
 
-            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
+            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager, httpHydra, nocache);
 
             if (checksearch)
             {
@@ -86,7 +86,7 @@ namespace LME.NMoonAnime.Controllers
             if (string.IsNullOrWhiteSpace(file))
                 return OnError("lme_nmoonanime", refresh_proxy: true);
 
-            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
+            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager, httpHydra, nocache);
             var streams = invoke.ParseStreams(file);
             if (streams == null || streams.Count == 0)
                 return OnError("lme_nmoonanime", refresh_proxy: true);

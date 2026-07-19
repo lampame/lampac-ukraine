@@ -27,6 +27,7 @@ namespace LME.NMoonAnime
         private readonly Action<string> _onLog;
         private readonly ProxyManager _proxyManager;
         private readonly HttpHydra _httpHydra;
+        private readonly bool _nocache;
         private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -37,13 +38,14 @@ namespace LME.NMoonAnime
 
         private string ApiToken => string.IsNullOrWhiteSpace(_init.token) ? ModInit.DefaultApiKey : _init.token;
 
-        public NMoonAnimeInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, HttpHydra httpHydra = null)
+        public NMoonAnimeInvoke(OnlinesSettings init, IHybridCache hybridCache, Action<string> onLog, ProxyManager proxyManager, HttpHydra httpHydra = null, bool nocache = false)
         {
             _init = init;
             _hybridCache = hybridCache;
             _onLog = onLog;
             _proxyManager = proxyManager;
             _httpHydra = httpHydra;
+            _nocache = nocache;
         }
 
         #region Пошук тайтлів (новий пайплайн)
@@ -54,7 +56,7 @@ namespace LME.NMoonAnime
         public async Task<List<NMoonAnimeSeasonRef>> Search(string imdbId, string malId, string title, string originalTitle, int year, int serial)
         {
             string memKey = $"NMoonAnime:search:{imdbId}:{malId}:{title}:{originalTitle}:{year}:{serial}";
-            if (_hybridCache.TryGetValue(memKey, out List<NMoonAnimeSeasonRef> cached))
+            if (!_nocache && _hybridCache.TryGetValue(memKey, out List<NMoonAnimeSeasonRef> cached))
                 return cached;
 
             try
@@ -191,7 +193,7 @@ namespace LME.NMoonAnime
         private async Task<MoonAnimeTitleResponse> FetchMoonanimeTitleByMalId(string malId)
         {
             string memKey = $"NMoonAnime:mal-title:{malId}";
-            if (_hybridCache.TryGetValue(memKey, out MoonAnimeTitleResponse cached))
+            if (!_nocache && _hybridCache.TryGetValue(memKey, out MoonAnimeTitleResponse cached))
                 return cached;
 
             try
@@ -217,7 +219,7 @@ namespace LME.NMoonAnime
         private async Task<List<NMoonAnimeSeasonRef>> SearchByMalId(string malId, int seasonHint = 0)
         {
             string memKey = $"NMoonAnime:mal:{malId}";
-            if (_hybridCache.TryGetValue(memKey, out List<NMoonAnimeSeasonRef> cached))
+            if (!_nocache && _hybridCache.TryGetValue(memKey, out List<NMoonAnimeSeasonRef> cached))
             {
                 if (seasonHint > 0)
                     foreach (var s in cached)
@@ -292,7 +294,7 @@ namespace LME.NMoonAnime
         private async Task<List<MoonAnimeSearchResult>> SearchByTitleSingle(string query, int limit)
         {
             string memKey = $"NMoonAnime:search-title:{query}:{limit}";
-            if (_hybridCache.TryGetValue(memKey, out List<MoonAnimeSearchResult> cached))
+            if (!_nocache && _hybridCache.TryGetValue(memKey, out List<MoonAnimeSearchResult> cached))
                 return cached;
 
             try
@@ -359,7 +361,7 @@ namespace LME.NMoonAnime
             string memKey = $"NMoonAnime:season:{season.Url}:{string.Join(",", season.AdditionalUrls ?? new List<string>())}";
             return await SingleFlightCache.GetOrCreateAsync<NMoonAnimeSeasonContent>(memKey, _hybridCache, async token =>
             {
-                if (_hybridCache.TryGetValue(memKey, out NMoonAnimeSeasonContent hit))
+                if (!_nocache && _hybridCache.TryGetValue(memKey, out NMoonAnimeSeasonContent hit))
                     return hit;
 
                 try
