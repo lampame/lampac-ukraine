@@ -441,19 +441,26 @@ namespace LME.NMoonAnime
 
                 if (existingVoice != null && existingVoice.Episodes != null && additionalVoice.Episodes != null)
                 {
-                    // Об'єднуємо епізоди, уникаючи дублікатів за номером
-                    var existingNumbers = new HashSet<int>(existingVoice.Episodes.Select(e => e.Number));
+                    // Зміщуємо номери епізодів додаткової частини
+                    int maxExistingNumber = existingVoice.Episodes.Any()
+                        ? existingVoice.Episodes.Max(e => e.Number)
+                        : 0;
+                    int offset = maxExistingNumber;
+
                     int addedCount = 0;
                     foreach (var ep in additionalVoice.Episodes)
                     {
-                        if (!existingNumbers.Contains(ep.Number))
+                        // Зміщуємо номер епізоду щоб уникнути дублікатів з першою частиною
+                        int newNumber = ep.Number + offset;
+                        existingVoice.Episodes.Add(new NMoonAnimeEpisodeContent
                         {
-                            existingVoice.Episodes.Add(ep);
-                            existingNumbers.Add(ep.Number);
-                            addedCount++;
-                        }
+                            Name = ep.Name,
+                            Number = newNumber,
+                            File = ep.File
+                        });
+                        addedCount++;
                     }
-                    _onLog($"NMoonAnime: voice '{additionalVoice.Name}' — додано {addedCount} епізодів (було {existingVoice.Episodes.Count - addedCount}, стало {existingVoice.Episodes.Count})");
+                    _onLog($"NMoonAnime: voice '{additionalVoice.Name}' — додано {addedCount} епізодів (offset {offset}, було {existingVoice.Episodes.Count - addedCount}, стало {existingVoice.Episodes.Count})");
                     existingVoice.Episodes = existingVoice.Episodes
                         .OrderBy(e => e.Number <= 0 ? int.MaxValue : e.Number)
                         .ToList();
