@@ -121,10 +121,10 @@ namespace LME.NMoonAnime
                     if (mappings == null || mappings.Count == 0)
                         return null;
 
-                    // Збираємо всі MAL ID
+                    // Збираємо всі MAL ID (myanimelist — int)
                     var malIds = mappings
-                        .Where(m => !string.IsNullOrWhiteSpace(m.MyAnimeList))
-                        .Select(m => m.MyAnimeList.Trim())
+                        .Where(m => m.MyAnimeList.HasValue)
+                        .Select(m => m.MyAnimeList.Value.ToString())
                         .Distinct()
                         .ToList();
 
@@ -260,7 +260,7 @@ namespace LME.NMoonAnime
 
             try
             {
-                string encoded = HttpUtility.UrlEncode(query);
+                string encoded = Uri.EscapeDataString(query);
                 string url = $"{_init.host.TrimEnd('/')}/api/7.0/anime/search?api_key={ApiToken}&q={encoded}&limit={limit}";
                 _onLog($"NMoonAnime: прямий пошук {url}");
 
@@ -268,7 +268,9 @@ namespace LME.NMoonAnime
                 if (string.IsNullOrWhiteSpace(json))
                     return null;
 
-                var results = JsonSerializer.Deserialize<List<MoonAnimeSearchResult>>(json, _jsonOptions);
+                // API повертає {"data": [...], "count": N}
+                var response = JsonSerializer.Deserialize<MoonAnimeSearchResponse>(json, _jsonOptions);
+                var results = response?.Data;
                 if (results != null && results.Count > 0)
                     _hybridCache.Set(memKey, results, CacheHelper.CacheTime(10, init: _init));
 
@@ -305,7 +307,7 @@ namespace LME.NMoonAnime
 
             // Тип контенту
             string type = item.Type?.ToLowerInvariant() ?? "";
-            bool isMovie = type == "movie" || type == "фільм";
+            bool isMovie = type == "movie";
             bool isSeries = type == "tv" || type == "ova" || type == "ona" || type == "special";
 
             if (wantSeries)
@@ -319,21 +321,21 @@ namespace LME.NMoonAnime
                 else if (isSeries) score -= 10;
             }
 
-            // Рік
-            if (year > 1900 && item.Year > 1900)
+            // Рік (може бути null)
+            if (year > 1900 && item.Year.HasValue && item.Year.Value > 1900)
             {
-                int diff = Math.Abs(item.Year - year);
+                int diff = Math.Abs(item.Year.Value - year);
                 if (diff == 0) score += 20;
                 else if (diff == 1) score += 10;
                 else if (diff <= 2) score += 5;
                 else score -= 5;
             }
 
-            // Статус
+            // Статус: "Finished Airing", "Currently Airing", "Not yet aired"
             string status = item.Status?.ToLowerInvariant() ?? "";
-            if (status == "released" || status == "ongoing")
+            if (status.Contains("finished") || status.Contains("released") || status.Contains("ongoing") || status.Contains("currently"))
                 score += 5;
-            else if (status == "upcoming")
+            else if (status.Contains("not yet") || status.Contains("upcoming"))
                 score -= 5;
 
             return score;
