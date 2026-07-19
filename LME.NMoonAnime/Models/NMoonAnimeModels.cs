@@ -63,7 +63,7 @@ namespace LME.NMoonAnime.Models
         public string Title { get; set; }
 
         [JsonPropertyName("seasons")]
-        public List<MoonAnimeSeasonRef> Seasons { get; set; } = new();
+        public List<NMoonAnimeSeasonRef> Seasons { get; set; } = new();
     }
 
     // ==================== Існуючі моделі ====================

@@ -162,7 +162,7 @@ namespace LME.NMoonAnime
                     _onLog($"NMoonAnime: помилка haglund - {ex.Message}");
                     return null;
                 }
-            }, token, negativeCacheSeconds: 60);
+            }, default, negativeCacheSeconds: 60);
         }
 
         /// <summary>
@@ -372,7 +372,7 @@ namespace LME.NMoonAnime
                     _onLog($"NMoonAnime: помилка читання сезону - {ex.Message}");
                     return null;
                 }
-            }, token, negativeCacheSeconds: 60);
+            }, default, negativeCacheSeconds: 60);
         }
 
         private NMoonAnimeSeasonContent ParseSeasonPage(string html, int seasonNumber, string seasonUrl)

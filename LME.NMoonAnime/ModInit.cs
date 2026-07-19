@@ -44,7 +44,7 @@ namespace LME.NMoonAnime
             {
                 displayname = "New MoonAnime",
                 displayindex = 0,
-                proxy = new Shared.Models.Base.ProxySettings()
+                proxy = new ProxySettings()
                 {
                     useAuth = true,
                     username = "",
