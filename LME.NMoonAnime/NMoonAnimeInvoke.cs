@@ -167,6 +167,7 @@ namespace LME.NMoonAnime
 
         /// <summary>
         /// Отримання moonanime ID за MAL ID.
+        /// v6.0 API повертає flat дані з полем id (moonanime internal ID).
         /// </summary>
         private async Task<List<NMoonAnimeSeasonRef>> SearchByMalId(string malId)
         {
@@ -184,28 +185,21 @@ namespace LME.NMoonAnime
                     return null;
 
                 var response = JsonSerializer.Deserialize<MoonAnimeTitleResponse>(json, _jsonOptions);
-                if (response?.Seasons == null || response.Seasons.Count == 0)
+                if (response == null || response.Id <= 0)
                     return null;
 
-                var seasons = response.Seasons
-                    .Where(s => s != null && !string.IsNullOrWhiteSpace(s.Url))
-                    .Select(s => new NMoonAnimeSeasonRef
-                    {
-                        SeasonNumber = s.SeasonNumber <= 0 ? 1 : s.SeasonNumber,
-                        Url = s.Url.Trim()
-                    })
-                    .GroupBy(s => s.Url, StringComparer.OrdinalIgnoreCase)
-                    .Select(g => g.First())
-                    .OrderBy(s => s.SeasonNumber)
-                    .ToList();
-
-                if (seasons.Count > 0)
+                // v6.0 повертає moonanime internal ID в полі id
+                var seasons = new List<NMoonAnimeSeasonRef>
                 {
-                    _hybridCache.Set(memKey, seasons, CacheHelper.CacheTime(10, init: _init));
-                    return seasons;
-                }
+                    new NMoonAnimeSeasonRef
+                    {
+                        SeasonNumber = 1,
+                        Url = $"{_init.host.TrimEnd('/')}/title/{response.Id}"
+                    }
+                };
 
-                return null;
+                _hybridCache.Set(memKey, seasons, CacheHelper.CacheTime(10, init: _init));
+                return seasons;
             }
             catch (Exception ex)
             {
@@ -237,12 +231,12 @@ namespace LME.NMoonAnime
                 if (filtered == null || filtered.Count == 0)
                     continue;
 
-                // Конвертуємо в SeasonRef
+                // Конвертуємо в SeasonRef — використовуємо TitlePageId (moonanime internal ID)
                 var seasons = filtered
                     .Select(r => new NMoonAnimeSeasonRef
                     {
                         SeasonNumber = 1,
-                        Url = $"{_init.host.TrimEnd('/')}/title/{r.Id}"
+                        Url = $"{_init.host.TrimEnd('/')}/title/{r.TitlePageId}"
                     })
                     .ToList();
 

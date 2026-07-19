@@ -47,6 +47,10 @@ namespace LME.NMoonAnime.Models
         [JsonPropertyName("id")]
         public int Id { get; set; }
 
+        /// <summary>Moonanime internal ID (використовується для URL /title/{post_id})</summary>
+        [JsonPropertyName("post_id")]
+        public int PostId { get; set; }
+
         [JsonPropertyName("display_title")]
         public string DisplayTitle { get; set; }
 
@@ -72,6 +76,10 @@ namespace LME.NMoonAnime.Models
         /// <summary>Отримати назву для пошуку</summary>
         [JsonIgnore]
         public string BestTitle => Titles?.En ?? Titles?.Ja ?? Titles?.Ua ?? DisplayTitle;
+
+        /// <summary>Moonanime title ID для URL (/title/{TitlePageId})</summary>
+        [JsonIgnore]
+        public int TitlePageId => PostId > 0 ? PostId : Id;
     }
 
     /// <summary>
@@ -93,6 +101,7 @@ namespace LME.NMoonAnime.Models
 
     /// <summary>
     /// Відповідь moonanime API v6.0 (/api/6.0/title/by/mal_id/{id})
+    /// Повертає flat дані тайтлу з полем id (moonanime internal ID)
     /// </summary>
     public class MoonAnimeTitleResponse
     {
@@ -102,8 +111,11 @@ namespace LME.NMoonAnime.Models
         [JsonPropertyName("title")]
         public string Title { get; set; }
 
-        [JsonPropertyName("seasons")]
-        public List<NMoonAnimeSeasonRef> Seasons { get; set; } = new();
+        [JsonPropertyName("episode")]
+        public int? Episodes { get; set; }
+
+        [JsonPropertyName("type")]
+        public string Type { get; set; }
     }
 
     // ==================== Існуючі моделі ====================
