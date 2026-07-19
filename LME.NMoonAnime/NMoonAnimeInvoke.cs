@@ -121,23 +121,24 @@ namespace LME.NMoonAnime
                     if (mappings == null || mappings.Count == 0)
                         return null;
 
-                    // Збираємо всі MAL ID (myanimelist — int)
-                    var malIds = mappings
+                    // Збираємо MAL ID з номерами сезонів з haglund
+                    var malWithSeason = mappings
                         .Where(m => m.MyAnimeList.HasValue)
-                        .Select(m => m.MyAnimeList.Value.ToString())
-                        .Distinct()
+                        .Select(m => new { MalId = m.MyAnimeList.Value.ToString(), Season = m.TheMovieDbSeason ?? 0 })
+                        .GroupBy(x => x.MalId)
+                        .Select(g => g.First())
                         .ToList();
 
-                    if (malIds.Count == 0)
+                    if (malWithSeason.Count == 0)
                         return null;
 
-                    _onLog($"NMoonAnime: haglund знайдено {malIds.Count} MAL ID для {imdbId}");
+                    _onLog($"NMoonAnime: haglund знайдено {malWithSeason.Count} MAL ID для {imdbId}");
 
-                    // Шукаємо за кожним MAL ID
+                    // Шукаємо за кожним MAL ID з передачею номеру сезону
                     var allSeasons = new List<NMoonAnimeSeasonRef>();
-                    foreach (var mid in malIds)
+                    foreach (var item in malWithSeason)
                     {
-                        var seasons = await SearchByMalId(mid);
+                        var seasons = await SearchByMalId(item.MalId, item.Season);
                         if (seasons != null && seasons.Count > 0)
                             allSeasons.AddRange(seasons);
                     }
@@ -169,11 +170,19 @@ namespace LME.NMoonAnime
         /// Отримання moonanime ID за MAL ID.
         /// v6.0 API повертає flat дані з полем id (moonanime internal ID).
         /// </summary>
-        private async Task<List<NMoonAnimeSeasonRef>> SearchByMalId(string malId)
+        private async Task<List<NMoonAnimeSeasonRef>> SearchByMalId(string malId, int seasonHint = 0)
         {
             string memKey = $"NMoonAnime:mal:{malId}";
             if (_hybridCache.TryGetValue(memKey, out List<NMoonAnimeSeasonRef> cached))
+            {
+                // Оновлюємо номер сезону якщо є хінт
+                if (seasonHint > 0)
+                {
+                    foreach (var s in cached)
+                        if (s.SeasonNumber <= 0) s.SeasonNumber = seasonHint;
+                }
                 return cached;
+            }
 
             try
             {
@@ -188,12 +197,13 @@ namespace LME.NMoonAnime
                 if (response == null || response.Id <= 0)
                     return null;
 
-                // v6.0 повертає moonanime internal ID в полі id
+                int seasonNumber = seasonHint > 0 ? seasonHint : 1;
+
                 var seasons = new List<NMoonAnimeSeasonRef>
                 {
                     new NMoonAnimeSeasonRef
                     {
-                        SeasonNumber = 1,
+                        SeasonNumber = seasonNumber,
                         Url = $"{_init.host.TrimEnd('/')}/title/{response.Id}"
                     }
                 };
@@ -278,7 +288,8 @@ namespace LME.NMoonAnime
         }
 
         /// <summary>
-        /// Фільтрація результатів пошуку за типом контенту та роком.
+        /// Фільтрація результатів пошуку за типом контенту.
+        /// Повертає всі результати що відповідають запиту (серіал/фільм).
         /// </summary>
         private List<MoonAnimeSearchResult> FilterSearchResults(List<MoonAnimeSearchResult> results, int year, int serial)
         {
@@ -287,52 +298,20 @@ namespace LME.NMoonAnime
 
             bool wantSeries = serial == 1;
 
-            foreach (var r in results)
-                r.MatchScore = CalcMatchScore(r, year, wantSeries);
-
             return results
-                .OrderByDescending(r => r.MatchScore)
+                .Where(r =>
+                {
+                    string type = r.Type?.ToLowerInvariant() ?? "";
+                    bool isMovie = type == "movie";
+                    bool isSeries = type == "tv" || type == "ova" || type == "ona" || type == "special";
+
+                    if (wantSeries)
+                        return isSeries;
+                    else
+                        return isMovie;
+                })
+                .OrderByDescending(r => r.Year ?? 0)
                 .ToList();
-        }
-
-        private static int CalcMatchScore(MoonAnimeSearchResult item, int year, bool wantSeries)
-        {
-            int score = 0;
-
-            // Тип контенту
-            string type = item.Type?.ToLowerInvariant() ?? "";
-            bool isMovie = type == "movie";
-            bool isSeries = type == "tv" || type == "ova" || type == "ona" || type == "special";
-
-            if (wantSeries)
-            {
-                if (isSeries) score += 30;
-                else if (isMovie) score -= 20;
-            }
-            else
-            {
-                if (isMovie) score += 30;
-                else if (isSeries) score -= 10;
-            }
-
-            // Рік (може бути null)
-            if (year > 1900 && item.Year.HasValue && item.Year.Value > 1900)
-            {
-                int diff = Math.Abs(item.Year.Value - year);
-                if (diff == 0) score += 20;
-                else if (diff == 1) score += 10;
-                else if (diff <= 2) score += 5;
-                else score -= 5;
-            }
-
-            // Статус: "Finished Airing", "Currently Airing", "Not yet aired"
-            string status = item.Status?.ToLowerInvariant() ?? "";
-            if (status.Contains("finished") || status.Contains("released") || status.Contains("ongoing") || status.Contains("currently"))
-                score += 5;
-            else if (status.Contains("not yet") || status.Contains("upcoming"))
-                score -= 5;
-
-            return score;
         }
 
         #endregion
