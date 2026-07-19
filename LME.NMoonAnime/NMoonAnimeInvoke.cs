@@ -133,6 +133,8 @@ namespace LME.NMoonAnime
                         return null;
 
                     _onLog($"NMoonAnime: haglund знайдено {bySeason.Count} сезонів для {imdbId}");
+                    foreach (var g in bySeason)
+                        _onLog($"NMoonAnime: сезон {g.Key} → {g.Count()} MAL ID: [{string.Join(", ", g.Select(m => m.MyAnimeList.ToString()))}]");
 
                     var result = new List<NMoonAnimeSeasonRef>();
 
@@ -363,7 +365,7 @@ namespace LME.NMoonAnime
                 try
                 {
                     // Завантажуємо основний URL
-                    _onLog($"NMoonAnime: завантаження сезону {season.Url}");
+                    _onLog($"NMoonAnime: завантаження сезону {season.Url} (додаткових URL: {season.AdditionalUrls?.Count ?? 0})");
                     string html = await HttpHelper.GetAsync(_httpHydra, _init, season.Url, DefaultHeaders(), _proxyManager);
                     if (string.IsNullOrWhiteSpace(html))
                         return null;
@@ -411,6 +413,8 @@ namespace LME.NMoonAnime
             if (primary == null || additional == null)
                 return;
 
+            _onLog($"NMoonAnime: об'єднання сезону — основний: {primary.Voices.Count} voices, додатковий: {additional.Voices.Count} voices");
+
             foreach (var additionalVoice in additional.Voices)
             {
                 if (additionalVoice == null)
@@ -424,14 +428,17 @@ namespace LME.NMoonAnime
                 {
                     // Об'єднуємо епізоди, уникаючи дублікатів за номером
                     var existingNumbers = new HashSet<int>(existingVoice.Episodes.Select(e => e.Number));
+                    int addedCount = 0;
                     foreach (var ep in additionalVoice.Episodes)
                     {
                         if (!existingNumbers.Contains(ep.Number))
                         {
                             existingVoice.Episodes.Add(ep);
                             existingNumbers.Add(ep.Number);
+                            addedCount++;
                         }
                     }
+                    _onLog($"NMoonAnime: voice '{additionalVoice.Name}' — додано {addedCount} епізодів (було {existingVoice.Episodes.Count - addedCount}, стало {existingVoice.Episodes.Count})");
                     existingVoice.Episodes = existingVoice.Episodes
                         .OrderBy(e => e.Number <= 0 ? int.MaxValue : e.Number)
                         .ToList();
