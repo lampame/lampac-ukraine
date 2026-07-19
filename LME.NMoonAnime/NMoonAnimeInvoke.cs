@@ -430,6 +430,14 @@ namespace LME.NMoonAnime
 
             _onLog($"NMoonAnime: об'єднання сезону — основний: {primary.Voices.Count} voices, додатковий: {additional.Voices.Count} voices");
 
+            // Глобальний офсет — максимальний номер епізоду серед всіх voices
+            int globalOffset = primary.Voices
+                .Where(v => v.Episodes != null && v.Episodes.Count > 0)
+                .SelectMany(v => v.Episodes)
+                .Where(e => e.Number > 0)
+                .DefaultIfEmpty()
+                .Max(e => e?.Number ?? 0);
+
             foreach (var additionalVoice in additional.Voices)
             {
                 if (additionalVoice == null)
@@ -441,11 +449,10 @@ namespace LME.NMoonAnime
 
                 if (existingVoice != null && existingVoice.Episodes != null && additionalVoice.Episodes != null)
                 {
-                    // Зміщуємо номери епізодів додаткової частини
-                    int maxExistingNumber = existingVoice.Episodes.Any()
+                    // Зміщуємо номери епізодів відносно цієї озвучки
+                    int voiceOffset = existingVoice.Episodes.Any()
                         ? existingVoice.Episodes.Max(e => e.Number)
-                        : 0;
-                    int offset = maxExistingNumber;
+                        : globalOffset;
 
                     int addedCount = 0;
                     foreach (var ep in additionalVoice.Episodes)
@@ -465,10 +472,27 @@ namespace LME.NMoonAnime
                         .OrderBy(e => e.Number <= 0 ? int.MaxValue : e.Number)
                         .ToList();
                 }
-                else if (existingVoice == null)
+                else if (existingVoice == null && additionalVoice.Episodes != null)
                 {
-                    // Нова озвучка — додаємо
-                    primary.Voices.Add(additionalVoice);
+                    // Нова озвучка — зміщуємо номери за глобальним офсетом
+                    var offsetEpisodes = additionalVoice.Episodes.Select(ep =>
+                    {
+                        int newNumber = ep.Number + globalOffset;
+                        return new NMoonAnimeEpisodeContent
+                        {
+                            Name = ep.Name,
+                            Number = newNumber,
+                            File = ep.File
+                        };
+                    }).ToList();
+
+                    primary.Voices.Add(new NMoonAnimeVoiceContent
+                    {
+                        Name = additionalVoice.Name,
+                        Episodes = offsetEpisodes
+                    });
+
+                    _onLog($"NMoonAnime: voice '{additionalVoice.Name}' — додано як нову ({offsetEpisodes.Count} епізодів, offset {globalOffset})");
                 }
             }
         }
