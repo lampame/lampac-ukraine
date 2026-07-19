@@ -20,6 +20,9 @@ namespace LME.NMoonAnime.Models
         [JsonPropertyName("themoviedb-season")]
         public int? TheMovieDbSeason { get; set; }
 
+        [JsonPropertyName("thetvdb-season")]
+        public int? TheTvdbSeason { get; set; }
+
         [JsonPropertyName("imdb")]
         public string Imdb { get; set; }
 

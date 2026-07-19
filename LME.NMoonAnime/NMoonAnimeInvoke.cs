@@ -123,11 +123,25 @@ namespace LME.NMoonAnime
                     if (mappings == null || mappings.Count == 0)
                         return null;
 
-                    // Групуємо MAL ID за themoviedb-season
-                    // Пропускаємо themoviedb-season == 0 (окремі ONA/OVA)
-                    var bySeason = mappings
-                        .Where(m => m.MyAnimeList.HasValue && (m.TheMovieDbSeason ?? 0) > 0)
-                        .GroupBy(m => m.TheMovieDbSeason.Value)
+                    // Групуємо MAL ID за thetvdb-season (він правильно визначає сезони)
+                    // Пропускаємо season == 0 (окремі ONA/OVA)
+                    // Fallback на themoviedb-season якщо thetvdb-season відсутній
+                    var mappingsWithSeason = mappings
+                        .Where(m => m.MyAnimeList.HasValue)
+                        .Select(m => new
+                        {
+                            MalId = m.MyAnimeList.Value.ToString(),
+                            Season = m.TheTvdbSeason.HasValue && m.TheTvdbSeason.Value > 0
+                                ? m.TheTvdbSeason.Value
+                                : (m.TheMovieDbSeason.HasValue && m.TheMovieDbSeason.Value > 0
+                                    ? m.TheMovieDbSeason.Value
+                                    : 0)
+                        })
+                        .ToList();
+
+                    var bySeason = mappingsWithSeason
+                        .Where(m => m.Season > 0)
+                        .GroupBy(m => m.Season)
                         .OrderBy(g => g.Key)
                         .ToList();
 
@@ -136,7 +150,7 @@ namespace LME.NMoonAnime
 
                     _onLog($"NMoonAnime: haglund знайдено {bySeason.Count} сезонів для {imdbId}");
                     foreach (var g in bySeason)
-                        _onLog($"NMoonAnime: сезон {g.Key} → {g.Count()} MAL ID: [{string.Join(", ", g.Select(m => m.MyAnimeList.ToString()))}]");
+                        _onLog($"NMoonAnime: сезон {g.Key} → {g.Count()} MAL ID: [{string.Join(", ", g.Select(m => m.MalId))}]");
 
                     var result = new List<NMoonAnimeSeasonRef>();
 
@@ -147,8 +161,7 @@ namespace LME.NMoonAnime
 
                         foreach (var mapping in seasonGroup)
                         {
-                            string malId = mapping.MyAnimeList.Value.ToString();
-                            var titleResponse = await FetchMoonanimeTitleByMalId(malId);
+                            var titleResponse = await FetchMoonanimeTitleByMalId(mapping.MalId);
                             if (titleResponse != null && titleResponse.Id > 0)
                             {
                                 string url = $"{_init.host.TrimEnd('/')}/title/{titleResponse.Id}";
