@@ -86,7 +86,7 @@ namespace LME.NMoonAnime.Controllers
             if (string.IsNullOrWhiteSpace(file))
                 return OnError("lme_nmoonanime", refresh_proxy: true);
 
-            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager, httpHydra, nocache);
+            var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
             var streams = invoke.ParseStreams(file);
             if (streams == null || streams.Count == 0)
                 return OnError("lme_nmoonanime", refresh_proxy: true);
