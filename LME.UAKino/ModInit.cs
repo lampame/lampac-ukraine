@@ -24,7 +24,7 @@ namespace LME.UAKino
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 1.0;
+        public static double Version => 1.2;
 
         public static OnlinesSettings UAKino;
         public static bool ApnHostProvided;
@@ -44,7 +44,7 @@ namespace LME.UAKino
             {
                 displayname = "UAKino",
                 displayindex = 0,
-                proxy = new Shared.Models.Base.ProxySettings()
+                proxy = new global::Shared.Models.Base.ProxySettings()
                 {
                     useAuth = true,
                     username = "",

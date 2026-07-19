@@ -19,7 +19,7 @@ namespace LME.UafilmME
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 1.1;
+        public static double Version => 1.3;
 
         public static OnlinesSettings UafilmME;
         public static bool ApnHostProvided;
@@ -39,7 +39,7 @@ namespace LME.UafilmME
             {
                 displayname = "UAFilmME",
                 displayindex = 0,
-                proxy = new Shared.Models.Base.ProxySettings()
+                proxy = new global::Shared.Models.Base.ProxySettings()
                 {
                     useAuth = true,
                     username = "",

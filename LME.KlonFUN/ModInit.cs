@@ -20,7 +20,7 @@ namespace LME.KlonFUN
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 2.1;
+        public static double Version => 2.3;
 
         public static ModuleConfig KlonFUN;
         public static bool ApnHostProvided;
@@ -49,7 +49,7 @@ namespace LME.KlonFUN
             {
                 displayname = "KlonFUN",
                 displayindex = 0,
-                proxy = new Shared.Models.Base.ProxySettings()
+                proxy = new global::Shared.Models.Base.ProxySettings()
                 {
                     useAuth = true,
                     username = "",

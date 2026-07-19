@@ -289,7 +289,19 @@ namespace LME.UafilmME.Controllers
 
         private static void OnLog(string message)
         {
-            System.Console.WriteLine(message);
+            if (string.IsNullOrEmpty(message)) return;
+            // ponytail: filter out success logs, keep only errors/cancellations
+            if (message.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("fail", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("exception", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("помилка", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("cancel", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("reject", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("limit", StringComparison.OrdinalIgnoreCase))
+            {
+                System.Console.WriteLine(message);
+            }
         }
     }
 }

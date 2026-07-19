@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using LME.UAKino.Models;
@@ -32,6 +33,12 @@ namespace LME.UAKino.Controllers
             if (!init.enable)
                 return Forbid();
 
+            // ponytail: hard 20s timeout + propagate client disconnect
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(
+                HttpContext.RequestAborted,
+                new CancellationTokenSource(TimeSpan.FromSeconds(20)).Token);
+            var ct = cts.Token;
+
             var invoke = new UAKinoInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
 
             if (checksearch)
@@ -39,9 +46,16 @@ namespace LME.UAKino.Controllers
                 if (!StreamHelper.IsCheckOnlineSearchEnabled())
                     return OnError("lme_uakino", refresh_proxy: true);
 
-                var searchResults = await invoke.Search(title, original_title, year, imdb_id);
-                if (searchResults != null && searchResults.Count > 0)
-                    return Content("data-json=", "text/plain; charset=utf-8");
+                try
+                {
+                    var searchResults = await invoke.Search(title, original_title, year, imdb_id, ct);
+                    if (searchResults != null && searchResults.Count > 0)
+                        return Content("data-json=", "text/plain; charset=utf-8");
+                }
+                catch (OperationCanceledException)
+                {
+                    return OnError("lme_uakino", refresh_proxy: false);
+                }
 
                 return OnError("lme_uakino", refresh_proxy: true);
             }
@@ -49,10 +63,12 @@ namespace LME.UAKino.Controllers
             string newsId = null;
             string itemUrl = href;
 
+            try
+            {
             if (string.IsNullOrEmpty(itemUrl))
             {
                 // === ПЕРШИЙ ЗАПИТ: пошук ===
-                var searchResults = await invoke.Search(title, original_title, year, imdb_id);
+                var searchResults = await invoke.Search(title, original_title, year, imdb_id, ct);
                 if (searchResults == null || searchResults.Count == 0)
                     return OnError("lme_uakino", refresh_proxy: true);
 
@@ -97,7 +113,7 @@ namespace LME.UAKino.Controllers
             if (string.IsNullOrEmpty(newsId))
                 return OnError("lme_uakino", refresh_proxy: true);
 
-            var voices = await invoke.GetPlaylist(newsId);
+            var voices = await invoke.GetPlaylist(newsId, ct);
             if (voices == null || voices.Count == 0)
             {
                 // Fallback: playlist API повернув ERR_NOT_DATA — пробуємо зі сторінки
@@ -142,6 +158,11 @@ namespace LME.UAKino.Controllers
             else
             {
                 return await HandleMovie(init, voices, title, original_title, rjson, invoke);
+            }
+            }
+            catch (OperationCanceledException)
+            {
+                return OnError("lme_uakino", refresh_proxy: false);
             }
         }
 
@@ -249,7 +270,19 @@ namespace LME.UAKino.Controllers
 
         private static void OnLog(string message)
         {
-            System.Console.WriteLine(message);
+            if (string.IsNullOrEmpty(message)) return;
+            // ponytail: filter out success logs, keep only errors/cancellations
+            if (message.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("fail", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("exception", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("помилка", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("cancel", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("reject", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("limit", StringComparison.OrdinalIgnoreCase))
+            {
+                System.Console.WriteLine(message);
+            }
         }
     }
 }

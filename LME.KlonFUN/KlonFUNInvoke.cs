@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using HtmlAgilityPack;
@@ -13,6 +14,7 @@ using Shared;
 using Shared.Engine;
 using Shared.Models;
 using Shared.Models.Online.Settings;
+using LME.Shared.Engine;
 
 namespace LME.KlonFUN
 {
@@ -42,60 +44,67 @@ namespace LME.KlonFUN
         public async Task<List<SearchResult>> Search(string imdbId, string title, string originalTitle)
         {
             string cacheKey = $"KlonFUN:search:{imdbId}:{title}:{originalTitle}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(cacheKey, out List<SearchResult> cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<List<SearchResult>>(cacheKey, _hybridCache, async token =>
             {
-                if (!string.IsNullOrWhiteSpace(imdbId))
+                if (_hybridCache.TryGetValue(cacheKey, out List<SearchResult> hit))
+                    return hit;
+
+                try
                 {
-                    var byImdb = await SearchByQuery(imdbId);
-                    if (byImdb?.Count > 0)
+                    if (!string.IsNullOrWhiteSpace(imdbId))
                     {
-                        _hybridCache.Set(cacheKey, byImdb, CacheHelper.CacheTime(20, init: _init));
-                        _onLog?.Invoke($"KlonFUN: знайдено {byImdb.Count} результат(ів) за imdb_id={imdbId}");
-                        return byImdb;
+                        var byImdb = await SearchByQuery(imdbId);
+                        if (byImdb?.Count > 0)
+                        {
+                            _hybridCache.Set(cacheKey, byImdb, CacheHelper.CacheTime(20, init: _init));
+                            _onLog?.Invoke($"KlonFUN: знайдено {byImdb.Count} результат(ів) за imdb_id={imdbId}");
+                            return byImdb;
+                        }
                     }
-                }
 
-                var queries = new[] { originalTitle, title }
-                    .Where(q => !string.IsNullOrWhiteSpace(q))
-                    .Select(q => q.Trim())
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                    var queries = new[] { originalTitle, title }
+                        .Where(q => !string.IsNullOrWhiteSpace(q))
+                        .Select(q => q.Trim())
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
 
-                var results = new List<SearchResult>();
-                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var results = new List<SearchResult>();
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                foreach (var query in queries)
-                {
-                    var partial = await SearchByQuery(query);
-                    if (partial == null)
-                        continue;
-
-                    foreach (var item in partial)
+                    foreach (var query in queries)
                     {
-                        if (!string.IsNullOrWhiteSpace(item?.Url) && seen.Add(item.Url))
-                            results.Add(item);
+                        var partial = await SearchByQuery(query);
+                        if (partial == null)
+                            continue;
+
+                        foreach (var item in partial)
+                        {
+                            if (!string.IsNullOrWhiteSpace(item?.Url) && seen.Add(item.Url))
+                                results.Add(item);
+                        }
+
+                        if (results.Count > 0)
+                            break;
                     }
 
                     if (results.Count > 0)
-                        break;
+                    {
+                        _hybridCache.Set(cacheKey, results, CacheHelper.CacheTime(20, init: _init));
+                        _onLog?.Invoke($"KlonFUN: знайдено {results.Count} результат(ів) за назвою");
+                        return results;
+                    }
                 }
-
-                if (results.Count > 0)
+                catch (Exception ex)
                 {
-                    _hybridCache.Set(cacheKey, results, CacheHelper.CacheTime(20, init: _init));
-                    _onLog?.Invoke($"KlonFUN: знайдено {results.Count} результат(ів) за назвою");
-                    return results;
+                    _onLog?.Invoke($"KlonFUN: помилка пошуку - {ex.Message}");
                 }
-            }
-            catch (Exception ex)
-            {
-                _onLog?.Invoke($"KlonFUN: помилка пошуку - {ex.Message}");
-            }
 
-            return null;
+                return null;
+            });
         }
 
         public async Task<KlonItem> GetItem(string url)
@@ -104,11 +113,14 @@ namespace LME.KlonFUN
                 return null;
 
             string cacheKey = $"KlonFUN:item:{url}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(cacheKey, out KlonItem cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<KlonItem>(cacheKey, _hybridCache, async token =>
             {
+                if (_hybridCache.TryGetValue(cacheKey, out KlonItem hit))
+                    return hit;
                 var headers = DefaultHeaders();
                 string html = await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
                 if (string.IsNullOrWhiteSpace(html))
@@ -166,12 +178,7 @@ namespace LME.KlonFUN
 
                 _hybridCache.Set(cacheKey, result, CacheHelper.CacheTime(40, init: _init));
                 return result;
-            }
-            catch (Exception ex)
-            {
-                _onLog?.Invoke($"KlonFUN: помилка читання сторінки {url} - {ex.Message}");
-                return null;
-            }
+            });
         }
 
         public async Task<List<MovieStream>> GetMovieStreams(string playerUrl)
@@ -180,66 +187,73 @@ namespace LME.KlonFUN
                 return null;
 
             string cacheKey = $"KlonFUN:movie:{playerUrl}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(cacheKey, out List<MovieStream> cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<List<MovieStream>>(cacheKey, _hybridCache, async token =>
             {
+                if (_hybridCache.TryGetValue(cacheKey, out List<MovieStream> hit))
+                    return hit;
+
+                try
+                {
                     string playerHtml = await GetPlayerHtml(ApnExtensions.WithAshdiMultivoice(playerUrl));
-                if (string.IsNullOrWhiteSpace(playerHtml))
-                    return null;
+                    if (string.IsNullOrWhiteSpace(playerHtml))
+                        return null;
 
-                var streams = new List<MovieStream>();
+                    var streams = new List<MovieStream>();
 
-                JsonArray playerArray = ParsePlayerArray(playerHtml);
-                if (playerArray != null)
-                {
-                    int index = 1;
-                    foreach (JsonObject item in playerArray.OfType<JsonObject>())
+                    JsonArray playerArray = ParsePlayerArray(playerHtml);
+                    if (playerArray != null)
                     {
-                        string link = (string?)item["file"];
-                        if (string.IsNullOrWhiteSpace(link))
-                            continue;
-
-                        string voiceTitle = QualityHelper.BuildDisplayTitle((string?)item["title"], link, index);
-
-                        streams.Add(new MovieStream
+                        int index = 1;
+                        foreach (JsonObject item in playerArray.OfType<JsonObject>())
                         {
-                            Title = voiceTitle,
-                            Link = link,
-                            Subtitles = ApnHelper.ParseSubtitles((string?)item["subtitle"])
-                        });
+                            string link = (string?)item["file"];
+                            if (string.IsNullOrWhiteSpace(link))
+                                continue;
 
-                        index++;
+                            string voiceTitle = QualityHelper.BuildDisplayTitle((string?)item["title"], link, index);
+
+                            streams.Add(new MovieStream
+                            {
+                                Title = voiceTitle,
+                                Link = link,
+                                Subtitles = ApnHelper.ParseSubtitles((string?)item["subtitle"])
+                            });
+
+                            index++;
+                        }
+                    }
+
+                    if (streams.Count == 0)
+                    {
+                        var directMatch = DirectFileRegex.Match(playerHtml);
+                        if (directMatch.Success)
+                        {
+                            streams.Add(new MovieStream
+                            {
+                                Title = QualityHelper.BuildDisplayTitle("Основне джерело", directMatch.Groups["url"].Value, 1),
+                                Link = directMatch.Groups["url"].Value,
+                                Subtitles = ApnHelper.ParseSubtitles(ApnHelper.ExtractPlayerSubtitle(playerHtml))
+                            });
+                        }
+                    }
+
+                    if (streams.Count > 0)
+                    {
+                        _hybridCache.Set(cacheKey, streams, CacheHelper.CacheTime(30, init: _init));
+                        return streams;
                     }
                 }
-
-                if (streams.Count == 0)
+                catch (Exception ex)
                 {
-                    var directMatch = DirectFileRegex.Match(playerHtml);
-                    if (directMatch.Success)
-                    {
-                        streams.Add(new MovieStream
-                        {
-                            Title = QualityHelper.BuildDisplayTitle("Основне джерело", directMatch.Groups["url"].Value, 1),
-                            Link = directMatch.Groups["url"].Value,
-                            Subtitles = ApnHelper.ParseSubtitles(ApnHelper.ExtractPlayerSubtitle(playerHtml))
-                        });
-                    }
+                    _onLog?.Invoke($"KlonFUN: помилка парсингу плеєра фільму - {ex.Message}");
                 }
 
-                if (streams.Count > 0)
-                {
-                    _hybridCache.Set(cacheKey, streams, CacheHelper.CacheTime(30, init: _init));
-                    return streams;
-                }
-            }
-            catch (Exception ex)
-            {
-                _onLog?.Invoke($"KlonFUN: помилка парсингу плеєра фільму - {ex.Message}");
-            }
-
-            return null;
+                return null;
+            });
         }
 
         public async Task<SerialStructure> GetSerialStructure(string playerUrl)
@@ -248,14 +262,20 @@ namespace LME.KlonFUN
                 return null;
 
             string cacheKey = $"KlonFUN:serial:{playerUrl}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(cacheKey, out SerialStructure cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<SerialStructure>(cacheKey, _hybridCache, async token =>
             {
-                string playerHtml = await GetPlayerHtml(playerUrl);
-                if (string.IsNullOrWhiteSpace(playerHtml))
-                    return null;
+                if (_hybridCache.TryGetValue(cacheKey, out SerialStructure hit))
+                    return hit;
+
+                try
+                {
+                    string playerHtml = await GetPlayerHtml(playerUrl);
+                    if (string.IsNullOrWhiteSpace(playerHtml))
+                        return null;
 
                 JsonArray playerArray = ParsePlayerArray(playerHtml);
                 if (playerArray == null || playerArray.Count == 0)
@@ -338,13 +358,14 @@ namespace LME.KlonFUN
                     _hybridCache.Set(cacheKey, structure, CacheHelper.CacheTime(30, init: _init));
                     return structure;
                 }
-            }
-            catch (Exception ex)
-            {
-                _onLog?.Invoke($"KlonFUN: помилка парсингу структури серіалу - {ex.Message}");
-            }
+                }
+                catch (Exception ex)
+                {
+                    _onLog?.Invoke($"KlonFUN: помилка парсингу структури серіалу - {ex.Message}");
+                }
 
-            return null;
+                return null;
+            });
         }
 
         public bool IsSerialPlayer(string playerUrl)
@@ -359,105 +380,112 @@ namespace LME.KlonFUN
                 return null;
 
             string cacheKey = $"KlonFUN:query:{query}";
+            // ponytail: single-flight
             if (_hybridCache.TryGetValue(cacheKey, out List<SearchResult> cached))
                 return cached;
 
-            try
+            return await SingleFlightCache.GetOrCreateAsync<List<SearchResult>>(cacheKey, _hybridCache, async token =>
             {
-                var headers = DefaultHeaders();
+                if (_hybridCache.TryGetValue(cacheKey, out List<SearchResult> hit))
+                    return hit;
 
-                string form = $"do=search&subaction=search&story={HttpUtility.UrlEncode(query)}";
-                string html = await HttpPost(_init.host, form, headers);
-                if (string.IsNullOrWhiteSpace(html))
-                    return null;
-
-                var doc = new HtmlDocument();
-                doc.LoadHtml(html);
-
-                var results = new List<SearchResult>();
-                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-                var nodes = doc.DocumentNode.SelectNodes("//div[contains(@class,'short-news__slide-item')]");
-                if (nodes != null)
+                try
                 {
-                    foreach (var node in nodes)
+                    var headers = DefaultHeaders();
+
+                    string form = $"do=search&subaction=search&story={HttpUtility.UrlEncode(query)}";
+                    string html = await HttpPost(_init.host, form, headers);
+                    if (string.IsNullOrWhiteSpace(html))
+                        return null;
+
+                    var doc = new HtmlDocument();
+                    doc.LoadHtml(html);
+
+                    var results = new List<SearchResult>();
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    var nodes = doc.DocumentNode.SelectNodes("//div[contains(@class,'short-news__slide-item')]");
+                    if (nodes != null)
                     {
-                        string href = node.SelectSingleNode(".//a[contains(@class,'short-news__small-card__link')]")?.GetAttributeValue("href", null)
-                            ?? node.SelectSingleNode(".//a[contains(@class,'card-link__style')]")?.GetAttributeValue("href", null);
-
-                        href = NormalizeUrl(href);
-                        if (string.IsNullOrWhiteSpace(href) || !seen.Add(href))
-                            continue;
-
-                        string title = CleanText(node.SelectSingleNode(".//div[contains(@class,'card-link__text')]")?.InnerText);
-                        if (string.IsNullOrWhiteSpace(title))
-                            title = CleanText(node.SelectSingleNode(".//a[contains(@class,'card-link__style')]")?.InnerText);
-
-                        string poster = node.SelectSingleNode(".//img[contains(@class,'card-poster__img')]")?.GetAttributeValue("data-src", null);
-                        if (string.IsNullOrWhiteSpace(poster))
-                            poster = node.SelectSingleNode(".//img[contains(@class,'card-poster__img')]")?.GetAttributeValue("src", null);
-
-                        string meta = CleanText(node.SelectSingleNode(".//div[contains(@class,'subscribe-label-module')]")?.InnerText);
-                        int year = 0;
-                        if (!string.IsNullOrWhiteSpace(meta))
+                        foreach (var node in nodes)
                         {
-                            var yearMatch = YearRegex.Match(meta);
-                            if (yearMatch.Success)
-                                int.TryParse(yearMatch.Value, out year);
-                        }
+                            string href = node.SelectSingleNode(".//a[contains(@class,'short-news__small-card__link')]")?.GetAttributeValue("href", null)
+                                ?? node.SelectSingleNode(".//a[contains(@class,'card-link__style')]")?.GetAttributeValue("href", null);
 
-                        if (!string.IsNullOrWhiteSpace(title))
-                        {
-                            results.Add(new SearchResult
-                            {
-                                Title = title,
-                                Url = href,
-                                Poster = NormalizeUrl(poster),
-                                Year = year
-                            });
-                        }
-                    }
-                }
-
-                if (results.Count == 0)
-                {
-                    // Резервний парсер для спрощеної HTML-відповіді (наприклад, AJAX search).
-                    var anchors = doc.DocumentNode.SelectNodes("//a[.//span[contains(@class,'searchheading')]]");
-                    if (anchors != null)
-                    {
-                        foreach (var anchor in anchors)
-                        {
-                            string href = NormalizeUrl(anchor.GetAttributeValue("href", null));
+                            href = NormalizeUrl(href);
                             if (string.IsNullOrWhiteSpace(href) || !seen.Add(href))
                                 continue;
 
-                            string title = CleanText(anchor.SelectSingleNode(".//span[contains(@class,'searchheading')]")?.InnerText);
+                            string title = CleanText(node.SelectSingleNode(".//div[contains(@class,'card-link__text')]")?.InnerText);
                             if (string.IsNullOrWhiteSpace(title))
-                                continue;
+                                title = CleanText(node.SelectSingleNode(".//a[contains(@class,'card-link__style')]")?.InnerText);
 
-                            results.Add(new SearchResult
+                            string poster = node.SelectSingleNode(".//img[contains(@class,'card-poster__img')]")?.GetAttributeValue("data-src", null);
+                            if (string.IsNullOrWhiteSpace(poster))
+                                poster = node.SelectSingleNode(".//img[contains(@class,'card-poster__img')]")?.GetAttributeValue("src", null);
+
+                            string meta = CleanText(node.SelectSingleNode(".//div[contains(@class,'subscribe-label-module')]")?.InnerText);
+                            int year = 0;
+                            if (!string.IsNullOrWhiteSpace(meta))
                             {
-                                Title = title,
-                                Url = href,
-                                Poster = string.Empty,
-                                Year = 0
-                            });
+                                var yearMatch = YearRegex.Match(meta);
+                                if (yearMatch.Success)
+                                    int.TryParse(yearMatch.Value, out year);
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(title))
+                            {
+                                results.Add(new SearchResult
+                                {
+                                    Title = title,
+                                    Url = href,
+                                    Poster = NormalizeUrl(poster),
+                                    Year = year
+                                });
+                            }
                         }
                     }
-                }
 
-                if (results.Count > 0)
+                    if (results.Count == 0)
+                    {
+                        // Резервний парсер для спрощеної HTML-відповіді (наприклад, AJAX search).
+                        var anchors = doc.DocumentNode.SelectNodes("//a[.//span[contains(@class,'searchheading')]]");
+                        if (anchors != null)
+                        {
+                            foreach (var anchor in anchors)
+                            {
+                                string href = NormalizeUrl(anchor.GetAttributeValue("href", null));
+                                if (string.IsNullOrWhiteSpace(href) || !seen.Add(href))
+                                    continue;
+
+                                string title = CleanText(anchor.SelectSingleNode(".//span[contains(@class,'searchheading')]")?.InnerText);
+                                if (string.IsNullOrWhiteSpace(title))
+                                    continue;
+
+                                results.Add(new SearchResult
+                                {
+                                    Title = title,
+                                    Url = href,
+                                    Poster = string.Empty,
+                                    Year = 0
+                                });
+                            }
+                        }
+                    }
+
+                    if (results.Count > 0)
+                    {
+                        _hybridCache.Set(cacheKey, results, CacheHelper.CacheTime(20, init: _init));
+                        return results;
+                    }
+                }
+                catch (Exception ex)
                 {
-                    _hybridCache.Set(cacheKey, results, CacheHelper.CacheTime(20, init: _init));
-                    return results;
+                    _onLog?.Invoke($"KlonFUN: помилка запиту пошуку '{query}' - {ex.Message}");
                 }
-            }
-            catch (Exception ex)
-            {
-                _onLog?.Invoke($"KlonFUN: помилка запиту пошуку '{query}' - {ex.Message}");
-            }
 
-            return null;
+                return null;
+            });
         }
 
         private async Task<string> GetPlayerHtml(string playerUrl)

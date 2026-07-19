@@ -19,7 +19,7 @@ namespace LME.Uaflix
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 5.3;
+        public static double Version => 5.5;
 
         public static UaflixSettings UaFlix;
 
@@ -45,7 +45,7 @@ namespace LME.Uaflix
                 displayindex = 0,
                 login = null,
                 passwd = null,
-                proxy = new Shared.Models.Base.ProxySettings()
+                proxy = new global::Shared.Models.Base.ProxySettings()
                 {
                     useAuth = true,
                     username = "a",
