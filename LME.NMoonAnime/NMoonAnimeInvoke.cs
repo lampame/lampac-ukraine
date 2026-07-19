@@ -107,7 +107,7 @@ namespace LME.NMoonAnime
             string memKey = $"NMoonAnime:haglund:{imdbId}";
             return await SingleFlightCache.GetOrCreateAsync<List<NMoonAnimeSeasonRef>>(memKey, _hybridCache, async token =>
             {
-                if (_hybridCache.TryGetValue(memKey, out List<NMoonAnimeSeasonRef> hit))
+                if (!_nocache && _hybridCache.TryGetValue(memKey, out List<NMoonAnimeSeasonRef> hit))
                     return hit;
 
                 try
