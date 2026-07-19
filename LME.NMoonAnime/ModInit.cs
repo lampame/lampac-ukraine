@@ -19,11 +19,15 @@ namespace LME.NMoonAnime
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 2.2;
+        public static double Version => 3.0;
 
         public static OnlinesSettings NMoonAnime;
 
         public static bool ApnHostProvided;
+
+        public static string HaglundHost = "https://arm.haglund.dev";
+
+        public static string DefaultApiKey = "865fEF-E2e1Bc-2ca431-e6A150-780DFD-737C6B";
 
         public static OnlinesSettings Settings
         {
@@ -36,7 +40,7 @@ namespace LME.NMoonAnime
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            NMoonAnime = new OnlinesSettings("LME.NMoonAnime", "https://moonanime.art", "https://apx.lme.isroot.in", streamproxy: false, useproxy: false)
+            NMoonAnime = new OnlinesSettings("LME.NMoonAnime", "https://moonanime.art", streamproxy: false, useproxy: false)
             {
                 displayname = "New MoonAnime",
                 displayindex = 0,
@@ -51,6 +55,8 @@ namespace LME.NMoonAnime
 
             var defaults = JObject.FromObject(NMoonAnime);
             defaults["enabled"] = true;
+            if (string.IsNullOrWhiteSpace(NMoonAnime.token))
+                defaults["token"] = DefaultApiKey;
             var conf = ModuleInvoke.Init("LME.NMoonAnime", defaults) ?? JObject.FromObject(NMoonAnime);
             bool hasApn = ApnHelper.TryGetInitConf(conf, out bool apnEnabled, out string apnHost);
             conf.Remove("apn");

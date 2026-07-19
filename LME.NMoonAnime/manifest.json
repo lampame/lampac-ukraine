@@ -15,6 +15,7 @@
     "../LME.Shared/Engine/ApnExtensions.cs",
     "../LME.Shared/Engine/QualityHelper.cs",
     "../LME.Shared/Engine/AshdiParser.cs",
-    "../LME.Shared/Engine/TortugaDecoder.cs"
+    "../LME.Shared/Engine/TortugaDecoder.cs",
+    "../LME.Shared/Engine/SingleFlightCache.cs"
   ]
 }

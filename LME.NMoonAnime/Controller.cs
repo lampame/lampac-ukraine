@@ -9,7 +9,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 
@@ -34,24 +33,24 @@ namespace LME.NMoonAnime.Controllers
             if (!init.enable)
                 return Forbid();
 
+            if (string.IsNullOrEmpty(init.token))
+                return OnError("lme_nmoonanime", gbcache: false, refresh_proxy: false);
+
             var invoke = new NMoonAnimeInvoke(init, hybridCache, OnLog, proxyManager, httpHydra);
-            string effectiveMalId = ResolveMalId(mal_id, kinopoisk_id, source);
 
             if (checksearch)
             {
                 if (!StreamHelper.IsCheckOnlineSearchEnabled())
                     return OnError("lme_nmoonanime", refresh_proxy: true);
 
-                var checkResults = await invoke.Search(imdb_id, effectiveMalId, title, year);
+                var checkResults = await invoke.Search(imdb_id, mal_id, title, original_title, year, serial);
                 if (checkResults != null && checkResults.Count > 0)
                     return Content("data-json=", "text/plain; charset=utf-8");
 
                 return OnError("lme_nmoonanime", refresh_proxy: true);
             }
 
-            OnLog($"NMoonAnime: назва={title}, source={source}, imdb={imdb_id}, kinopoisk_id(як mal_id)={kinopoisk_id}, mal_id_ефективний={effectiveMalId}, рік={year}, серіал={serial}, сезон={s}, озвучка={t}");
-
-            var seasons = await invoke.Search(imdb_id, effectiveMalId, title, year);
+            var seasons = await invoke.Search(imdb_id, mal_id, title, original_title, year, serial);
             if (seasons == null || seasons.Count == 0)
                 return OnError("lme_nmoonanime", refresh_proxy: true);
 
@@ -69,7 +68,7 @@ namespace LME.NMoonAnime.Controllers
 
             if (isSeries)
             {
-                return await RenderSerial(invoke, seasons, imdb_id, kinopoisk_id, title, original_title, year, effectiveMalId, s, t, rjson);
+                return await RenderSerial(invoke, seasons, imdb_id, kinopoisk_id, title, original_title, year, mal_id, s, t, rjson);
             }
 
             return await RenderMovie(invoke, seasons, title, original_title, firstSeasonData, rjson);
@@ -298,20 +297,6 @@ namespace LME.NMoonAnime.Controllers
             return index;
         }
 
-        private static string ResolveMalId(string malId, long kinopoiskId, string source)
-        {
-            if (!string.IsNullOrWhiteSpace(source) && source.Equals("tmdb", StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            if (!string.IsNullOrWhiteSpace(malId))
-                return malId.Trim();
-
-            if (!string.IsNullOrWhiteSpace(source) && source.Equals("hikka", StringComparison.OrdinalIgnoreCase) && kinopoiskId > 0)
-                return kinopoiskId.ToString();
-
-            return null;
-        }
-
         private string BuildStreamUrl(OnlinesSettings init, string streamLink)
         {
             var headers = new List<HeadersModel>
@@ -327,7 +312,21 @@ namespace LME.NMoonAnime.Controllers
 
         private static void OnLog(string message)
         {
-            System.Console.WriteLine(message);
+            if (string.IsNullOrEmpty(message))
+                return;
+
+            // Фільтрація логів: залишаємо тільки помилки та критичні події
+            if (message.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("fail", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("exception", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("помилка", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("cancel", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("reject", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("limit", StringComparison.OrdinalIgnoreCase))
+            {
+                System.Console.WriteLine(message);
+            }
         }
     }
 }
