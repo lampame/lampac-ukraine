@@ -458,7 +458,7 @@ namespace LME.NMoonAnime
                     foreach (var ep in additionalVoice.Episodes)
                     {
                         // Зміщуємо номер епізоду щоб уникнути дублікатів з першою частиною
-                        int newNumber = ep.Number + offset;
+                        int newNumber = ep.Number + voiceOffset;
                         existingVoice.Episodes.Add(new NMoonAnimeEpisodeContent
                         {
                             Name = ep.Name,
@@ -467,7 +467,7 @@ namespace LME.NMoonAnime
                         });
                         addedCount++;
                     }
-                    _onLog($"NMoonAnime: voice '{additionalVoice.Name}' — додано {addedCount} епізодів (offset {offset}, було {existingVoice.Episodes.Count - addedCount}, стало {existingVoice.Episodes.Count})");
+                    _onLog($"NMoonAnime: voice '{additionalVoice.Name}' — додано {addedCount} епізодів (offset {voiceOffset}, було {existingVoice.Episodes.Count - addedCount}, стало {existingVoice.Episodes.Count})");
                     existingVoice.Episodes = existingVoice.Episodes
                         .OrderBy(e => e.Number <= 0 ? int.MaxValue : e.Number)
                         .ToList();
