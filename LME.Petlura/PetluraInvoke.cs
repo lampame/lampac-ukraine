@@ -106,38 +106,44 @@ namespace LME.Petlura
                 if (sources == null || sources.Length == 0)
                     sources = new[] { "https://uaserials.fm", "https://uaserials.my" };
 
-                var tails = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                var errors = new List<string>();
+                // (numericId, fullTail, source)
+                var found = new List<(int id, string tail, string source)>();
 
                 foreach (var source in sources)
                 {
                     string tail = await SearchSingleSource(source, imdbId);
-                    if (!string.IsNullOrEmpty(tail) && !tails.ContainsKey(tail))
-                        tails[tail] = source;
-                    else if (tail == null)
-                        errors.Add(source);
+                    if (string.IsNullOrEmpty(tail))
+                        continue;
+
+                    // tail = "embed/XXXX/XXXXX"
+                    var match = Regex.Match(tail, @"embed/(\d+)/", RegexOptions.IgnoreCase);
+                    if (match.Success && int.TryParse(match.Groups[1].Value, out int numId))
+                        found.Add((numId, tail, source));
                 }
 
-                if (tails.Count == 0)
+                if (found.Count == 0)
                 {
                     _onLog?.Invoke($"Petlura: жодне джерело не знайшло embed для {imdbId}");
                     _hybridCache.Set<string>(memKey, null, CacheHelper.CacheTime(5, init: _init));
                     return null;
                 }
 
-                if (tails.Count > 1)
+                // Всі однакові numericId — беремо перший
+                var ids = found.Select(f => f.id).Distinct().ToList();
+                if (ids.Count == 1)
                 {
-                    // Різні джерела повернули різні embed — щось не так
-                    var tailList = string.Join(", ", tails.Select(t => $"{t.Value}:{t.Key}"));
-                    _onLog?.Invoke($"Petlura: різні embed від джерел для {imdbId}: {tailList}");
-                    _hybridCache.Set<string>(memKey, null, CacheHelper.CacheTime(5, init: _init));
-                    return null;
+                    string result = found[0].tail;
+                    _onLog?.Invoke($"Petlura: знайдено embed {result} для {imdbId}");
+                    _hybridCache.Set(memKey, result, CacheHelper.CacheTime(30, init: _init));
+                    return result;
                 }
 
-                string result = tails.Keys.First();
-                _onLog?.Invoke($"Petlura: знайдено embed {result} для {imdbId}");
-                _hybridCache.Set(memKey, result, CacheHelper.CacheTime(30, init: _init));
-                return result;
+                // Різні numericId — беремо найбільший
+                int bestId = ids.Max();
+                var best = found.First(f => f.id == bestId);
+                _onLog?.Invoke($"Petlura: різні embed ID, вибрано найбільший {best.tail} (джерело: {best.source}) для {imdbId}");
+                _hybridCache.Set(memKey, best.tail, CacheHelper.CacheTime(30, init: _init));
+                return best.tail;
             }
             catch (Exception ex)
             {
@@ -225,7 +231,7 @@ namespace LME.Petlura
             if (_httpHydra != null)
                 return await _httpHydra.Get(url, newheaders: headers);
 
-            return await Http.Get(_init.cors(url), headers: headers, proxy: _proxyManager.Get());
+            return await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
         }
 
         /// <summary>
