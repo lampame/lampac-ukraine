@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
-using HtmlAgilityPack;
 using LME.Petlura.Models;
 using Shared;
 using Shared.Engine;
@@ -42,25 +41,10 @@ namespace LME.Petlura
             RegexOptions.IgnoreCase | RegexOptions.Compiled
         );
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
-        private static readonly Regex Quality4kRegex = new Regex(
-            @"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled
-        );
-
-        private static readonly Regex QualityFhdRegex = new Regex(
-            @"(^|[^0-9])(1080p?)([^0-9]|$)|\bfhd\b",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled
-        );
-
-        private static readonly Regex YearPrefixRegex = new Regex(
-            @"(19|20)\d{2}",
-            RegexOptions.Compiled
-        );
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            PropertyNameCaseInsensitive = true
+        };
 
         private static readonly string[] NoResultMarkers = {
             "не дав жодних результатів",
@@ -236,269 +220,85 @@ namespace LME.Petlura
         }
 
         /// <summary>
-        /// Розпарсити HTML плеєра і отримати потоки для фільму.
+        /// Розпарсити HTML плеєра як структуру сезонів.
+        /// Повертає список сезонів з озвучками та епізодами, або null для фільму.
         /// </summary>
-        public async Task<List<StreamInfo>> GetMovieStreams(string embedTail)
+        public async Task<List<HdvbSeason>> ParseSeasons(string embedId)
         {
-            if (string.IsNullOrWhiteSpace(embedTail))
+            if (string.IsNullOrWhiteSpace(embedId))
                 return null;
 
-            string memKey = $"Petlura:movie:{embedTail}";
-            if (_hybridCache.TryGetValue(memKey, out List<StreamInfo> cached))
+            string memKey = $"Petlura:seasons:{embedId}";
+            if (_hybridCache.TryGetValue(memKey, out List<HdvbSeason> cached))
                 return cached;
 
             try
             {
-                string html = await FetchPlayerHtml(embedTail);
+                string html = await FetchPlayerHtml(embedId);
                 if (string.IsNullOrWhiteSpace(html))
                     return null;
 
-                var streams = new List<StreamInfo>();
-
-                // 1. Спроба розпарсити PlayerJS JSON масив
-                var jsonItems = ParsePlayerFileArray(html);
-                if (jsonItems != null && jsonItems.Count > 0)
-                {
-                    int index = 1;
-                    foreach (var item in jsonItems)
-                    {
-                        string fileUrl = item?.file;
-                        if (string.IsNullOrWhiteSpace(fileUrl))
-                            continue;
-
-                        string rawTitle = item.title;
-                        string title = BuildStreamTitle(rawTitle, fileUrl, index);
-                        string quality = DetectQuality(rawTitle, fileUrl);
-
-                        var stream = new StreamInfo
-                        {
-                            Title = title,
-                            Url = fileUrl,
-                            Quality = quality,
-                            Subtitles = ParseSubtitles(item.subtitle)
-                        };
-                        streams.Add(stream);
-                        index++;
-                    }
-                }
-
-                // 2. Спроба знайти <source> теги
-                if (streams.Count == 0)
-                {
-                    streams = ParseSourceTags(html);
-                }
-
-                // 3. Фолбек: m3u8 в тексті
-                if (streams.Count == 0)
-                {
-                    var match = M3u8UrlRegex.Match(html ?? "");
-                    if (match.Success)
-                    {
-                        string url = match.Groups[1].Value;
-                        streams.Add(new StreamInfo
-                        {
-                            Title = "Video",
-                            Url = url,
-                            Quality = DetectQuality(null, url)
-                        });
-                    }
-                }
-
-                // 4. Дедуплікація
-                streams = DedupeStreams(streams);
-
-                if (streams.Count > 0)
-                    _hybridCache.Set(memKey, streams, CacheHelper.CacheTime(30, init: _init));
-                else
-                    _hybridCache.Set(memKey, streams, CacheHelper.CacheTime(5, init: _init));
-
-                return streams;
-            }
-            catch (Exception ex)
-            {
-                _onLog?.Invoke($"Petlura: помилка парсингу фільму {embedTail}: {ex.Message}");
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Розпарсити HTML плеєра і отримати серіали (озвучки → сезони → епізоди).
-        /// </summary>
-        public async Task<SerialInfo> GetSerialEpisodes(string embedTail)
-        {
-            if (string.IsNullOrWhiteSpace(embedTail))
-                return null;
-
-            string memKey = $"Petlura:serial:{embedTail}";
-            if (_hybridCache.TryGetValue(memKey, out SerialInfo cached))
-                return cached;
-
-            try
-            {
-                string html = await FetchPlayerHtml(embedTail);
-                if (string.IsNullOrWhiteSpace(html))
+                // Шукаємо file:'[{...}]' — серіал з сезонами й озвучками
+                int idx = html.IndexOf("file:'[", StringComparison.Ordinal);
+                if (idx < 0)
                     return null;
 
-                var jsonItems = ParsePlayerFileArray(html);
-                if (jsonItems == null || jsonItems.Count == 0)
+                int endIdx = html.IndexOf("']", idx + 6);
+                if (endIdx < 0)
                     return null;
 
-                var serialInfo = new SerialInfo();
-
-                foreach (var item in jsonItems)
-                {
-                    string voiceName = item?.title?.Trim();
-                    if (string.IsNullOrWhiteSpace(voiceName))
-                        continue;
-
-                    // Спроба розпарсити folder як JSON масив сезонів
-                    if (item?.folder != null && item.folder.Value.ValueKind == JsonValueKind.Array)
-                    {
-                        var episodes = ParseFolderEpisodes(item.folder.Value);
-                        if (episodes != null && episodes.Count > 0)
-                        {
-                            serialInfo.Voices.Add(new VoiceEpisodes
-                            {
-                                Name = voiceName,
-                                Episodes = episodes
-                            });
-                            continue;
-                        }
-                    }
-
-                    // Якщо немає folder, пробуємо використати file як пряме посилання
-                    string fileUrl = item?.file?.Trim();
-                    if (!string.IsNullOrWhiteSpace(fileUrl))
-                    {
-                        serialInfo.Voices.Add(new VoiceEpisodes
-                        {
-                            Name = voiceName,
-                            Episodes = new List<EpisodeInfo>
-                            {
-                                new EpisodeInfo
-                                {
-                                    Episode = 1,
-                                    Title = voiceName,
-                                    Url = fileUrl
-                                }
-                            }
-                        });
-                    }
-
-
-                }
-
-                if (serialInfo.Voices.Count > 0)
-                    _hybridCache.Set(memKey, serialInfo, CacheHelper.CacheTime(30, init: _init));
-
-                return serialInfo;
-            }
-            catch (Exception ex)
-            {
-                _onLog?.Invoke($"Petlura: помилка парсингу серіалу {embedTail}: {ex.Message}");
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Отримати епізоди для конкретного сезону та озвучки.
-        /// </summary>
-        public async Task<List<EpisodeInfo>> GetSeasonEpisodes(string embedTail, int seasonNumber, string voiceName)
-        {
-            var serialInfo = await GetSerialEpisodes(embedTail);
-            if (serialInfo == null)
-                return null;
-
-            // Шукаємо голос
-            var voice = serialInfo.Voices.FirstOrDefault(v =>
-                string.Equals(v.Name, voiceName, StringComparison.OrdinalIgnoreCase));
-
-            if (voice == null && serialInfo.Voices.Count > 0)
-                voice = serialInfo.Voices[0];
-
-            if (voice == null)
-                return null;
-
-            return voice.Episodes;
-        }
-
-        /// <summary>
-        /// Розпарсити JSON масив з PlayerJS: file:'[...]'.
-        /// </summary>
-        private List<PlayerFileItem> ParsePlayerFileArray(string html)
-        {
-            if (string.IsNullOrWhiteSpace(html))
-                return null;
-
-            string jsonArrayStr = AshdiParser.ExtractPlayerFileArray(html);
-            if (string.IsNullOrWhiteSpace(jsonArrayStr))
-            {
-                // Фолбек: пошук file: через regex
-                var match = Regex.Match(html, @"file\s*:\s*['""](\[.+?\])['""]", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                if (match.Success)
-                    jsonArrayStr = match.Groups[1].Value;
-            }
-
-            if (string.IsNullOrWhiteSpace(jsonArrayStr))
-                return null;
-
-            try
-            {
-                jsonArrayStr = jsonArrayStr
+                string jsonStr = html.Substring(idx + 6, endIdx - idx - 6)
                     .Replace("\\'", "'")
                     .Replace("\\\"", "\"")
                     .Replace("\\/", "/");
 
-                jsonArrayStr = System.Net.WebUtility.HtmlDecode(jsonArrayStr);
+                var seasons = JsonSerializer.Deserialize<List<HdvbSeason>>(jsonStr, JsonOptions);
+                if (seasons == null || seasons.Count == 0)
+                    return null;
 
-                var items = JsonSerializer.Deserialize<List<PlayerFileItem>>(jsonArrayStr, JsonOptions);
-                return items?.Where(i => i != null).ToList();
+                _hybridCache.Set(memKey, seasons, CacheHelper.CacheTime(30, init: _init));
+                return seasons;
             }
-            catch (JsonException ex)
+            catch (Exception ex)
             {
-                _onLog?.Invoke($"Petlura: помилка парсингу JSON плеєра: {ex.Message}");
+                _onLog?.Invoke($"Petlura: помилка парсингу сезонів {embedId}: {ex.Message}");
                 return null;
             }
         }
 
         /// <summary>
-        /// Розпарсити JsonElement (масив) як сезони з епізодами.
-        /// Повертає плаский список усіх епізодів з усіх сезонів.
-        /// Структура: [{"title":"Сезон 1","folder":[{"title":"1","file":"url1","subtitle":"..."}]}]
+        /// Отримати m3u8 URL для фільму.
+        /// Шукає file: "https://.../index.m3u8" (подвійні лапки без масиву).
         /// </summary>
-        private List<EpisodeInfo> ParseFolderEpisodes(JsonElement folderElement)
+        public async Task<string> GetMovieStream(string embedId)
         {
-            if (folderElement.ValueKind != JsonValueKind.Array)
+            if (string.IsNullOrWhiteSpace(embedId))
                 return null;
 
-            var allEpisodes = new List<EpisodeInfo>();
-            int globalIndex = 1;
+            string memKey = $"Petlura:movie:{embedId}";
+            if (_hybridCache.TryGetValue(memKey, out string cached))
+                return cached;
 
-            foreach (var seasonElem in folderElement.EnumerateArray())
+            try
             {
-                // Парсимо епізоди всередині сезону
-                if (seasonElem.TryGetProperty("folder", out var episodesElem) && episodesElem.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var epElem in episodesElem.EnumerateArray())
-                    {
-                        string epTitle = epElem.TryGetProperty("title", out var et) ? et.GetString() : null;
-                        string epFile = epElem.TryGetProperty("file", out var ef) ? ef.GetString() : null;
+                string html = await FetchPlayerHtml(embedId);
+                if (string.IsNullOrWhiteSpace(html))
+                    return null;
 
-                        if (string.IsNullOrWhiteSpace(epFile))
-                            continue;
+                // file: "https://.../index.m3u8"
+                var match = Regex.Match(html, @"file:\s*""(https?://[^""]+/index\.m3u8)""", RegexOptions.IgnoreCase);
+                if (!match.Success)
+                    return null;
 
-                        allEpisodes.Add(new EpisodeInfo
-                        {
-                            Episode = globalIndex,
-                            Title = epTitle ?? $"Епізод {globalIndex}",
-                            Url = epFile
-                        });
-                        globalIndex++;
-                    }
-                }
+                string url = match.Groups[1].Value;
+                _hybridCache.Set(memKey, url, CacheHelper.CacheTime(30, init: _init));
+                return url;
             }
-
-            return allEpisodes.Count > 0 ? allEpisodes : null;
+            catch (Exception ex)
+            {
+                _onLog?.Invoke($"Petlura: помилка отримання фільму {embedId}: {ex.Message}");
+                return null;
+            }
         }
 
         /// <summary>
@@ -600,133 +400,31 @@ namespace LME.Petlura
         }
 
         /// <summary>
-        /// Парсинг <source> тегів з HTML.
-        /// </summary>
-        private List<StreamInfo> ParseSourceTags(string html)
-        {
-            if (string.IsNullOrWhiteSpace(html))
-                return new List<StreamInfo>();
-
-            var streams = new List<StreamInfo>();
-            var doc = new HtmlDocument();
-            doc.LoadHtml(html);
-
-            var sourceNodes = doc.DocumentNode.SelectNodes("//source");
-            if (sourceNodes != null)
-            {
-                foreach (var node in sourceNodes)
-                {
-                    string src = node.GetAttributeValue("src", "");
-                    if (string.IsNullOrWhiteSpace(src) || !src.Contains(".m3u8"))
-                        continue;
-
-                    string quality = node.GetAttributeValue("label", "") ??
-                                     node.GetAttributeValue("res", "") ?? "";
-                    if (string.IsNullOrWhiteSpace(quality))
-                        quality = DetectQuality(null, src);
-
-                    streams.Add(new StreamInfo
-                    {
-                        Title = string.IsNullOrWhiteSpace(quality) ? "Video" : quality,
-                        Url = src,
-                        Quality = string.IsNullOrWhiteSpace(quality) ? "auto" : quality
-                    });
-                }
-            }
-
-            return streams;
-        }
-
-        /// <summary>
-        /// Визначення якості з назви або URL.
-        /// </summary>
-        private string DetectQuality(string title, string url)
-        {
-            string text = $"{title ?? ""} {url ?? ""}";
-            if (Quality4kRegex.IsMatch(text))
-                return "2160p";
-            if (QualityFhdRegex.IsMatch(text))
-                return "1080p";
-            return "auto";
-        }
-
-        /// <summary>
-        /// Побудова назви стріму для фільму.
-        /// </summary>
-        private string BuildStreamTitle(string rawTitle, string streamUrl, int index)
-        {
-            string title = rawTitle?.Trim() ?? "";
-            if (string.IsNullOrWhiteSpace(title))
-                return $"Варіант {index}";
-
-            // Прибрати рік на початку
-            title = Regex.Replace(title, @"\s+", " ").Trim();
-            int sepIndex = title.LastIndexOf(" - ", StringComparison.Ordinal);
-            if (sepIndex > 0 && sepIndex < title.Length - 3)
-            {
-                string prefix = title.Substring(0, sepIndex).Trim();
-                string suffix = title.Substring(sepIndex + 3).Trim();
-                if (!string.IsNullOrEmpty(suffix) && YearPrefixRegex.IsMatch(prefix))
-                    title = suffix;
-            }
-
-            // Додати тег якості
-            string tag = QualityHelper.DetectQualityTag($"{title} {streamUrl}");
-            if (!string.IsNullOrEmpty(tag) && !title.StartsWith("[4K]") && !title.StartsWith("[FHD]"))
-                title = $"{tag} {title}";
-
-            return title;
-        }
-
-        /// <summary>
-        /// Дедуплікація стрімів за URL.
-        /// </summary>
-        private List<StreamInfo> DedupeStreams(List<StreamInfo> streams)
-        {
-            if (streams == null || streams.Count == 0)
-                return streams ?? new List<StreamInfo>();
-
-            var deduped = new List<StreamInfo>();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var stream in streams)
-            {
-                string url = stream?.Url?.Trim() ?? "";
-                if (string.IsNullOrEmpty(url) || seen.Contains(url))
-                    continue;
-
-                seen.Add(url);
-                deduped.Add(stream);
-            }
-
-            return deduped;
-        }
-
-        /// <summary>
         /// Парсинг субтитрів з формату [lang]url.
         /// </summary>
-        private List<SubtitleInfo> ParseSubtitles(string subtitleValue)
+        private SubtitleInfo ParseSubtitle(string subtitleValue)
         {
-            var subtitles = new List<SubtitleInfo>();
             if (string.IsNullOrWhiteSpace(subtitleValue))
-                return subtitles;
+                return null;
 
-            var matches = Regex.Matches(subtitleValue, @"\[([^\]]+)\]([^,]+)");
-            foreach (System.Text.RegularExpressions.Match match in matches)
+            var match = Regex.Match(subtitleValue, @"\[([^\]]+)\](https?://[^,]+)");
+            if (!match.Success)
+                return null;
+
+            return new SubtitleInfo
             {
-                if (!match.Success)
-                    continue;
-
-                string lang = System.Net.WebUtility.HtmlDecode(match.Groups[1].Value.Trim());
-                string url = System.Net.WebUtility.HtmlDecode(match.Groups[2].Value.Trim());
-                if (string.IsNullOrEmpty(lang) || string.IsNullOrEmpty(url))
-                    continue;
-
-                subtitles.Add(new SubtitleInfo { Lang = lang, Url = url });
-            }
-
-            return subtitles;
+                Lang = System.Net.WebUtility.HtmlDecode(match.Groups[1].Value.Trim()),
+                Url = System.Net.WebUtility.HtmlDecode(match.Groups[2].Value.Trim())
+            };
         }
     }
 
+    /// <summary>
+    /// Модель для субтитрів
+    /// </summary>
+    public class SubtitleInfo
+    {
+        public string Lang { get; set; }
+        public string Url { get; set; }
+    }
 }

@@ -35,112 +35,113 @@ namespace LME.Petlura.Controllers
             if (string.IsNullOrWhiteSpace(imdb_id))
                 return OnError("lme_petlura", refresh_proxy: true);
 
-            string embedTail = null;
+            string embedId = null;
 
             if (checksearch)
             {
                 if (!StreamHelper.IsCheckOnlineSearchEnabled())
                     return OnError("lme_petlura", refresh_proxy: true);
 
-                // Перевіряємо чи є embed для цього imdb_id
-                embedTail = await invoke.ResolveEmbedTail(imdb_id);
-                if (!string.IsNullOrEmpty(embedTail))
+                embedId = await invoke.ResolveEmbedTail(imdb_id);
+                if (!string.IsNullOrEmpty(embedId))
                     return Content("data-json=", "text/plain; charset=utf-8");
 
                 return OnError("lme_petlura", refresh_proxy: true);
             }
 
-            // Отримуємо embed tail
             if (!string.IsNullOrEmpty(href))
-            {
-                embedTail = href;
-            }
+                embedId = href;
             else
             {
-                embedTail = await invoke.ResolveEmbedTail(imdb_id);
-                if (string.IsNullOrEmpty(embedTail))
+                embedId = await invoke.ResolveEmbedTail(imdb_id);
+                if (string.IsNullOrEmpty(embedId))
                     return OnError("lme_petlura", refresh_proxy: true);
             }
 
             if (serial == 1)
             {
-                var serialInfo = await invoke.GetSerialEpisodes(embedTail);
-                if (serialInfo == null || serialInfo.Voices.Count == 0)
+                var seasons = await invoke.ParseSeasons(embedId);
+                if (seasons == null || seasons.Count == 0)
                     return OnError("lme_petlura", refresh_proxy: true);
 
-                var voice_tpl = new VoiceTpl();
-                var episode_tpl = new EpisodeTpl();
+                if (s == -1)
+                {
+                    var seasonTpl = new SeasonTpl(seasons.Count);
+                    foreach (var season in seasons)
+                    {
+                        int seasonNum = ExtractSeasonNumber(season.title);
+                        string link = $"{host}/lite/lme_petlura?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={seasonNum}&href={HttpUtility.UrlEncode(embedId)}";
+                        seasonTpl.Append(season.title, link, seasonNum.ToString());
+                    }
+                    return rjson ? Content(seasonTpl.ToJson(), "application/json; charset=utf-8") : Content(seasonTpl.ToHtml(), "text/html; charset=utf-8");
+                }
 
-                // Вибір голосу
-                string selectedVoice;
-                var availableVoices = serialInfo.Voices;
+                var selectedSeason = seasons.FirstOrDefault(sn => ExtractSeasonNumber(sn.title) == s) ?? seasons[0];
+                if (selectedSeason?.folder == null || selectedSeason.folder.Count == 0)
+                    return OnError("lme_petlura", refresh_proxy: true);
 
+                var voices = selectedSeason.folder;
                 if (string.IsNullOrEmpty(t))
-                    selectedVoice = availableVoices[0].Name;
-                else
-                    selectedVoice = t;
+                    t = voices[0].title;
 
-                // Шукаємо вибраний голос, або беремо перший
-                var voiceEpisodes = availableVoices.FirstOrDefault(v =>
-                    string.Equals(v.Name, selectedVoice, StringComparison.OrdinalIgnoreCase));
-                if (voiceEpisodes == null)
-                    voiceEpisodes = availableVoices[0];
-
-                // Формуємо VoiceTpl
-                foreach (var voice in availableVoices)
+                var voiceTpl = new VoiceTpl(voices.Count);
+                foreach (var voice in voices)
                 {
-                    string voiceLink = $"{host}/lite/lme_petlura?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&t={HttpUtility.UrlEncode(voice.Name)}&href={HttpUtility.UrlEncode(embedTail)}";
-                    bool isActive = string.Equals(voice.Name, voiceEpisodes.Name, StringComparison.OrdinalIgnoreCase);
-                    voice_tpl.Append(voice.Name, isActive, voiceLink);
+                    string voiceLink = $"{host}/lite/lme_petlura?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&s={s}&t={HttpUtility.UrlEncode(voice.title)}&href={HttpUtility.UrlEncode(embedId)}";
+                    voiceTpl.Append(voice.title, string.Equals(voice.title, t, StringComparison.OrdinalIgnoreCase), voiceLink);
                 }
 
-                // Формуємо EpisodeTpl
-                int index = 1;
-                foreach (var ep in voiceEpisodes.Episodes.OrderBy(e => e.Episode ?? int.MaxValue))
-                {
-                    int episodeNumber = ep.Episode ?? index;
-                    string episodeName = string.IsNullOrEmpty(ep.Title) ? $"Епізод {episodeNumber}" : ep.Title;
-                    string streamUrl = BuildStreamUrl(init, ep.Url);
-                    episode_tpl.Append(episodeName, title ?? original_title, "1", episodeNumber.ToString("D2"), streamUrl);
-                    index++;
-                }
-
-                episode_tpl.Append(voice_tpl);
-
-                if (rjson)
-                    return Content(episode_tpl.ToJson(), "application/json; charset=utf-8");
-
-                return Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
-            }
-            else // Фільм
-            {
-                var streams = await invoke.GetMovieStreams(embedTail);
-                if (streams == null || streams.Count == 0)
+                var selectedVoice = voices.FirstOrDefault(v => string.Equals(v.title, t, StringComparison.OrdinalIgnoreCase)) ?? voices[0];
+                if (selectedVoice.folder == null || selectedVoice.folder.Count == 0)
                     return OnError("lme_petlura", refresh_proxy: true);
 
-                var movie_tpl = new MovieTpl(title, original_title);
-                for (int i = 0; i < streams.Count; i++)
+                var episodeTpl = new EpisodeTpl(selectedVoice.folder.Count);
+                int epIndex = 1;
+                foreach (var ep in selectedVoice.folder)
                 {
-                    var stream = streams[i];
-                    string label = !string.IsNullOrEmpty(stream.Title) ? stream.Title : $"Варіант {i + 1}";
-                    string streamUrl = BuildStreamUrl(init, stream.Url);
+                    string epName = ep.title ?? $"Епізод {epIndex}";
+                    int epNum = ExtractEpisodeNumber(ep.title, epIndex);
 
                     SubtitleTpl subtitles = null;
-                    if (stream.Subtitles != null && stream.Subtitles.Count > 0)
+                    var subInfo = invoke.ParseSubtitle(ep.subtitle);
+                    if (subInfo != null)
                     {
-                        subtitles = new SubtitleTpl();
-                        foreach (var sub in stream.Subtitles)
-                        {
-                            if (!string.IsNullOrEmpty(sub.Lang) && !string.IsNullOrEmpty(sub.Url))
-                                subtitles.Append(sub.Lang, sub.Url);
-                        }
+                        subtitles = new SubtitleTpl(1);
+                        subtitles.Append(subInfo.Lang, subInfo.Url);
                     }
 
-                    movie_tpl.Append(label, streamUrl, subtitles: subtitles);
+                    string streamUrl = BuildStreamUrl(init, ep.file);
+                    episodeTpl.Append(epName, title ?? original_title, s.ToString(), epNum.ToString("D2"), streamUrl, subtitles: subtitles);
+                    epIndex++;
                 }
 
-                return rjson ? Content(movie_tpl.ToJson(), "application/json; charset=utf-8") : Content(movie_tpl.ToHtml(), "text/html; charset=utf-8");
+                episodeTpl.Append(voiceTpl);
+                return rjson ? Content(episodeTpl.ToJson(), "application/json; charset=utf-8") : Content(episodeTpl.ToHtml(), "text/html; charset=utf-8");
             }
+            else
+            {
+                string streamUrl = await invoke.GetMovieStream(embedId);
+                if (string.IsNullOrEmpty(streamUrl))
+                    return OnError("lme_petlura", refresh_proxy: true);
+
+                var movieTpl = new MovieTpl(title, original_title);
+                movieTpl.Append("HD", BuildStreamUrl(init, streamUrl));
+                return rjson ? Content(movieTpl.ToJson(), "application/json; charset=utf-8") : Content(movieTpl.ToHtml(), "text/html; charset=utf-8");
+            }
+        }
+
+        private static int ExtractSeasonNumber(string title)
+        {
+            if (string.IsNullOrEmpty(title)) return 1;
+            var match = System.Text.RegularExpressions.Regex.Match(title, @"(\d+)");
+            return match.Success ? int.Parse(match.Groups[1].Value) : 1;
+        }
+
+        private static int ExtractEpisodeNumber(string title, int defaultNum)
+        {
+            if (string.IsNullOrEmpty(title)) return defaultNum;
+            var match = System.Text.RegularExpressions.Regex.Match(title, @"(\d+)");
+            return match.Success ? int.Parse(match.Groups[1].Value) : defaultNum;
         }
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)
