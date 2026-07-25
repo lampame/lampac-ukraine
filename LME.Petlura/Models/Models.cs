@@ -42,12 +42,6 @@ namespace LME.Petlura.Models
         public List<VoiceEpisodes> Voices { get; set; } = new();
     }
 
-    public class SeasonInfo
-    {
-        public int SeasonNumber { get; set; }
-        public List<VoiceEpisodes> Voices { get; set; } = new();
-    }
-
     public class PlayerFileItem
     {
         public string file { get; set; }

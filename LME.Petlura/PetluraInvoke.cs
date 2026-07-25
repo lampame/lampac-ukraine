@@ -121,7 +121,7 @@ namespace LME.Petlura
                 if (tails.Count == 0)
                 {
                     _onLog?.Invoke($"Petlura: жодне джерело не знайшло embed для {imdbId}");
-                    _hybridCache.Set(memKey, null, CacheHelper.CacheTime(5, init: _init));
+                    _hybridCache.Set<string>(memKey, null, CacheHelper.CacheTime(5, init: _init));
                     return null;
                 }
 
@@ -130,7 +130,7 @@ namespace LME.Petlura
                     // Різні джерела повернули різні embed — щось не так
                     var tailList = string.Join(", ", tails.Select(t => $"{t.Value}:{t.Key}"));
                     _onLog?.Invoke($"Petlura: різні embed від джерел для {imdbId}: {tailList}");
-                    _hybridCache.Set(memKey, null, CacheHelper.CacheTime(5, init: _init));
+                    _hybridCache.Set<string>(memKey, null, CacheHelper.CacheTime(5, init: _init));
                     return null;
                 }
 
@@ -347,34 +347,14 @@ namespace LME.Petlura
                     // Спроба розпарсити folder як JSON масив сезонів
                     if (item?.folder != null && item.folder.Value.ValueKind == JsonValueKind.Array)
                     {
-                        var seasons = ParseFolderSeasons(item.folder.Value);
-                        if (seasons != null && seasons.Count > 0)
+                        var episodes = ParseFolderEpisodes(item.folder.Value);
+                        if (episodes != null && episodes.Count > 0)
                         {
-                            var allEpisodes = new List<EpisodeInfo>();
-                            foreach (var season in seasons)
+                            serialInfo.Voices.Add(new VoiceEpisodes
                             {
-                                foreach (var ep in season.Episodes)
-                                {
-                                    if (!string.IsNullOrWhiteSpace(ep.Url))
-                                    {
-                                        allEpisodes.Add(new EpisodeInfo
-                                        {
-                                            Episode = ep.Episode,
-                                            Title = ep.Title ?? $"Епізод {ep.Episode}",
-                                            Url = ep.Url
-                                        });
-                                    }
-                                }
-                            }
-
-                            if (allEpisodes.Count > 0)
-                            {
-                                serialInfo.Voices.Add(new VoiceEpisodes
-                                {
-                                    Name = voiceName,
-                                    Episodes = allEpisodes
-                                });
-                            }
+                                Name = voiceName,
+                                Episodes = episodes
+                            });
                             continue;
                         }
                     }
@@ -398,35 +378,7 @@ namespace LME.Petlura
                         });
                     }
 
-                    // Беремо всі епізоди з усіх сезонів для цієї озвучки
-                    var allEpisodes = new List<EpisodeInfo>();
-                    foreach (var season in seasons)
-                    {
-                        if (season.Episodes == null)
-                            continue;
 
-                        foreach (var ep in season.Episodes)
-                        {
-                            if (!string.IsNullOrWhiteSpace(ep.Url))
-                            {
-                                allEpisodes.Add(new EpisodeInfo
-                                {
-                                    Episode = ep.Episode,
-                                    Title = ep.Title ?? $"Епізод {ep.Episode}",
-                                    Url = ep.Url
-                                });
-                            }
-                        }
-                    }
-
-                    if (allEpisodes.Count > 0)
-                    {
-                        serialInfo.Voices.Add(new VoiceEpisodes
-                        {
-                            Name = voiceName,
-                            Episodes = allEpisodes
-                        });
-                    }
                 }
 
                 if (serialInfo.Voices.Count > 0)
@@ -504,32 +456,22 @@ namespace LME.Petlura
 
         /// <summary>
         /// Розпарсити JsonElement (масив) як сезони з епізодами.
+        /// Повертає плаский список усіх епізодів з усіх сезонів.
         /// Структура: [{"title":"Сезон 1","folder":[{"title":"1","file":"url1","subtitle":"..."}]}]
         /// </summary>
-        private List<SeasonInfo> ParseFolderSeasons(JsonElement folderElement)
+        private List<EpisodeInfo> ParseFolderEpisodes(JsonElement folderElement)
         {
             if (folderElement.ValueKind != JsonValueKind.Array)
                 return null;
 
-            var seasons = new List<SeasonInfo>();
+            var allEpisodes = new List<EpisodeInfo>();
+            int globalIndex = 1;
 
             foreach (var seasonElem in folderElement.EnumerateArray())
             {
-                string seasonTitle = seasonElem.TryGetProperty("title", out var st) ? st.GetString() : null;
-                if (string.IsNullOrWhiteSpace(seasonTitle))
-                    continue;
-
-                // Витягуємо номер сезону з назви "Сезон N"
-                int seasonNumber = 0;
-                var seasonMatch = Regex.Match(seasonTitle, @"Сезон\s+(\d+)", RegexOptions.IgnoreCase);
-                if (seasonMatch.Success)
-                    int.TryParse(seasonMatch.Groups[1].Value, out seasonNumber);
-
-                // Парсимо епізоди
-                var episodes = new List<EpisodeInfo>();
+                // Парсимо епізоди всередині сезону
                 if (seasonElem.TryGetProperty("folder", out var episodesElem) && episodesElem.ValueKind == JsonValueKind.Array)
                 {
-                    int epIndex = 1;
                     foreach (var epElem in episodesElem.EnumerateArray())
                     {
                         string epTitle = epElem.TryGetProperty("title", out var et) ? et.GetString() : null;
@@ -538,34 +480,18 @@ namespace LME.Petlura
                         if (string.IsNullOrWhiteSpace(epFile))
                             continue;
 
-                        episodes.Add(new EpisodeInfo
+                        allEpisodes.Add(new EpisodeInfo
                         {
-                            Episode = epIndex,
-                            Title = epTitle ?? $"Епізод {epIndex}",
+                            Episode = globalIndex,
+                            Title = epTitle ?? $"Епізод {globalIndex}",
                             Url = epFile
                         });
-                        epIndex++;
+                        globalIndex++;
                     }
-                }
-
-                if (episodes.Count > 0)
-                {
-                    seasons.Add(new SeasonInfo
-                    {
-                        SeasonNumber = seasonNumber,
-                        Voices = new List<VoiceEpisodes>
-                        {
-                            new VoiceEpisodes
-                            {
-                                Name = seasonTitle,
-                                Episodes = episodes
-                            }
-                        }
-                    });
                 }
             }
 
-            return seasons.Count > 0 ? seasons : null;
+            return allEpisodes.Count > 0 ? allEpisodes : null;
         }
 
         /// <summary>
@@ -738,7 +664,7 @@ namespace LME.Petlura
             }
 
             // Додати тег якості
-            string tag = QualityHelper.DetectQuality($"{title} {streamUrl}");
+            string tag = QualityHelper.DetectQualityTag($"{title} {streamUrl}");
             if (!string.IsNullOrEmpty(tag) && !title.StartsWith("[4K]") && !title.StartsWith("[FHD]"))
                 title = $"{tag} {title}";
 

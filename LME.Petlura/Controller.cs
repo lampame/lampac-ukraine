@@ -35,13 +35,15 @@ namespace LME.Petlura.Controllers
             if (string.IsNullOrWhiteSpace(imdb_id))
                 return OnError("lme_petlura", refresh_proxy: true);
 
+            string embedTail = null;
+
             if (checksearch)
             {
                 if (!StreamHelper.IsCheckOnlineSearchEnabled())
                     return OnError("lme_petlura", refresh_proxy: true);
 
                 // Перевіряємо чи є embed для цього imdb_id
-                string embedTail = await invoke.ResolveEmbedTail(imdb_id);
+                embedTail = await invoke.ResolveEmbedTail(imdb_id);
                 if (!string.IsNullOrEmpty(embedTail))
                     return Content("data-json=", "text/plain; charset=utf-8");
 
@@ -49,7 +51,6 @@ namespace LME.Petlura.Controllers
             }
 
             // Отримуємо embed tail
-            string embedTail;
             if (!string.IsNullOrEmpty(href))
             {
                 embedTail = href;
