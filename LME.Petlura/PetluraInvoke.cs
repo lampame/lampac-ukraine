@@ -239,15 +239,12 @@ namespace LME.Petlura
                     return null;
 
                 // Шукаємо file:'[{...}]' — серіал з сезонами й озвучками
-                int idx = html.IndexOf("file:'[", StringComparison.Ordinal);
-                if (idx < 0)
+                // Формат: file: '[{"title":...}]',
+                var match = Regex.Match(html, @"file:\s*'(\[.*?\])\s*'", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                if (!match.Success)
                     return null;
 
-                int endIdx = html.IndexOf("']", idx + 6);
-                if (endIdx < 0)
-                    return null;
-
-                string jsonStr = html.Substring(idx + 6, endIdx - idx - 6)
+                string jsonStr = match.Groups[1].Value
                     .Replace("\\'", "'")
                     .Replace("\\\"", "\"")
                     .Replace("\\/", "/");
