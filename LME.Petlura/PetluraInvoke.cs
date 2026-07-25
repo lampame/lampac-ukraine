@@ -88,8 +88,8 @@ namespace LME.Petlura
         }
 
         /// <summary>
-        /// Знайти hdvbua embed tail через пошук на всіх джерелах.
-        /// Повертає embed tail (embed/XXXX/XXXXX) або null.
+        /// Знайти hdvbua embed ID через пошук на всіх джерелах.
+        /// Повертає числовий ID (напр. "7519") або null.
         /// </summary>
         public async Task<string> ResolveEmbedTail(string imdbId)
         {
@@ -132,18 +132,18 @@ namespace LME.Petlura
                 var ids = found.Select(f => f.id).Distinct().ToList();
                 if (ids.Count == 1)
                 {
-                    string result = found[0].tail;
-                    _onLog?.Invoke($"Petlura: знайдено embed {result} для {imdbId}");
-                    _hybridCache.Set(memKey, result, CacheHelper.CacheTime(30, init: _init));
-                    return result;
+                    string resultId = found[0].id.ToString();
+                    _onLog?.Invoke($"Petlura: знайдено embed /embed/{resultId} для {imdbId}");
+                    _hybridCache.Set(memKey, resultId, CacheHelper.CacheTime(30, init: _init));
+                    return resultId;
                 }
 
                 // Різні numericId — беремо найбільший
                 int bestId = ids.Max();
                 var best = found.First(f => f.id == bestId);
-                _onLog?.Invoke($"Petlura: різні embed ID, вибрано найбільший {best.tail} (джерело: {best.source}) для {imdbId}");
-                _hybridCache.Set(memKey, best.tail, CacheHelper.CacheTime(30, init: _init));
-                return best.tail;
+                _onLog?.Invoke($"Petlura: різні embed ID, вибрано найбільший /embed/{best.id} (джерело: {best.source}) для {imdbId}");
+                _hybridCache.Set(memKey, best.id.ToString(), CacheHelper.CacheTime(30, init: _init));
+                return best.id.ToString();
             }
             catch (Exception ex)
             {
@@ -214,12 +214,12 @@ namespace LME.Petlura
         /// <summary>
         /// Отримати HTML плеєра hdvbua.pro.
         /// </summary>
-        private async Task<string> FetchPlayerHtml(string embedTail)
+        private async Task<string> FetchPlayerHtml(string embedId)
         {
-            if (string.IsNullOrWhiteSpace(embedTail))
+            if (string.IsNullOrWhiteSpace(embedId))
                 return null;
 
-            string url = $"https://hdvbua.pro/{embedTail}";
+            string url = $"https://hdvbua.pro/embed/{embedId}";
             var headers = new List<HeadersModel>
             {
                 new HeadersModel("User-Agent", "Mozilla/5.0"),
@@ -231,7 +231,8 @@ namespace LME.Petlura
             if (_httpHydra != null)
                 return await _httpHydra.Get(url, newheaders: headers);
 
-            return await Http.Get(url, headers: headers, proxy: _proxyManager.Get());
+            var proxy = _proxyManager?.Get();
+            return await Http.Get(url, headers: headers, proxy: proxy);
         }
 
         /// <summary>
