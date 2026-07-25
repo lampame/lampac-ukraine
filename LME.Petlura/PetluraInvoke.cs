@@ -402,7 +402,7 @@ namespace LME.Petlura
         /// <summary>
         /// Парсинг субтитрів з формату [lang]url.
         /// </summary>
-        private SubtitleInfo ParseSubtitle(string subtitleValue)
+        public SubtitleInfo ParseSubtitle(string subtitleValue)
         {
             if (string.IsNullOrWhiteSpace(subtitleValue))
                 return null;
