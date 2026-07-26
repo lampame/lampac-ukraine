@@ -226,10 +226,66 @@ namespace LME.Uaflix
                 return null;
 
             var match = Regex.Match(content, "src=['\\\"]([^'\\\"]+)['\\\"]", RegexOptions.IgnoreCase);
-            if (!match.Success)
+            if (match.Success)
+                return NormalizeIframeUrl(match.Groups[1].Value);
+
+            // Спробувати знайти пряме посилання на плеєр в content meta-тега
+            string directUrl = ExtractPlayerUrlFromText(content);
+            if (!string.IsNullOrEmpty(directUrl))
+                return directUrl;
+
+            // Якщо content сам є URL (напр. og:video:iframe містить URL без src="")
+            string trimmed = content.Trim();
+            if (trimmed.StartsWith("http://") || trimmed.StartsWith("https://") || trimmed.StartsWith("//"))
+                return NormalizeIframeUrl(trimmed);
+
+            return null;
+        }
+
+        /// <summary>
+        /// Знайти пряме посилання на плеєр (ashdi.vip, zetvideo.net) в тексті HTML.
+        /// Використовується як fallback, коли iframe або meta-теги не містять URL плеєра.
+        /// Відповідає Python _extract_player_url_from_text().
+        /// </summary>
+        private static string ExtractPlayerUrlFromText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
                 return null;
 
-            return NormalizeIframeUrl(match.Groups[1].Value);
+            string decoded = WebUtility.HtmlDecode(text).Replace("\\/", "/");
+
+            // Пошук абсолютних URL: https://ashdi.vip/serial/..., https://zetvideo.net/serial/..., https://zetvideo.net/vod/...
+            var match = Regex.Match(decoded, @"https?://(?:ashdi\.vip|zetvideo\.net)/(?:serial|vod)/[^\s""'<>\\]+", RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                string url = match.Value.TrimEnd('\'', '"', ')', ';', ']', '}', '>', ',');
+                return NormalizeStaticIframeUrl(url);
+            }
+
+            // Пошук protocol-relative URL: //ashdi.vip/serial/..., //zetvideo.net/...
+            match = Regex.Match(decoded, @"//(?:ashdi\.vip|zetvideo\.net)/(?:serial|vod)/[^\s""'<>\\]+", RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                string url = "https:" + match.Value.TrimEnd('\'', '"', ')', ';', ']', '}', '>', ',');
+                return NormalizeStaticIframeUrl(url);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Статична версія NormalizeIframeUrl для використання в статичних методах
+        /// </summary>
+        private static string NormalizeStaticIframeUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return null;
+
+            string result = WebUtility.HtmlDecode(url.Trim()).Replace("&amp;", "&");
+            if (result.StartsWith("//"))
+                result = "https:" + result;
+
+            return result;
         }
 
         private string ExtractIframeUrl(HtmlDocument doc)
@@ -245,7 +301,12 @@ namespace LME.Uaflix
             if (!string.IsNullOrEmpty(iframeUrl))
                 return iframeUrl;
 
-            return ExtractIframeFromMeta(doc);
+            string metaUrl = ExtractIframeFromMeta(doc);
+            if (!string.IsNullOrEmpty(metaUrl))
+                return metaUrl;
+
+            // Fallback: direct player URL embedded in page text (e.g. zetvideo.net/serial/xxxx без iframe)
+            return ExtractPlayerUrlFromText(doc.DocumentNode.OuterHtml);
         }
 
         /// <summary>
@@ -289,6 +350,14 @@ namespace LME.Uaflix
             string metaIframe = ExtractIframeFromMeta(doc);
             if (!string.IsNullOrEmpty(metaIframe) && !result.Any(u => string.Equals(u, metaIframe, StringComparison.OrdinalIgnoreCase)))
                 result.Add(metaIframe);
+
+            // Fallback: direct player URL embedded in page text
+            if (result.Count == 0)
+            {
+                string directUrl = ExtractPlayerUrlFromText(doc.DocumentNode.OuterHtml);
+                if (!string.IsNullOrEmpty(directUrl) && !result.Any(u => string.Equals(u, directUrl, StringComparison.OrdinalIgnoreCase)))
+                    result.Add(directUrl);
+            }
 
             return result;
         }
@@ -798,7 +867,7 @@ namespace LME.Uaflix
                                 continue;
                             }
 
-                            if (seasonProbe.PlayerType == "ashdi-serial" || seasonProbe.PlayerType == "zetvideo-serial")
+                            if (seasonProbe.PlayerType == "ashdi-serial")
                             {
                                 string serialKey = NormalizeSerialPlayerKey(seasonProbe.PlayerType, seasonProbe.IframeUrl);
                                 if (!serialPlayersProcessed.Add(serialKey))
@@ -815,7 +884,52 @@ namespace LME.Uaflix
                                 }
 
                                 MergeVoices(structure, voices);
-                                _onLog($"AggregateSerialStructure: Parsed serial player {seasonProbe.PlayerType}, voices={voices.Count}");
+                                _onLog($"AggregateSerialStructure: Parsed ashdi-serial player, voices={voices.Count}");
+                                continue;
+                            }
+
+                            if (seasonProbe.PlayerType == "zetvideo-serial")
+                            {
+                                // Гібридний підхід: спочатку пробуємо multi-episode парсинг
+                                var voices = await ParseMultiEpisodePlayer(seasonProbe.IframeUrl, seasonProbe.PlayerType);
+
+                                // Фільтруємо прем'єрні епізоди
+                                var seasonAvailable = seasonGroup.Value.Where(e => !e.IsPremiere).ToList();
+                                int filteredCount = seasonGroup.Value.Count - seasonAvailable.Count;
+                                if (filteredCount > 0)
+                                    _onLog($"AggregateSerialStructure: Відфільтровано {filteredCount} прем'єрних епізодів із сезону {season}");
+
+                                int expectedEpCount = seasonAvailable.Count;
+                                bool multiCoversAll = false;
+
+                                if (voices != null && voices.Count > 0 && expectedEpCount > 0)
+                                {
+                                    foreach (var voice in voices)
+                                    {
+                                        if (voice?.Seasons != null && voice.Seasons.TryGetValue(season, out var voiceEps) && voiceEps != null && voiceEps.Count >= expectedEpCount)
+                                        {
+                                            multiCoversAll = true;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (multiCoversAll)
+                                {
+                                    string serialKey = NormalizeSerialPlayerKey(seasonProbe.PlayerType, seasonProbe.IframeUrl);
+                                    if (!string.IsNullOrWhiteSpace(serialKey))
+                                        serialPlayersProcessed.Add(serialKey);
+
+                                    MergeVoices(structure, voices);
+                                    _onLog($"AggregateSerialStructure: zetvideo-serial multi-episode покриває всі епізоди сезону {season}, voices={voices.Count}");
+                                }
+                                else if (seasonAvailable.Count > 0)
+                                {
+                                    // Multi-episode не покриває всі епізоди — per-episode (як vod)
+                                    _onLog($"AggregateSerialStructure: zetvideo-serial не покриває всі епізоди сезону {season}, переходжу на per-episode (vod) режим");
+                                    AddVodSeasonEpisodes(structure, "zetvideo-vod", season, seasonAvailable);
+                                }
+
                                 continue;
                             }
 
@@ -1155,7 +1269,7 @@ namespace LME.Uaflix
                         }
                     }
 
-                    if (seasonProbe.PlayerType == "ashdi-serial" || seasonProbe.PlayerType == "zetvideo-serial")
+                    if (seasonProbe.PlayerType == "ashdi-serial")
                     {
                         var voices = await ParseMultiEpisodePlayerCached(seasonProbe.IframeUrl, seasonProbe.PlayerType);
                         foreach (var voice in voices)
@@ -1184,6 +1298,71 @@ namespace LME.Uaflix
                                         .ToList()
                                 }
                             };
+                        }
+                    }
+                    else if (seasonProbe.PlayerType == "zetvideo-serial")
+                    {
+                        // Гібридний підхід: спочатку пробуємо multi-episode парсинг
+                        var voices = await ParseMultiEpisodePlayerCached(seasonProbe.IframeUrl, seasonProbe.PlayerType);
+
+                        // Фільтруємо прем'єрні епізоди
+                        var seasonAvailable = seasonEpisodes.Where(e => !e.IsPremiere).ToList();
+                        int filteredCount = seasonEpisodes.Count - seasonAvailable.Count;
+                        if (filteredCount > 0)
+                            _onLog($"GetSeasonStructure: Відфільтровано {filteredCount} прем'єрних епізодів із сезону {season}");
+
+                        int expectedEpCount = seasonAvailable.Count;
+                        bool multiCoversAll = false;
+
+                        // Перевіряємо, чи multi-episode дані покривають всі епізоди
+                        if (voices != null && voices.Count > 0 && expectedEpCount > 0)
+                        {
+                            foreach (var voice in voices)
+                            {
+                                if (voice?.Seasons != null && voice.Seasons.TryGetValue(season, out var voiceEps) && voiceEps != null && voiceEps.Count >= expectedEpCount)
+                                {
+                                    multiCoversAll = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (multiCoversAll)
+                        {
+                            // Multi-episode дані покривають всі епізоди — використовуємо їх
+                            foreach (var voice in voices)
+                            {
+                                if (voice?.Seasons == null || !voice.Seasons.TryGetValue(season, out List<EpisodeInfo> seasonVoiceEpisodes) || seasonVoiceEpisodes == null || seasonVoiceEpisodes.Count == 0)
+                                    continue;
+
+                                structure.Voices[voice.DisplayName] = new VoiceInfo
+                                {
+                                    Name = voice.Name,
+                                    PlayerType = voice.PlayerType,
+                                    DisplayName = voice.DisplayName,
+                                    Seasons = new Dictionary<int, List<EpisodeInfo>>
+                                    {
+                                        [season] = seasonVoiceEpisodes
+                                            .Where(ep => ep != null && !string.IsNullOrWhiteSpace(ep.File))
+                                            .Select(ep => new EpisodeInfo
+                                            {
+                                                Number = ep.Number,
+                                                Title = ep.Title,
+                                                File = ep.File,
+                                                Id = ep.Id,
+                                                Poster = ep.Poster,
+                                                Subtitle = ep.Subtitle
+                                            })
+                                            .ToList()
+                                    }
+                                };
+                            }
+                        }
+                        else if (seasonAvailable.Count > 0)
+                        {
+                            // Multi-episode не покриває всі епізоди — per-episode (як vod)
+                            _onLog($"GetSeasonStructure: zetvideo-serial не покриває всі епізоди сезону {season}, переходжу на per-episode (vod) режим");
+                            AddVodSeasonEpisodes(structure, "zetvideo-vod", season, seasonAvailable);
                         }
                     }
                     else if (seasonProbe.PlayerType == "ashdi-vod" || seasonProbe.PlayerType == "zetvideo-vod")
@@ -2395,6 +2574,64 @@ namespace LME.Uaflix
                     });
                 }
             }
+
+            if (result.Count > 0)
+                return result;
+
+            // Fallback: спроба розпарсити Playerjs JSON масив (serial сторінки мають file:'[...]')
+            var jsonMatch = Regex.Match(html, @"file:'(\[.+?\])'", RegexOptions.Singleline);
+            if (jsonMatch.Success)
+            {
+                try
+                {
+                    string jsonStr = jsonMatch.Groups[1].Value
+                        .Replace("\\'", "'")
+                        .Replace("\\\"", "\"");
+
+                    var items = JsonSerializer.Deserialize<List<JsonObject>>(WebUtility.HtmlDecode(jsonStr).Replace("\\/", "/"));
+                    if (items != null && items.Count > 0)
+                    {
+                        foreach (var item in items)
+                        {
+                            string voiceTitle = item["title"]?.ToString().Trim() ?? "Uaflix";
+                            var folders = item["folder"] as JsonArray;
+                            if (folders == null) continue;
+
+                            foreach (var seasonFolder in folders)
+                            {
+                                var eps = seasonFolder?["folder"] as JsonArray;
+                                if (eps == null) continue;
+
+                                foreach (var ep in eps)
+                                {
+                                    string fileUrl = ep?["file"]?.ToString().Trim();
+                                    if (string.IsNullOrWhiteSpace(fileUrl))
+                                        continue;
+
+                                    string quality = QualityHelper.DetectQualityTag(fileUrl) ?? "auto";
+                                    SubtitleTpl? subtitles = null;
+                                    string subtitleStr = ep?["subtitle"]?.ToString();
+                                    if (!string.IsNullOrWhiteSpace(subtitleStr))
+                                        subtitles = ApnHelper.ParseSubtitles(subtitleStr);
+
+                                    result.Add(new PlayStream
+                                    {
+                                        link = fileUrl,
+                                        quality = quality,
+                                        title = QualityHelper.BuildDisplayTitle(voiceTitle, fileUrl, result.Count + 1),
+                                        subtitles = subtitles
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _onLog($"ParseAllZetvideoSources: Помилка парсингу Playerjs JSON: {ex.Message}");
+                }
+            }
+
             return result;
         }
 
