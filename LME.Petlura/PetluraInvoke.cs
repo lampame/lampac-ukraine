@@ -107,7 +107,6 @@ namespace LME.Petlura
 
                 if (found.Count == 0)
                 {
-                    _onLog?.Invoke($"Petlura: жодне джерело не знайшло embed для {imdbId}");
                     _hybridCache.Set<string>(memKey, null, CacheHelper.CacheTime(5, init: _init));
                     return null;
                 }
@@ -117,7 +116,6 @@ namespace LME.Petlura
                 if (ids.Count == 1)
                 {
                     string resultId = found[0].id.ToString();
-                    _onLog?.Invoke($"Petlura: знайдено embed /embed/{resultId} для {imdbId}");
                     _hybridCache.Set(memKey, resultId, CacheHelper.CacheTime(30, init: _init));
                     return resultId;
                 }
@@ -125,7 +123,6 @@ namespace LME.Petlura
                 // Різні numericId — беремо найбільший
                 int bestId = ids.Max();
                 var best = found.First(f => f.id == bestId);
-                _onLog?.Invoke($"Petlura: різні embed ID, вибрано найбільший /embed/{best.id} (джерело: {best.source}) для {imdbId}");
                 _hybridCache.Set(memKey, best.id.ToString(), CacheHelper.CacheTime(30, init: _init));
                 return best.id.ToString();
             }
@@ -151,7 +148,6 @@ namespace LME.Petlura
                     new HeadersModel("Referer", baseUrl)
                 };
 
-                _onLog?.Invoke($"Petlura: пошук на {baseUrl} для {imdbId}");
                 string searchHtml = await HttpHelper.GetAsync(_httpHydra, _init, searchUrl, headers, _proxyManager);
                 if (string.IsNullOrWhiteSpace(searchHtml))
                     return null;
@@ -159,7 +155,6 @@ namespace LME.Petlura
                 // 2. Перевірка на відсутність результатів
                 if (HasNoResults(searchHtml))
                 {
-                    _onLog?.Invoke($"Petlura: {baseUrl} — результатів не знайдено для {imdbId}");
                     return null;
                 }
 
@@ -168,7 +163,6 @@ namespace LME.Petlura
                 string contentUrl = FindContentLink(searchHtml, baseUri.Host);
                 if (string.IsNullOrEmpty(contentUrl))
                 {
-                    _onLog?.Invoke($"Petlura: {baseUrl} — не знайдено посилання на контент для {imdbId}");
                     return null;
                 }
 
@@ -176,15 +170,12 @@ namespace LME.Petlura
                     contentUrl = baseUrl.TrimEnd('/') + "/" + contentUrl.TrimStart('/');
 
                 // 4. Отримати сторінку контенту
-                _onLog?.Invoke($"Petlura: сторінка контенту {contentUrl}");
                 string pageHtml = await HttpHelper.GetAsync(_httpHydra, _init, contentUrl, headers, _proxyManager);
                 if (string.IsNullOrWhiteSpace(pageHtml))
                     return null;
 
                 // 5. Знайти HDVB embed
                 string tail = ExtractHdvbTail(pageHtml);
-                if (!string.IsNullOrEmpty(tail))
-                    _onLog?.Invoke($"Petlura: {baseUrl} -> embed {tail}");
 
                 return tail;
             }
@@ -209,8 +200,6 @@ namespace LME.Petlura
                 new HeadersModel("User-Agent", "Mozilla/5.0"),
                 new HeadersModel("Referer", "https://uaserials.fm/")
             };
-
-            _onLog?.Invoke($"Petlura: запит до плеєра {url}");
 
             if (_httpHydra != null)
                 return await _httpHydra.Get(url, newheaders: headers);
