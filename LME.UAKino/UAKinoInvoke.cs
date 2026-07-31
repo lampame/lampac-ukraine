@@ -67,10 +67,22 @@ namespace LME.UAKino
                         new HeadersModel("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
                     };
 
-                    string json = await Http.Post(_init.cors(url), body, headers: headers, proxy: _proxyManager.Get());
+                    string requestUrl = _init.cors(url);
+                    var proxy = _proxyManager.Get();
+                    string json;
+                    using (var content = new System.Net.Http.StringContent(body, System.Text.Encoding.UTF8, "application/x-www-form-urlencoded"))
+                    {
+                        var (respContent, resp) = await Http.BasePost(requestUrl, content, headers: headers, proxy: proxy, disposeData: true);
+                        if (resp == null || resp.StatusCode != System.Net.HttpStatusCode.OK)
+                        {
+                            _onLog?.Invoke($"UAKino search error: HTTP status={(resp == null ? "null" : (int)resp.StatusCode)}, url={requestUrl}, useproxy={_init.useproxy}, proxy={(proxy != null ? "так" : "ні")} (пошук '{query}')");
+                            return null;
+                        }
+                        json = respContent;
+                    }
                     if (string.IsNullOrEmpty(json))
                     {
-                        _onLog?.Invoke($"UAKino search error: порожня відповідь від {_init.host} (пошук '{query}')");
+                        _onLog?.Invoke($"UAKino search error: порожнє тіло, url={requestUrl}, useproxy={_init.useproxy}, proxy={(proxy != null ? "так" : "ні")} (пошук '{query}')");
                         return null;
                     }
 
