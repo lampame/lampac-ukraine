@@ -69,15 +69,24 @@ namespace LME.UAKino
 
                     string json = await Http.Post(_init.cors(url), body, headers: headers, proxy: _proxyManager.Get());
                     if (string.IsNullOrEmpty(json))
+                    {
+                        _onLog?.Invoke($"UAKino search error: порожня відповідь від {_init.host} (пошук '{query}')");
                         return null;
+                    }
 
                     using var jsonDoc = JsonDocument.Parse(json);
                     if (!jsonDoc.RootElement.TryGetProperty("content", out JsonElement contentElem))
+                    {
+                        _onLog?.Invoke($"UAKino search error: відповідь без поля 'content' від {_init.host}");
                         return null;
+                    }
 
                     string html = contentElem.GetString();
                     if (string.IsNullOrEmpty(html))
+                    {
+                        _onLog?.Invoke($"UAKino search error: порожній HTML від {_init.host} (пошук '{query}')");
                         return null;
+                    }
 
                     var htmlDoc = new HtmlDocument();
                     htmlDoc.LoadHtml(html);
@@ -132,15 +141,24 @@ namespace LME.UAKino
 
                     string json = await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
                     if (string.IsNullOrEmpty(json))
+                    {
+                        _onLog?.Invoke($"UAKino playlist error: порожня відповідь від {_init.host} (news_id={newsId})");
                         return null;
+                    }
 
                     using var jsonDoc = JsonDocument.Parse(json);
                     if (!jsonDoc.RootElement.TryGetProperty("response", out JsonElement responseElem))
+                    {
+                        _onLog?.Invoke($"UAKino playlist error: відповідь без поля 'response' від {_init.host}");
                         return null;
+                    }
 
                     string html = responseElem.GetString();
                     if (string.IsNullOrEmpty(html))
+                    {
+                        _onLog?.Invoke($"UAKino playlist error: порожній HTML від {_init.host} (news_id={newsId})");
                         return null;
+                    }
 
                     var voices = ParsePlaylistHtml(html);
                     if (voices.Count > 0)
@@ -178,7 +196,10 @@ namespace LME.UAKino
 
                 string html = await HttpHelper.GetAsync(_httpHydra, _init, pageUrl, headers, _proxyManager);
                 if (string.IsNullOrEmpty(html))
+                {
+                    _onLog?.Invoke($"UAKino page fallback error: порожня відповідь від {_init.host} ({pageUrl})");
                     return null;
+                }
 
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
