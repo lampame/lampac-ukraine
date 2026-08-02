@@ -84,6 +84,8 @@ wget -O - https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-mo
 
 Запускайте з теки інсталяції Lampac (там, де є `module/` або `mods/`).
 
+Якщо в `repository.yaml` не вказано `modules:` (режим «поставити все»), скрипт звіряє модулі з репозиторієм на GitHub. За браку доступу до GitHub (ліміт API, фаєрвол) такі репо безпечно пропускаються, а в лозі видно HTTP-код причини.
+
 Якщо `wget` не встановлений, використовуйте `curl`:
 
 ```bash
@@ -305,6 +307,8 @@ wget -O - https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-mo
 ```
 
 Run from the Lampac install directory (where `module/` or `mods/` is).
+
+If `repository.yaml` has no `modules:` (install-all mode), the script compares modules against the repo on GitHub. If GitHub is unavailable (API limit, firewall), such repos are safely skipped and the log shows the HTTP status.
 
 If `wget` is not installed, use `curl`:
 

@@ -251,9 +251,9 @@ echo "prune-modules: очікуваних module/<repo>/<mod> теків: $expec
 repo_owner_path() { awk -F'\t' -v n="$1" '$1==n {print $2; exit}' "$REPO_FILE"; }
 repo_branch()    { awk -F'\t' -v n="$1" '$1==n {print $2; exit}' "$BRANCH_FILE"; }
 
-fetch_url() {
+fetch_body() {
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "$1"
+        curl -sSL "$1"
     elif command -v wget >/dev/null 2>&1; then
         wget -qO - "$1"
     else
@@ -261,14 +261,54 @@ fetch_url() {
     fi
 }
 
-# поточні теки верхнього рівня репозиторію (як FetchRepositoryFolders у C#)
-github_dirs() {
-    local op="$1" br="$2"
-    fetch_url "https://api.github.com/repos/${op}/contents?ref=${br}" 2>/dev/null \
+http_code() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -sSL -o /dev/null -w '%{http_code}' "$1" 2>/dev/null
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O /dev/null --server-response "$1" 2>&1 | awk 'NR==1{print $2}'
+    fi
+}
+
+# поточні теки верхнього рівня репозиторію (як FetchRepositoryFolders у C#).
+# Спершу GitHub API (JSON), потім fallback на github.com (HTML) — бо api.github.com
+# часто обмежений лімітом (403) або заблокований там, де github.com ще працює.
+github_dirs_branch() {
+    local op="$1" br="$2" url out
+    # 1) GitHub API
+    url="https://api.github.com/repos/${op}/contents?ref=${br}"
+    out="$(fetch_body "$url" 2>/dev/null \
         | tr '{' '\n' \
         | grep '"type":"dir"' \
         | grep -oE '"name":"[^"]+"' \
-        | sed -E 's/"name":"([^"]+)"/\1/'
+        | sed -E 's/"name":"([^"]+)"/\1/' || true)"
+    if [[ -n "$out" ]]; then
+        printf '%s\n' "$out"
+        return 0
+    fi
+    # 2) github.com (HTML-дерево) — лише теки верхнього рівня
+    url="https://github.com/${op}/tree/${br}"
+    fetch_body "$url" 2>/dev/null \
+        | grep -oE "href=\"/${op}/tree/${br}/[^/?#\"]+" \
+        | sed -E "s#href=\"/${op}/tree/${br}/##" \
+        | sort -u
+}
+
+GITHUB_STATUS=""
+github_dirs() {
+    local op="$1" br="$2" b out first=1
+    out=""
+    GITHUB_STATUS=""
+    for b in "$br" main master; do
+        if [[ -n "$first" ]]; then
+            GITHUB_STATUS="$(http_code "https://api.github.com/repos/${op}/contents?ref=${b}" 2>/dev/null || true)"
+            first=""
+        fi
+        out="$(github_dirs_branch "$op" "$b" || true)"
+        if [[ -n "$out" ]]; then
+            printf '%s\n' "$out"
+            return 0
+        fi
+    done
 }
 
 # --- збір списку на видалення ------------------------------------------------
@@ -315,7 +355,11 @@ for entry in "$MODULE_DIR"/*; do
             fi
             current="$(github_dirs "$op" "$br" || true)"
             if [[ -z "$current" ]]; then
-                echo "prune-modules: [пропуск, немає доступу до GitHub для] $name"
+                if [[ -n "$GITHUB_STATUS" && "$GITHUB_STATUS" != "200" ]]; then
+                    echo "prune-modules: [пропуск, GitHub недоступний (HTTP ${GITHUB_STATUS}) для] $name"
+                else
+                    echo "prune-modules: [пропуск, немає тек у GitHub для] $name"
+                fi
                 continue
             fi
             for mod in "$entry"/*; do
