@@ -12,10 +12,14 @@
 #   1. Знаходить активний конфіг: mods/repository.yaml, інакше module/repository.yaml.
 #   2. Парсить його та будує "очікуваний" набір module/<repo>/<module>/.
 #   3. Видаляє:
-#        - цілі теки <repo>, яких немає в конфізі взагалі (репозиторій прибрано);
-#        - теки <module> всередині repo, які не вказані в modules: списку.
-#   4. НЕ чіпає repo без явного modules: (режим "поставити все з репо") —
-#      статично невідомо, які там модулі.
+#        - цілі теки <repo>, які колись були встановлені через repository.yaml
+#          (видно в .repository_state.json), але тепер прибрані з конфігу;
+#        - теки <module> всередині repo, які не вказані в modules: списку;
+#        - теки <module> всередині repo без modules: (режим "поставити все"),
+#          яких уже немає у віддаленому репозиторії (звірка з GitHub).
+#   4. НІКОЛИ не чіпає теки, що не керуються repository.yaml:
+#      вбудовані модулі Lampac (AdminPanel, Online, SISI, ...) і вручну
+#      встановлені модулі в module/ або mods/ лишаються недоторканими.
 #
 # Безпека:
 #   За замовчуванням — dry-run (тільки показує, що буде видалено).
@@ -33,7 +37,10 @@
 # Обмеження:
 #   - Парсить список-форму (modules: список рядків). Flow-listу
 #     "modules: [A, B]" теж розуміє. Dict-форму modules: {A: B} — ні.
-#   - Репо без modules: скрипт пропускає (режим авто-вибору всіх тек).
+#   - Для repo без modules: потрібен доступ до GitHub API (curl або wget),
+#     інакше таке repo безпечно пропускається.
+#   - Приватні репозиторії, що потребують токена, у режимі "поставити все"
+#     пропускаються (скрипт токена не знає).
 
 set -euo pipefail
 
@@ -68,6 +75,9 @@ else
     exit 1
 fi
 
+# state-файл лежить поруч із конфігом (як у ModuleRepository)
+STATE_FILE="$(dirname "$CONFIG")/.repository_state.json"
+
 APPLY=false
 for arg in "$@"; do
     case "$arg" in
@@ -98,6 +108,15 @@ parse_yaml() {
             sub(/\.git$/, "", name)
             return name
         }
+        function ownerpath(url,    n, parts) {
+            sub(/^[A-Za-z0-9+.-]*:\/\//, "", url)
+            sub(/^git@[^:]*:/, "", url)
+            gsub(/\/+$/, "", url)
+            sub(/\.git$/, "", url)
+            n = split(url, parts, "/")
+            if (n >= 2) return parts[n-1] "/" parts[n]
+            return ""
+        }
         function reset() { repo=""; inmods=0; hasmods=0 }
         {
             line = $0
@@ -113,12 +132,21 @@ parse_yaml() {
                 gsub(/^[\x27\x22]|[\x27\x22]$/, "", line)
                 repo = reponame(line)
                 inmods = 0; hasmods = 0
-                print "REPO\t" repo
+                print "REPO\t" repo "\t" ownerpath(line)
                 next
             }
 
             # ключ-заголовок рівня 0 у map-формі (наприклад "ukraine:")
             if (indent == 0 && line ~ /:[[:space:]]*$/) { reset(); next }
+
+            # ключ гілки
+            if (line ~ /^branch:/ || line ~ /^[-][[:space:]]+branch:/) {
+                sub(/^[-][[:space:]]+branch:[[:space:]]*/, "", line)
+                sub(/^branch:[[:space:]]*/, "", line)
+                gsub(/^[\x27\x22]|[\x27\x22]$/, "", line)
+                if (repo != "") print "BRANCH\t" repo "\t" line
+                next
+            }
 
             # ключ списку модулів
             if (line ~ /^(modules|folders|directories|paths|include):/) {
@@ -155,15 +183,23 @@ PARSE_FILE="$TMPDIR_SAFE/prune-modules.parse.$$"
 MANAGED_FILE="$TMPDIR_SAFE/prune-modules.managed.$$"
 HASMODS_FILE="$TMPDIR_SAFE/prune-modules.hasmods.$$"
 EXPECTED_FILE="$TMPDIR_SAFE/prune-modules.expected.$$"
+REPO_FILE="$TMPDIR_SAFE/prune-modules.repo.$$"
+BRANCH_FILE="$TMPDIR_SAFE/prune-modules.branch.$$"
+KNOWN_FILE="$TMPDIR_SAFE/prune-modules.known.$$"
 : > "$MANAGED_FILE"; : > "$HASMODS_FILE"; : > "$EXPECTED_FILE"
+: > "$REPO_FILE"; : > "$BRANCH_FILE"; : > "$KNOWN_FILE"
 
 parse_yaml "$CONFIG" > "$PARSE_FILE"
 
-while IFS=$'\t' read -r kind value; do
+while IFS=$'\t' read -r kind value extra; do
     [[ -z "$value" ]] && continue
     case "$kind" in
         REPO)
             echo "$value" >> "$MANAGED_FILE"
+            [[ -n "$extra" ]] && printf '%s\t%s\n' "$value" "$extra" >> "$REPO_FILE"
+            ;;
+        BRANCH)
+            printf '%s\t%s\n' "$value" "$extra" >> "$BRANCH_FILE"
             ;;
         MOD)
             repo="${value%%/*}"
@@ -176,18 +212,70 @@ while IFS=$'\t' read -r kind value; do
 done < "$PARSE_FILE"
 
 rm -f "$PARSE_FILE"
-trap 'rm -f "$MANAGED_FILE" "$HASMODS_FILE" "$EXPECTED_FILE"' EXIT
+trap 'rm -f "$MANAGED_FILE" "$HASMODS_FILE" "$EXPECTED_FILE" "$REPO_FILE" "$BRANCH_FILE" "$KNOWN_FILE"' EXIT
+
+# "відомі" репо = ті, що є в конфізі + ті, що колись встановлювались через
+# repository.yaml (видно в .repository_state.json). Це дозволяє безпечно
+# відрізнити repo-теки від вбудованих/ручних модулів Lampac і не чіпати останні.
+cp "$MANAGED_FILE" "$KNOWN_FILE"
+if [[ -f "$STATE_FILE" ]]; then
+    awk '
+        function extract(rest,    ident, parts) {
+            if (match(rest, /[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/)) {
+                ident = substr(rest, RSTART, RLENGTH)
+                split(ident, parts, "/")
+                print parts[2]
+            }
+        }
+        {
+            line = $0
+            idx = index(line, "cache:branch-sha:")
+            if (idx) extract(substr(line, idx + 18))
+            idx = index(line, "cache:repo-default-branch:")
+            if (idx) extract(substr(line, idx + 27))
+            idx = index(line, "etag:repo:")
+            if (idx) extract(substr(line, idx + 10))
+            idx = index(line, "etag:branch:")
+            if (idx) extract(substr(line, idx + 12))
+        }
+    ' "$STATE_FILE" >> "$KNOWN_FILE"
+fi
+sort -u "$KNOWN_FILE" -o "$KNOWN_FILE"
 
 managed_count=$(sort -u "$MANAGED_FILE" | grep -c . || true)
 expected_count=$(grep -c . "$EXPECTED_FILE" || true)
 echo "prune-modules: репозиторіїв у конфізі: $managed_count"
 echo "prune-modules: очікуваних module/<repo>/<mod> теків: $expected_count"
 
+# --- допоміжні функції -------------------------------------------------------
+repo_owner_path() { awk -F'\t' -v n="$1" '$1==n {print $2; exit}' "$REPO_FILE"; }
+repo_branch()    { awk -F'\t' -v n="$1" '$1==n {print $2; exit}' "$BRANCH_FILE"; }
+
+fetch_url() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$1"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO - "$1"
+    else
+        return 1
+    fi
+}
+
+# поточні теки верхнього рівня репозиторію (як FetchRepositoryFolders у C#)
+github_dirs() {
+    local op="$1" br="$2"
+    fetch_url "https://api.github.com/repos/${op}/contents?ref=${br}" 2>/dev/null \
+        | tr '{' '\n' \
+        | grep '"type":"dir"' \
+        | grep -oE '"name":"[^"]+"' \
+        | sed -E 's/"name":"([^"]+)"/\1/'
+}
+
 # --- збір списку на видалення ------------------------------------------------
 REMOVE=()
 
 # файли, які завжди треба зберігати в module/
-KEEP_FILES=("repository.yaml" ".repository_state.json")
+KEEP_FILES=("repository.yaml" "repository.example.yaml" ".repository_state.json")
 
 for entry in "$MODULE_DIR"/*; do
     [[ -e "$entry" ]] || continue
@@ -203,22 +291,47 @@ for entry in "$MODULE_DIR"/*; do
         continue
     fi
 
-    if [[ -d "$entry" ]]; then
-        if ! grep -qx "$name" "$MANAGED_FILE"; then
-            REMOVE+=("$entry")
+    [[ -d "$entry" ]] || continue
+
+    if grep -Fqx "$name" "$MANAGED_FILE"; then
+        # репо є в конфізі
+        if grep -Fqx "$name" "$HASMODS_FILE"; then
+            # явний modules: — прибираємо підтеки, яких немає в списку
+            for mod in "$entry"/*; do
+                [[ -d "$mod" ]] || continue
+                mname="$(basename "$mod")"
+                if ! grep -Fqx "$name/$mname" "$EXPECTED_FILE"; then
+                    REMOVE+=("$mod")
+                fi
+            done
         else
-            if grep -qx "$name" "$HASMODS_FILE"; then
-                for mod in "$entry"/*; do
-                    [[ -d "$mod" ]] || continue
-                    mname="$(basename "$mod")"
-                    if ! grep -qx "$name/$mname" "$EXPECTED_FILE"; then
-                        REMOVE+=("$mod")
-                    fi
-                done
-            else
-                echo "prune-modules: [пропуск, repo без modules:] $name"
+            # install-all режим: звіряємо підтеки з віддаленим репозиторієм
+            op="$(repo_owner_path "$name")"
+            br="$(repo_branch "$name")"
+            [[ -z "$br" ]] && br="main"
+            if [[ -z "$op" ]]; then
+                echo "prune-modules: [пропуск, не вдалось визначити repo] $name"
+                continue
             fi
+            current="$(github_dirs "$op" "$br" || true)"
+            if [[ -z "$current" ]]; then
+                echo "prune-modules: [пропуск, немає доступу до GitHub для] $name"
+                continue
+            fi
+            for mod in "$entry"/*; do
+                [[ -d "$mod" ]] || continue
+                mname="$(basename "$mod")"
+                if ! printf '%s\n' "$current" | grep -Fqx "$mname"; then
+                    REMOVE+=("$mod")
+                fi
+            done
         fi
+    elif grep -Fqx "$name" "$KNOWN_FILE"; then
+        # репо було встановлене через repository.yaml, але прибране з конфігу
+        REMOVE+=("$entry")
+    else
+        # вбудований або вручну встановлений модуль Lampac — не чіпаємо
+        echo "prune-modules: [пропуск, вбудований/ручний модуль] $name"
     fi
 done
 

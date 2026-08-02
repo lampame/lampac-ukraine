@@ -84,6 +84,12 @@ wget -O - https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-mo
 
 Запускайте з теки інсталяції Lampac (там, де є `module/` або `mods/`).
 
+Якщо `wget` не встановлений, використовуйте `curl`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-modules.sh | bash -s -- --apply
+```
+
 ### Налаштування в `init.conf`
 
 Ключ має збігатися з назвою модуля (`LME.XXX`), а не з назвою провайдера.
@@ -299,6 +305,12 @@ wget -O - https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-mo
 ```
 
 Run from the Lampac install directory (where `module/` or `mods/` is).
+
+If `wget` is not installed, use `curl`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-modules.sh | bash -s -- --apply
+```
 
 ### `init.conf` key rule
 
