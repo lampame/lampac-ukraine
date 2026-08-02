@@ -25,7 +25,6 @@
 - `LME.Bamboo`
 - `LME.Unimay`
 - `LME.Mikai`
-- `LME.NMoonAnime`
 
 ### Ручне встановлення
 
@@ -55,7 +54,6 @@ git clone https://github.com/lampame/lampac-ukraine.git .
     - LME.AnimeON
     - LME.Unimay
     - LME.Mikai
-    - LME.NMoonAnime
     - LME.Uaflix
     - LME.Bamboo
     - LME.Makhno
@@ -127,7 +125,7 @@ git clone https://github.com/lampame/lampac-ukraine.git .
 
 Нотатки:
 - Якщо `apn: false`, APN вимикається.
-- Якщо `apn: true`, береться `apn_host` (для `Bamboo`, `NMoonAnime`, `StarLight`, `UafilmME` за порожнього `apn_host` підставляється дефолтний хост).
+- Якщо `apn: true`, береться `apn_host` (для `Bamboo`, `StarLight`, `UafilmME` за порожнього `apn_host` підставляється дефолтний хост).
 
 ### Приклад конфігурації `LME.JackTor`
 
@@ -227,7 +225,6 @@ wget -O check.sh https://raw.githubusercontent.com/lampame/lampac-ukraine/main/c
 - `LME.Bamboo`
 - `LME.Unimay`
 - `LME.Mikai`
-- `LME.NMoonAnime`
 
 ### Manual installation
 
@@ -257,7 +254,6 @@ Create or update `module/repository.yaml`:
     - LME.AnimeON
     - LME.Unimay
     - LME.Mikai
-    - LME.NMoonAnime
     - LME.Uaflix
     - LME.Bamboo
     - LME.Makhno
@@ -330,7 +326,7 @@ Short form:
 
 Notes:
 - If `apn: false`, APN is disabled.
-- If `apn: true`, `apn_host` is used (for `Bamboo`, `NMoonAnime`, `StarLight`, `UafilmME`, default host is used when `apn_host` is empty).
+- If `apn: true`, `apn_host` is used (for `Bamboo`, `StarLight`, `UafilmME`, default host is used when `apn_host` is empty).
 
 ### Source/player availability check script
 
