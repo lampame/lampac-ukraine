@@ -28,6 +28,7 @@
 # Використання:
 #   ./prune-modules.sh                 # dry-run
 #   ./prune-modules.sh --apply         # реально видалити
+#   ./prune-modules.sh --verbose       # показувати пропущені (вбудовані) модулі
 #   LAMPAC_DIR=/opt/lampac ./prune-modules.sh --apply
 #
 # Важливо: скрипт треба запускати КОЛИ Lampac зупинено (або одразу після
@@ -79,11 +80,13 @@ fi
 STATE_FILE="$(dirname "$CONFIG")/.repository_state.json"
 
 APPLY=false
+VERBOSE=false
 for arg in "$@"; do
     case "$arg" in
         --apply) APPLY=true ;;
+        --verbose|-v) VERBOSE=true ;;
         -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-        *) echo "prune-modules: невідомий аргумент '$arg' (дозволено: --apply, --help)" >&2; exit 2 ;;
+        *) echo "prune-modules: невідомий аргумент '$arg' (дозволено: --apply, --verbose, --help)" >&2; exit 2 ;;
     esac
 done
 
@@ -311,6 +314,13 @@ github_dirs() {
     done
 }
 
+# службові нотатки (пропуски) друкуємо лише у --verbose, щоб не спамити
+note() {
+    if $VERBOSE; then
+        echo "prune-modules: $*"
+    fi
+}
+
 # --- збір списку на видалення ------------------------------------------------
 REMOVE=()
 
@@ -327,7 +337,7 @@ for entry in "$MODULE_DIR"/*; do
 
     if [[ -f "$entry" ]]; then
         # невідомий файл у корені module/ — не чіпаємо (безпечніше лишити)
-        echo "prune-modules: [пропуск файлу] $name"
+        note "[пропуск файлу] $name"
         continue
     fi
 
@@ -350,15 +360,15 @@ for entry in "$MODULE_DIR"/*; do
             br="$(repo_branch "$name")"
             [[ -z "$br" ]] && br="main"
             if [[ -z "$op" ]]; then
-                echo "prune-modules: [пропуск, не вдалось визначити repo] $name"
+                note "[пропуск, не вдалось визначити repo] $name"
                 continue
             fi
             current="$(github_dirs "$op" "$br" || true)"
             if [[ -z "$current" ]]; then
                 if [[ -n "$GITHUB_STATUS" && "$GITHUB_STATUS" != "200" ]]; then
-                    echo "prune-modules: [пропуск, GitHub недоступний (HTTP ${GITHUB_STATUS}) для] $name"
+                    note "[пропуск, GitHub недоступний (HTTP ${GITHUB_STATUS}) для] $name"
                 else
-                    echo "prune-modules: [пропуск, немає тек у GitHub для] $name"
+                    note "[пропуск, немає тек у GitHub для] $name"
                 fi
                 continue
             fi
@@ -375,7 +385,7 @@ for entry in "$MODULE_DIR"/*; do
         REMOVE+=("$entry")
     else
         # вбудований або вручну встановлений модуль Lampac — не чіпаємо
-        echo "prune-modules: [пропуск, вбудований/ручний модуль] $name"
+        note "[пропуск, вбудований/ручний модуль] $name"
     fi
 done
 
