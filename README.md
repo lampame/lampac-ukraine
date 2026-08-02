@@ -68,6 +68,22 @@ git clone https://github.com/lampame/lampac-ukraine.git .
 - `modules` — необов'язково; якщо не вказано, встановляться всі модулі з репозиторію.
 - Якщо ви вказуєте конкретний список `modules`, додавайте `LME.Shared`, бо інші модулі підключають спільні файли через `syntaxPaths`.
 
+### Прибирання видалених модулів (`prune-modules.sh`)
+
+Спочатку перегляньте, що буде видалено (dry-run):
+
+```bash
+wget -O - https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-modules.sh | bash -s
+```
+
+Якщо все вірно — застосуйте видалення:
+
+```bash
+wget -O - https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-modules.sh | bash -s -- --apply
+```
+
+Запускайте з теки інсталяції Lampac (там, де є `module/` або `mods/`).
+
 ### Налаштування в `init.conf`
 
 Ключ має збігатися з назвою модуля (`LME.XXX`), а не з назвою провайдера.
@@ -267,6 +283,22 @@ Notes:
 - `branch` is optional, default is `main`.
 - `modules` is optional; if omitted, all repository modules are installed.
 - If you specify an explicit module list, include `LME.Shared` because other modules use shared files through `syntaxPaths`.
+
+### Removing deleted modules (`prune-modules.sh`)
+
+First preview what would be removed (dry-run):
+
+```bash
+wget -O - https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-modules.sh | bash -s
+```
+
+If it looks correct, apply the removal:
+
+```bash
+wget -O - https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-modules.sh | bash -s -- --apply
+```
+
+Run from the Lampac install directory (where `module/` or `mods/` is).
 
 ### `init.conf` key rule
 
