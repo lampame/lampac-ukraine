@@ -7,5 +7,6 @@ Dead modules archive for lampac-ukraine.
 - AniHUB
 - AshdiBase
 - CikavaIdeya
+- NMoonAnime
 - UAKino
 - UaTUT
