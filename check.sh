@@ -22,7 +22,7 @@ SRC
 )
 
 # Підтримувані провайдери плеєрів
-PROVIDERS="Ashdi Zetvideo Moonanime Tortuga BambooPlayer"
+PROVIDERS="Ashdi Zetvideo Moonanime Tortuga BambooPlayer HdvbUA"
 
 source_tmp=$(mktemp)
 provider_tmp=$(mktemp)
@@ -50,13 +50,13 @@ extract_provider_urls() {
     # Повні та protocol-relative URL
     printf '%s' "$normalized" \
       | tr "\"'()<>," '\n' \
-      | grep -Eio '(https?:)?//[^ )>]*(ashdi\.vip|zetvideo\.net|moonanime\.art|tortuga)[^ )>]*' \
+      | grep -Eio '(https?:)?//[^ )>]*(ashdi\.vip|zetvideo\.net|moonanime\.art|tortuga|hdvbua\.pro)[^ )>]*' \
       | sed 's#^//#https://#'
 
     # Випадок, коли домен вбудований без схеми (ashdi.vip/...)
     printf '%s' "$normalized" \
       | tr "\"'()<>," '\n' \
-      | grep -Eio '(ashdi\.vip|zetvideo\.net|moonanime\.art|tortuga)[^ )>]*' \
+      | grep -Eio '(ashdi\.vip|zetvideo\.net|moonanime\.art|tortuga|hdvbua\.pro)[^ )>]*' \
       | sed 's#^#https://#'
   } | awk '!seen[$0]++'
 }
@@ -70,6 +70,7 @@ provider_from_url() {
     *moonanime.art*) echo "Moonanime" ;;
     *tortuga*) echo "Tortuga" ;;
     *friends.bambooua.com*) echo "BambooPlayer" ;;
+    *hdvbua.pro*) echo "HdvbUA" ;;
     *) echo "Unknown" ;;
   esac
 }
@@ -111,6 +112,7 @@ provider_referer() {
     Zetvideo) printf '%s' "https://zetvideo.net/" ;;
     Moonanime) printf '%s' "https://animeon.club/" ;;
     Tortuga) printf '%s' "https://tortuga.tw/" ;;
+    HdvbUA) printf '%s' "https://uaserials.fm/" ;;
     *) printf '%s' "" ;;
   esac
 }
@@ -273,6 +275,11 @@ for provider in $PROVIDERS; do
   sample_player=$(best_sample_player "$provider")
   if [ -z "$sample_player" ]; then
     sample_player=$(awk -F'|' -v p="$provider" '$2==p {print $3; exit}' "$provider_tmp")
+  fi
+
+  # hdvbua.pro перевіряємо напряму (embed ID як у LME.Petlura)
+  if [ -z "$sample_player" ] && [ "$provider" = "HdvbUA" ]; then
+    sample_player="https://hdvbua.pro/embed/2389"
   fi
 
   if [ -z "$sample_player" ]; then
