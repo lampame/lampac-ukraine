@@ -9,4 +9,5 @@ Dead modules archive for lampac-ukraine.
 - CikavaIdeya
 - NMoonAnime
 - UAKino
+- UAFilmME
 - UaTUT
