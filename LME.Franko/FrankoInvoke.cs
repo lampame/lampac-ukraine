@@ -58,7 +58,10 @@ namespace LME.Franko
 
             imdbId = imdbId.Trim();
             if (!ImdbRegex.IsMatch(imdbId))
+            {
+                _onLog?.Invoke($"lme_franko search: imdb '{imdbId}' не валідний");
                 return null;
+            }
 
             string memKey = $"lme_franko:search:{imdbId}";
             if (_hybridCache.TryGetValue(memKey, out FrankoSearchResult cached))
@@ -68,9 +71,14 @@ namespace LME.Franko
                 ? _init.mirrors
                 : new string[] { "https://kinokrad-ua.com" };
 
+            _onLog?.Invoke($"lme_franko search: imdb={imdbId}, mirrors=[{string.Join(", ", mirrors)}], fhost={_init.fhost}");
+
             var payload = await ConsiliumSearch(imdbId, mirrors);
             if (payload == null)
+            {
+                _onLog?.Invoke($"lme_franko search: payload не знайдено для {imdbId}");
                 return null;
+            }
 
             var result = new FrankoSearchResult
             {
@@ -101,16 +109,27 @@ namespace LME.Franko
 
             string html = await MirrorSearch(mirror, imdbId, family == "uaserials" ? "uaserials" : "uakino");
             if (string.IsNullOrEmpty(html))
+            {
+                _onLog?.Invoke($"lme_franko mirror {mirror}: пошук порожній");
                 return null;
+            }
+
+            _onLog?.Invoke($"lme_franko mirror {mirror}: search len={html.Length}");
 
             // Fast path: franko id зашитий у URL постера пошуку.
             int? picassoId = ExtractPicassoId(html);
             if (picassoId.HasValue)
+            {
+                _onLog?.Invoke($"lme_franko mirror {mirror}: picasso id={picassoId}");
                 return await GetPlayerPayload($"{_init.fhost}/show/{picassoId}/");
+            }
 
             string contentHref = ExtractContentHref(html, mirror);
             if (string.IsNullOrEmpty(contentHref))
+            {
+                _onLog?.Invoke($"lme_franko mirror {mirror}: content href не знайдено");
                 return null;
+            }
 
             string page = await FetchHtml(contentHref, $"{mirror.TrimEnd('/')}/");
             if (string.IsNullOrEmpty(page))
@@ -118,7 +137,10 @@ namespace LME.Franko
 
             string showPath = ExtractFrankoShowPath(page);
             if (string.IsNullOrEmpty(showPath))
+            {
+                _onLog?.Invoke($"lme_franko mirror {mirror}: franko show path не знайдено (page len={page.Length})");
                 return null;
+            }
 
             return await GetPlayerPayload($"{_init.fhost}{showPath}/");
         }
@@ -174,6 +196,7 @@ namespace LME.Franko
 
                 if (payload != null)
                 {
+                    _onLog?.Invoke($"lme_franko consilium: знайдено payload id={payload.id}, is_serial={payload.is_serial}, translations={payload.translations?.Count}");
                     ordered.Add(payload);
                     if (payload.id > 0)
                     {
@@ -211,11 +234,17 @@ namespace LME.Franko
 
             string html = await FetchHtml(url, null);
             if (string.IsNullOrEmpty(html))
+            {
+                _onLog?.Invoke($"lme_franko payload: порожня відповідь для {url}");
                 return null;
+            }
 
             var match = PlayerPayloadRegex.Match(html);
             if (!match.Success)
+            {
+                _onLog?.Invoke($"lme_franko payload: regex не знайдено у {url} (html len={html.Length})");
                 return null;
+            }
 
             try
             {
@@ -359,6 +388,7 @@ namespace LME.Franko
 
         /// <summary>
         /// POST <mirror>/engine/ajax/controller.php?mod=search (form-urlencoded).
+        /// Простий Http.Post (як у Python-джерелі) — без hydra, з statusCodeOK:false для діагностики.
         /// </summary>
         private async Task<string> MirrorSearch(string mirror, string imdb, string skin)
         {
@@ -375,10 +405,17 @@ namespace LME.Franko
 
             try
             {
-                if (_httpHydra != null)
-                    return await _httpHydra.Post(url, body, newheaders: headers);
+                string content = await Http.Post(
+                    _init.cors(url),
+                    body,
+                    headers: headers,
+                    proxy: _proxyManager.Get(),
+                    timeoutSeconds: TimeoutSeconds,
+                    statusCodeOK: false
+                );
 
-                return await Http.Post(_init.cors(url), body, headers: headers, proxy: _proxyManager.Get());
+                _onLog?.Invoke($"lme_franko mirror search {url} -> len={content?.Length ?? 0}");
+                return content;
             }
             catch (Exception ex)
             {
@@ -388,7 +425,7 @@ namespace LME.Franko
         }
 
         /// <summary>
-        /// GET html з referer (опційно). Використовує HttpHelper (hydra fallback → Http.Get з cors).
+        /// GET html з referer (опційно). Простий Http.Get (як у Python) з statusCodeOK:false.
         /// </summary>
         private async Task<string> FetchHtml(string url, string referer)
         {
@@ -401,7 +438,16 @@ namespace LME.Franko
 
             try
             {
-                return await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
+                string content = await Http.Get(
+                    _init.cors(url),
+                    headers: headers,
+                    proxy: _proxyManager.Get(),
+                    timeoutSeconds: TimeoutSeconds,
+                    statusCodeOK: false
+                );
+
+                _onLog?.Invoke($"lme_franko fetch {url} -> len={content?.Length ?? 0}");
+                return content;
             }
             catch (Exception ex)
             {

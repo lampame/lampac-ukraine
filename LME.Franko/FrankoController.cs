@@ -53,7 +53,7 @@ namespace LME.Franko
             if (string.IsNullOrWhiteSpace(imdb_id))
                 return OnError("lme_franko", refresh_proxy: true);
 
-            OnLog($"lme_franko: {title} (serial={serial}, s={s}, t={t})");
+            OnLog($"lme_franko: {title} (imdb_id={imdb_id}, serial={serial}, s={s}, t={t})");
 
             var searchResult = await invoke.Search(imdb_id);
             if (searchResult == null || searchResult.Payload == null)
