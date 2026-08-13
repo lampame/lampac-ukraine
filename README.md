@@ -17,7 +17,6 @@
 - `LME.Makhno`
 - `LME.StarLight`
 - `LME.KlonFUN`
-- `LME.UafilmME`
 - `LME.JackTor`
 
 **Аніме та дорами**
@@ -59,7 +58,6 @@ git clone https://github.com/lampame/lampac-ukraine.git .
     - LME.Makhno
     - LME.StarLight
     - LME.KlonFUN
-    - LME.UafilmME
     - LME.JackTor
 ```
 
@@ -131,7 +129,7 @@ curl -fsSL https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-m
 Підтримувані формати в `init.conf`:
 
 ```json
-"LME.UafilmME": {
+"LME.StarLight": {
   "enable": true,
   "apn": true,
   "apn_host": "https://proxy.com/proxy.php?url={encodeurl}"
@@ -141,7 +139,7 @@ curl -fsSL https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-m
 Альтернатива коротким записом:
 
 ```json
-"LME.UafilmME": {
+"LME.StarLight": {
   "enable": true,
   "apn": "https://proxy.com/proxy.php?url={encodeurl}"
 }
@@ -149,7 +147,7 @@ curl -fsSL https://raw.githubusercontent.com/lampame/lampac-ukraine/main/prune-m
 
 Нотатки:
 - Якщо `apn: false`, APN вимикається.
-- Якщо `apn: true`, береться `apn_host` (для `Bamboo`, `StarLight`, `UafilmME` за порожнього `apn_host` підставляється дефолтний хост).
+- Якщо `apn: true`, береться `apn_host` (для `Bamboo`, `StarLight` за порожнього `apn_host` підставляється дефолтний хост).
 
 ### Приклад конфігурації `LME.JackTor`
 
@@ -241,7 +239,6 @@ wget -O check.sh https://raw.githubusercontent.com/lampame/lampac-ukraine/main/c
 - `LME.Makhno`
 - `LME.StarLight`
 - `LME.KlonFUN`
-- `LME.UafilmME`
 - `LME.JackTor`
 
 **Anime and dorama**
@@ -283,7 +280,6 @@ Create or update `module/repository.yaml`:
     - LME.Makhno
     - LME.StarLight
     - LME.KlonFUN
-    - LME.UafilmME
     - LME.JackTor
 ```
 
@@ -356,7 +352,7 @@ Parameter compatibility:
 Supported formats in `init.conf`:
 
 ```json
-"LME.UafilmME": {
+"LME.StarLight": {
   "enable": true,
   "apn": true,
   "apn_host": "https://proxy.com/proxy.php?url={encodeurl}"
@@ -366,7 +362,7 @@ Supported formats in `init.conf`:
 Short form:
 
 ```json
-"LME.UafilmME": {
+"LME.StarLight": {
   "enable": true,
   "apn": "https://proxy.com/proxy.php?url={encodeurl}"
 }
@@ -374,7 +370,7 @@ Short form:
 
 Notes:
 - If `apn: false`, APN is disabled.
-- If `apn: true`, `apn_host` is used (for `Bamboo`, `StarLight`, `UafilmME`, default host is used when `apn_host` is empty).
+- If `apn: true`, `apn_host` is used (for `Bamboo`, `StarLight`, default host is used when `apn_host` is empty).
 
 ### Source/player availability check script
 
