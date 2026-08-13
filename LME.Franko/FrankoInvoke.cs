@@ -69,7 +69,7 @@ namespace LME.Franko
 
             var mirrors = _init.mirrors != null && _init.mirrors.Length > 0
                 ? _init.mirrors
-                : new string[] { "https://kinokrad-ua.com" };
+                : new string[] { "https://uakino.watch", "https://uaserials.live" };
 
             _onLog?.Invoke($"lme_franko search: imdb={imdbId}, mirrors=[{string.Join(", ", mirrors)}], fhost={_init.fhost}");
 
@@ -94,7 +94,8 @@ namespace LME.Franko
 
         /// <summary>
         /// Resolve одного мірора: imdb_id → franko payload.
-        /// kinokrad: прямий запит до /show/imdb/{imdb}; uakino/uaserials: search → content (якщо треба) → franko player.
+        /// Всі мірори — через сайти-донори: DLE search → picasso id (fast path) або content page → franko player.
+        /// Прямий /show/imdb/{imdb} ендпоінт НЕ використовуємо (ненадійний, чужий контент).
         /// </summary>
         public async Task<FrankoPayload> ResolveMirror(string mirror, string imdbId)
         {
@@ -103,10 +104,9 @@ namespace LME.Franko
 
             string family = MirrorFamily(mirror);
 
-            // kinokrad ділить бекенд з uacdn — резолвиться напряму, без DLE search (без false positives).
-            if (family == "kinokrad")
-                return await GetPlayerPayload($"{_init.fhost}/show/imdb/{imdbId}");
-
+            // Резолвимо ТІЛЬКИ через сайти-донори (DLE search → content page → franko player).
+            // Прямий /show/imdb/{imdb} ендпоінт ненадійний — повертає чужий контент
+            // (приклад: Avatar: Fire and Ash → id=149 замість правильного 11662).
             string html = await MirrorSearch(mirror, imdbId, family == "uaserials" ? "uaserials" : "uakino");
             if (string.IsNullOrEmpty(html))
             {

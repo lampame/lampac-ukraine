@@ -31,7 +31,8 @@ namespace LME.Franko
         }
 
         /// <summary>
-        /// Дефолтний пул мірорів для consilium search.
+        /// Дефолтний пул мірорів для consilium search (тільки сайти-донори).
+        /// kinokrad виключено: його прямий /show/imdb/ ендпоінт ненадійний (чужий контент).
         /// </summary>
         private static readonly string[] DefaultMirrors = new string[]
         {
@@ -40,8 +41,7 @@ namespace LME.Franko
             "https://uaserials.live",
             "https://uaserials.digital",
             "https://uaserialshd.my",
-            "https://uakino.productions",
-            "https://kinokrad-ua.com"
+            "https://uakino.productions"
         };
 
         /// <summary>
