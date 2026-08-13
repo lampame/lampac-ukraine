@@ -6,6 +6,7 @@ using System.Web;
 using LME.Common.Engine;
 using LME.Franko.Models;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 using Shared;
 using Shared.Engine;
 using Shared.Models;
@@ -108,16 +109,7 @@ namespace LME.Franko
 
             // Без вибору озвучки — список перекладів (VoiceTpl).
             if (!int.TryParse(t, out int tid) || !translations.Any(x => x.id == tid))
-            {
-                var voice_tpl = new VoiceTpl();
-                foreach (var tr in translations)
-                {
-                    string voiceLink = $"{host}/lite/lme_franko?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title ?? string.Empty)}&original_title={HttpUtility.UrlEncode(original_title ?? string.Empty)}&year={year}&t={tr.id}";
-                    voice_tpl.Append(tr.title, false, voiceLink);
-                }
-
-                return rjson ? Content(voice_tpl.ToJson(), "application/json; charset=utf-8") : Content(voice_tpl.ToHtml(), "text/html; charset=utf-8");
-            }
+                return VoiceTplResult(BuildVoiceTpl(translations, imdb_id, title, original_title, year, null), rjson);
 
             var stream = await invoke.ResolveStream(result.Id, tid, null, null);
             if (stream == null || string.IsNullOrEmpty(stream.Url))
@@ -141,16 +133,7 @@ namespace LME.Franko
 
             // Без вибору озвучки — список перекладів (VoiceTpl).
             if (!int.TryParse(t, out int tid) || !translations.Any(x => x.id == tid))
-            {
-                var voice_tpl = new VoiceTpl();
-                foreach (var tr in translations)
-                {
-                    string voiceLink = $"{host}/lite/lme_franko?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title ?? string.Empty)}&original_title={HttpUtility.UrlEncode(original_title ?? string.Empty)}&year={year}&t={tr.id}";
-                    voice_tpl.Append(tr.title, false, voiceLink);
-                }
-
-                return rjson ? Content(voice_tpl.ToJson(), "application/json; charset=utf-8") : Content(voice_tpl.ToHtml(), "text/html; charset=utf-8");
-            }
+                return VoiceTplResult(BuildVoiceTpl(translations, imdb_id, title, original_title, year, null), rjson);
 
             // Сезони спільні для всіх перекладів (з player payload).
             var seasons = (payload.seasons_episodes ?? new Dictionary<string, List<int>>())
@@ -181,12 +164,7 @@ namespace LME.Franko
             if (!payload.seasons_episodes.TryGetValue(s.ToString(), out var episodes) || episodes == null || episodes.Count == 0)
                 return OnError("lme_franko", refresh_proxy: true);
 
-            var voice_tpl = new VoiceTpl();
-            foreach (var tr in translations)
-            {
-                string voiceLink = $"{host}/lite/lme_franko?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title ?? string.Empty)}&original_title={HttpUtility.UrlEncode(original_title ?? string.Empty)}&year={year}&t={tr.id}&s={s}";
-                voice_tpl.Append(tr.title, tr.id == tid, voiceLink);
-            }
+            var voice_tpl = BuildVoiceTpl(translations, imdb_id, title, original_title, year, tid, s);
 
             var episode_tpl = new EpisodeTpl();
             foreach (var ep in episodes.OrderBy(e => e))
@@ -202,6 +180,30 @@ namespace LME.Franko
 
             return Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
         }
+
+        /// <summary>
+        /// Список перекладів як VoiceTpl для вибору озвучки.
+        /// </summary>
+        private VoiceTpl BuildVoiceTpl(List<FrankoTranslation> translations, string imdb_id, string title, string original_title, int year, int? activeTid, int? s = null)
+        {
+            var tpl = new VoiceTpl();
+            foreach (var tr in translations)
+            {
+                string link = $"{host}/lite/lme_franko?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title ?? string.Empty)}&original_title={HttpUtility.UrlEncode(original_title ?? string.Empty)}&year={year}&t={tr.id}";
+                if (s.HasValue)
+                    link += $"&s={s.Value}";
+
+                tpl.Append(tr.title, activeTid.HasValue && activeTid.Value == tr.id, link);
+            }
+            return tpl;
+        }
+
+        /// <summary>
+        /// Відповідь зі списком перекладів. VoiceTpl не має ToJson — для rjson серіалізуємо ToObject().
+        /// </summary>
+        private ActionResult VoiceTplResult(VoiceTpl tpl, bool rjson)
+            => rjson ? Content(JsonConvert.SerializeObject(tpl.ToObject()), "application/json; charset=utf-8")
+                     : Content(tpl.ToHtml(), "text/html; charset=utf-8");
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)
             => StreamHelper.BuildStreamUrl(init, streamLink, ModInit.ApnHostProvided, (s, l) => HostStreamProxy(s, l));
