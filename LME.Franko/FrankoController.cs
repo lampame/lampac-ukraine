@@ -6,7 +6,6 @@ using System.Web;
 using LME.Common.Engine;
 using LME.Franko.Models;
 using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json;
 using Shared;
 using Shared.Engine;
 using Shared.Models;
@@ -107,19 +106,21 @@ namespace LME.Franko
             if (translations.Count == 0)
                 return OnError("lme_franko", refresh_proxy: true);
 
-            // Без вибору озвучки — список перекладів (VoiceTpl).
-            if (!int.TryParse(t, out int tid) || !translations.Any(x => x.id == tid))
-                return VoiceTplResult(BuildVoiceTpl(translations, imdb_id, title, original_title, year, null), rjson);
-
-            var stream = await invoke.ResolveStream(result.Id, tid, null, null);
-            if (stream == null || string.IsNullOrEmpty(stream.Url))
-                return OnError("lme_franko", refresh_proxy: true);
-
-            var selected = translations.First(x => x.id == tid);
-            string streamUrl = BuildStreamUrl(init, stream.Url);
-
+            // Фільм: всі переклади як окремі потоки (MovieTpl). Standalone VoiceTpl
+            // клієнт Lampa не вміє рендерити — тому одразу показуємо потоки (як Bamboo).
             var movie_tpl = new MovieTpl(title, original_title);
-            movie_tpl.Append(selected.title, streamUrl);
+            foreach (var tr in translations)
+            {
+                var stream = await invoke.ResolveStream(result.Id, tr.id, null, null);
+                if (stream == null || string.IsNullOrEmpty(stream.Url))
+                    continue;
+
+                string streamUrl = BuildStreamUrl(init, stream.Url);
+                movie_tpl.Append(tr.title, streamUrl);
+            }
+
+            if (movie_tpl.data == null || movie_tpl.data.Count == 0)
+                return OnError("lme_franko", refresh_proxy: true);
 
             return rjson ? Content(movie_tpl.ToJson(), "application/json; charset=utf-8") : Content(movie_tpl.ToHtml(), "text/html; charset=utf-8");
         }
@@ -130,10 +131,6 @@ namespace LME.Franko
             var translations = payload?.translations ?? new List<FrankoTranslation>();
             if (translations.Count == 0)
                 return OnError("lme_franko", refresh_proxy: true);
-
-            // Без вибору озвучки — список перекладів (VoiceTpl).
-            if (!int.TryParse(t, out int tid) || !translations.Any(x => x.id == tid))
-                return VoiceTplResult(BuildVoiceTpl(translations, imdb_id, title, original_title, year, null), rjson);
 
             // Сезони спільні для всіх перекладів (з player payload).
             var seasons = (payload.seasons_episodes ?? new Dictionary<string, List<int>>())
@@ -147,13 +144,13 @@ namespace LME.Franko
             if (seasons.Count == 0)
                 return OnError("lme_franko", refresh_proxy: true);
 
-            // Вибір сезону (SeasonTpl).
+            // Вибір сезону (SeasonTpl) — Lampa показує список сезонів, авто-перехід якщо один.
             if (s == -1)
             {
                 var season_tpl = new SeasonTpl();
                 foreach (var seasonNum in seasons)
                 {
-                    string link = $"{host}/lite/lme_franko?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title ?? string.Empty)}&original_title={HttpUtility.UrlEncode(original_title ?? string.Empty)}&year={year}&t={tid}&s={seasonNum}";
+                    string link = $"{host}/lite/lme_franko?imdb_id={imdb_id}&title={HttpUtility.UrlEncode(title ?? string.Empty)}&original_title={HttpUtility.UrlEncode(original_title ?? string.Empty)}&year={year}&s={seasonNum}";
                     season_tpl.Append($"Сезон {seasonNum}", link, seasonNum.ToString());
                 }
 
@@ -163,6 +160,12 @@ namespace LME.Franko
             // Список епізодів сезону (EpisodeTpl) + перемикач озвучок.
             if (!payload.seasons_episodes.TryGetValue(s.ToString(), out var episodes) || episodes == null || episodes.Count == 0)
                 return OnError("lme_franko", refresh_proxy: true);
+
+            // Автовибір першої озвучки — standalone VoiceTpl клієнт Lampa не рендерить,
+            // тому голоси йдуть разом з епізодами (як у Bamboo/KlonFUN/Makhno).
+            int tid;
+            if (!int.TryParse(t, out tid) || !translations.Any(x => x.id == tid))
+                tid = translations[0].id;
 
             var voice_tpl = BuildVoiceTpl(translations, imdb_id, title, original_title, year, tid, s);
 
@@ -197,13 +200,6 @@ namespace LME.Franko
             }
             return tpl;
         }
-
-        /// <summary>
-        /// Відповідь зі списком перекладів. VoiceTpl не має ToJson — для rjson серіалізуємо ToObject().
-        /// </summary>
-        private ActionResult VoiceTplResult(VoiceTpl tpl, bool rjson)
-            => rjson ? Content(JsonConvert.SerializeObject(tpl.ToObject()), "application/json; charset=utf-8")
-                     : Content(tpl.ToHtml(), "text/html; charset=utf-8");
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)
             => StreamHelper.BuildStreamUrl(init, streamLink, ModInit.ApnHostProvided, (s, l) => HostStreamProxy(s, l));
