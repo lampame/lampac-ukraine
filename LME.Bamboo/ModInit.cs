@@ -25,7 +25,7 @@ namespace LME.Bamboo
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 4.1;
+        public static double Version => 5.0;
 
         public static OnlinesSettings Bamboo;
         public static bool ApnHostProvided;

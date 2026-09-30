@@ -32,6 +32,23 @@ namespace LME.Franko.Models
         public List<FrankoTranslation> translations { get; set; } = new List<FrankoTranslation>();
 
         public Dictionary<string, List<int>> seasons_episodes { get; set; } = new Dictionary<string, List<int>>();
+
+        /// <summary>
+        /// JWT-токен для POST /api/player/files. Без нього ендпоінт відповідає 403 "forbidden".
+        /// Видається на сторінці show/{id}/, прив'язаний до контенту, TTL ~5 хв, не single-use.
+        /// </summary>
+        public string player_files_token { get; set; }
+    }
+
+    /// <summary>
+    /// Кешований bootstrap-токен разом із часом життя (Unix-секунди).
+    /// </summary>
+    public class FrankoToken
+    {
+        public string Token { get; set; }
+
+        /// <summary>Unix-час exp з JWT (0 — токен без exp, живемо за дефолтним TTL).</summary>
+        public long ExpiresAt { get; set; }
     }
 
     /// <summary>Одна озвучка/переклад з player payload.</summary>

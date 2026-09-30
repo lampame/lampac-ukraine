@@ -25,6 +25,15 @@ namespace LME.Franko
         private const int TimeoutSeconds = 10;
         private const int MaxConsiliumWorkers = 8;
 
+        // /api/player/files відповідає 403 "forbidden" без bootstrap_token.
+        // Токен видає сторінка плеєра (player_files_token у window.__PLAYER_PAYLOAD__):
+        // це JWT, прив'язаний до id контенту, з часом життя ~5 хв і НЕ single-use —
+        // один токен обслуговує всі переклади та епізоди цього контенту.
+        private const int TokenRefreshSkewSeconds = 30;
+        private const int TokenSafetySeconds = 30;
+        private const int TokenMaxTtlSeconds = 240;
+        private const int NegativeStreamCacheSeconds = 30;
+
         private static readonly Regex ImdbRegex = new Regex(@"^tt\d{7,10}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex PlayerPayloadRegex = new Regex(@"window\.__PLAYER_PAYLOAD__\s*=\s*(\{.*?\});", RegexOptions.Singleline | RegexOptions.Compiled);
         private static readonly Regex ContentHrefRegex = new Regex(@"href=""(https?://[^""]+\.html)""", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -259,8 +268,9 @@ namespace LME.Franko
 
         /// <summary>
         /// POST {api_host}/api/player/files з JSON body. translation_id опційний — якщо null, ключ опускається.
+        /// bootstrap_token обов'язковий: ендпоінт відповідає 403 "forbidden" без нього.
         /// </summary>
-        public async Task<FrankoStreamResponse> GetStreamData(int mediaId, int? translationId, int? season, int? episode)
+        public async Task<FrankoStreamResponse> GetStreamData(int mediaId, int? translationId, int? season, int? episode, string bootstrapToken)
         {
             var payload = new System.Text.Json.Nodes.JsonObject { ["id"] = mediaId };
             if (translationId.HasValue)
@@ -269,6 +279,8 @@ namespace LME.Franko
                 payload["season_number"] = season.Value;
             if (episode.HasValue)
                 payload["episode_number"] = episode.Value;
+            if (!string.IsNullOrEmpty(bootstrapToken))
+                payload["bootstrap_token"] = bootstrapToken;
 
             string json = payload.ToJsonString();
             string url = $"{_init.api_host}/api/player/files";
@@ -298,33 +310,38 @@ namespace LME.Franko
         }
 
         /// <summary>
-        /// Resolve stream з episode token validation (кеш 10 хв).
+        /// Resolve stream з episode token validation (кеш 10 хв; негатив — короткий 30 c).
         /// </summary>
-        public async Task<FrankoStream> ResolveStream(int mediaId, int? translationId, int? season, int? episode)
+        public async Task<(FrankoStream Stream, string Failure)> ResolveStream(int mediaId, int? translationId, int? season, int? episode)
         {
             string cacheKey = $"lme_franko:stream:{mediaId}:{translationId}:{season}:{episode}";
-            if (_hybridCache.TryGetValue(cacheKey, out FrankoStream cached))
-                return cached;
+            if (_hybridCache.TryGetValue(cacheKey, out FrankoStream cached) && cached != null)
+                return (cached, string.Empty);
 
-            var result = await ResolveStreamInner(mediaId, translationId, season, episode);
+            var (stream, reason) = await ResolveStreamInner(mediaId, translationId, season, episode);
 
-            // ponytail: негативні результати не кешуємо (Python кешує 30s) — повторний resolve безпечніший за стейл-стан.
-            if (result != null)
-                _hybridCache.Set(cacheKey, result, CacheHelper.CacheTime(10, init: _init));
+            // Негативний результат кешуємо коротко: стейл-кеш на 10 хв псував би наступні спроби.
+            if (stream == null)
+                _hybridCache.Set(cacheKey, new FrankoStream(), TimeSpan.FromSeconds(NegativeStreamCacheSeconds));
+            else
+                _hybridCache.Set(cacheKey, stream, CacheHelper.CacheTime(10, init: _init));
 
-            return result;
+            return (stream, reason);
         }
 
         /// <summary>
         /// Внутрішній resolve: якщо stream серіалу не відповідає запитаному епізоду
         /// (бекенд тихо повертає епізод 1 для відсутніх) — повторний resolve БЕЗ translation_id.
         /// </summary>
-        private async Task<FrankoStream> ResolveStreamInner(int mediaId, int? translationId, int? season, int? episode)
+        private async Task<(FrankoStream Stream, string Failure)> ResolveStreamInner(int mediaId, int? translationId, int? season, int? episode)
         {
-            var streamData = await GetStreamData(mediaId, translationId, season, episode);
+            var (streamData, reason) = await PostPlayerFiles(mediaId, translationId, season, episode);
             string fileUrl = streamData?.file;
             if (string.IsNullOrEmpty(fileUrl))
-                return null;
+            {
+                _onLog?.Invoke($"lme_franko resolve: id={mediaId}, t={translationId}, s={season}, e={episode} → {reason ?? "no-file"}");
+                return (null, reason ?? "no-file");
+            }
 
             var stream = new FrankoStream { Url = fileUrl, Quality = "auto" };
 
@@ -334,14 +351,117 @@ namespace LME.Franko
                 var actual = GetEpisodeToken(fileUrl);
                 if (actual.HasValue && actual.Value != (season.Value, episode.Value))
                 {
-                    var fallback = await GetStreamData(mediaId, null, season, episode);
+                    _onLog?.Invoke($"lme_franko resolve: епізод-токен {actual.Value} != запитаний ({season.Value},{episode.Value}) — fallback без перекладу");
+
+                    var (fallback, _) = await PostPlayerFiles(mediaId, null, season, episode);
                     string fallbackUrl = fallback?.file;
                     if (!string.IsNullOrEmpty(fallbackUrl))
                         stream = new FrankoStream { Url = fallbackUrl, Quality = "auto" };
                 }
             }
 
-            return stream;
+            return (stream, string.Empty);
+        }
+
+        /// <summary>
+        /// Придатний bootstrap-токен для player files API.
+        ///
+        /// З 2026-09 ендпоинт відхиляє запити без bootstrap_token. Токен видає сторінка
+        /// плеєра для поточного контенту (player_files_token у player payload), це JWT
+        /// з часом життя ~5 хв, прив'язаний до id контенту і НЕ single-use —
+        /// один токен обслуговує всі переклади та епізоди цього контенту.
+        /// </summary>
+        public async Task<string> GetBootstrapToken(int mediaId, bool forceRefresh = false)
+        {
+            if (mediaId <= 0)
+                return null;
+
+            string memKey = $"lme_franko:token:{mediaId}";
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            // Переиспользуємо, поки лишається комфортний запас часу.
+            if (!forceRefresh
+                && _hybridCache.TryGetValue(memKey, out FrankoToken cached)
+                && !string.IsNullOrEmpty(cached?.Token)
+                && cached.ExpiresAt - now > TokenRefreshSkewSeconds)
+            {
+                return cached.Token;
+            }
+
+            var payload = await GetPlayerPayload($"{_init.fhost}/show/{mediaId}/");
+            string token = payload?.player_files_token?.Trim();
+
+            if (string.IsNullOrEmpty(token))
+            {
+                // Коротко запам'ятовуємо невдачу, щоб "миготлива" сторінка не перетворилась на потік запитів.
+                _onLog?.Invoke($"lme_franko token: player_files_token не отримано для id={mediaId}");
+                _hybridCache.Set(memKey, new FrankoToken(), TimeSpan.FromSeconds(TokenSafetySeconds));
+                return null;
+            }
+
+            long expiresAt = JwtExpiry(token);
+            long ttl = TokenMaxTtlSeconds;
+            if (expiresAt > 0)
+                ttl = Math.Max(0, Math.Min(TokenMaxTtlSeconds, expiresAt - now - TokenSafetySeconds));
+
+            _hybridCache.Set(
+                memKey,
+                new FrankoToken { Token = token, ExpiresAt = expiresAt > 0 ? expiresAt : now + TokenMaxTtlSeconds },
+                TimeSpan.FromSeconds(ttl));
+
+            _onLog?.Invoke($"lme_franko token: оновлено для id={mediaId}, ttl={ttl}s, exp={expiresAt}");
+            return token;
+        }
+
+        /// <summary>
+        /// POST /api/player/files з достатньо свіжим bootstrap-токеном.
+        ///
+        /// Одна прозора повторна спроба, щоб протухлий чи відхилений JWT не дійшов
+        /// до клієнта як "нічого не знайдено". Повертає (відповідь, причина невдачі).
+        /// </summary>
+        public async Task<(FrankoStreamResponse Response, string Failure)> PostPlayerFiles(int mediaId, int? translationId, int? season, int? episode)
+        {
+            string failure = "request-failed";
+
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                string token = await GetBootstrapToken(mediaId, forceRefresh: attempt > 0);
+                if (attempt == 0 && string.IsNullOrEmpty(token))
+                    failure = "no-bootstrap-token";
+
+                var result = await GetStreamData(mediaId, translationId, season, episode, token);
+                if (!string.IsNullOrEmpty(result?.file))
+                    return (result, string.Empty);
+
+                if (result != null)
+                    return (null, "no-file");
+            }
+
+            return (null, failure);
+        }
+
+        /// <summary>
+        /// Читає exp-claim з JWT без перевірки підпису.
+        /// </summary>
+        public static long JwtExpiry(string token)
+        {
+            var parts = (token ?? string.Empty).Split('.');
+            if (parts.Length < 2)
+                return 0;
+
+            try
+            {
+                string raw = parts[1];
+                raw += new string('=', (4 - raw.Length % 4) % 4);
+                using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(raw)));
+                if (doc.RootElement.TryGetProperty("exp", out var exp) && exp.TryGetInt64(out long value))
+                    return value;
+            }
+            catch
+            {
+            }
+
+            return 0;
         }
 
         /// <summary>

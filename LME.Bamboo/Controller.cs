@@ -47,6 +47,7 @@ namespace LME.Bamboo.Controllers
             }
 
             string itemUrl = href;
+            SearchResult picked = null;
             if (string.IsNullOrEmpty(itemUrl))
             {
                 var searchResults = await invoke.Search(title, original_title);
@@ -65,70 +66,116 @@ namespace LME.Bamboo.Controllers
                     return rjson ? Content(similar_tpl.ToJson(), "application/json; charset=utf-8") : Content(similar_tpl.ToHtml(), "text/html; charset=utf-8");
                 }
 
-                itemUrl = searchResults[0].Url;
+                picked = searchResults[0];
+                itemUrl = picked.Url;
             }
 
-            if (serial == 1)
+            // Тип контенту задає клієнт (serial). Підказка з картки — лише фолбек,
+            // бо сам URL (/dorama/) тип не визначає.
+            bool isSerial = serial == 1 || (picked != null && picked.IsSeriesHint && !picked.IsMovieHint);
+
+            if (isSerial)
+                return await HandleSeries(invoke, init, itemUrl, imdb_id, kinopoisk_id, title, original_title, year, t, s, rjson);
+
+            return await HandleMovie(invoke, init, itemUrl, title, original_title, rjson);
+        }
+
+        /// <summary>
+        /// Серіал: VoiceTpl (перемикач озвучок) + EpisodeTpl одразу разом —
+        /// standalone VoiceTpl клієнт Lampa не рендерить (див. патерн KlonFUN/Franko).
+        /// </summary>
+        private async Task<ActionResult> HandleSeries(BambooInvoke invoke, OnlinesSettings init, string itemUrl, string imdb_id, long kinopoisk_id, string title, string original_title, int year, string t, int s, bool rjson)
+        {
+            var series = await invoke.GetSeriesEpisodes(itemUrl);
+            if (series == null || series.Voices.Count == 0)
+                return OnError("lme_bamboo", refresh_proxy: true);
+
+            var selected = series.Voices.FirstOrDefault(v => v.Key == t) ?? series.Voices[0];
+            var voice_tpl = new VoiceTpl();
+
+            foreach (var voice in series.Voices)
             {
-                var series = await invoke.GetSeriesEpisodes(itemUrl);
-                if (series == null || (series.Sub.Count == 0 && series.Dub.Count == 0))
-                    return OnError("lme_bamboo", refresh_proxy: true);
-
-                var voice_tpl = new VoiceTpl();
-                var episode_tpl = new EpisodeTpl();
-
-                var availableVoices = new List<(string key, string name, List<EpisodeInfo> episodes)>();
-                if (series.Sub.Count > 0)
-                    availableVoices.Add(("sub", "Субтитри", series.Sub));
-                if (series.Dub.Count > 0)
-                    availableVoices.Add(("dub", "Озвучення", series.Dub));
-
-                if (string.IsNullOrEmpty(t))
-                    t = availableVoices.First().key;
-
-                foreach (var voice in availableVoices)
-                {
-                    string voiceLink = $"{host}/lite/lme_bamboo?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&year={year}&serial=1&t={voice.key}&href={HttpUtility.UrlEncode(itemUrl)}";
-                    voice_tpl.Append(voice.name, voice.key == t, voiceLink);
-                }
-
-                var selected = availableVoices.FirstOrDefault(v => v.key == t);
-                if (selected.episodes == null || selected.episodes.Count == 0)
-                    return OnError("lme_bamboo", refresh_proxy: true);
-
-                int index = 1;
-                foreach (var ep in selected.episodes.OrderBy(e => e.Episode ?? int.MaxValue))
-                {
-                    int episodeNumber = ep.Episode ?? index;
-                    string episodeName = string.IsNullOrEmpty(ep.Title) ? $"Епізод {episodeNumber}" : ep.Title;
-                    string streamUrl = BuildStreamUrl(init, ep.Url);
-                    episode_tpl.Append(episodeName, title ?? original_title, "1", episodeNumber.ToString("D2"), streamUrl);
-                    index++;
-                }
-
-                episode_tpl.Append(voice_tpl);
-                if (rjson)
-                    return Content(episode_tpl.ToJson(), "application/json; charset=utf-8");
-
-                return Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
+                // href передаємо, щоб перемикання озвучки не запускало пошук заново
+                // (інакше клієнт може впасти в SimilarTpl).
+                string voiceLink = BuildSeriesLink(itemUrl, imdb_id, kinopoisk_id, title, original_title, year, voice.Key, s);
+                voice_tpl.Append(voice.Name, voice.Key == selected.Key, voiceLink);
             }
-            else
+
+            var episodes = selected.Episodes
+                .OrderBy(e => e.Season)
+                .ThenBy(e => e.Episode ?? int.MaxValue)
+                .ToList();
+
+            if (episodes.Count == 0)
+                return OnError("lme_bamboo", refresh_proxy: true);
+
+            var episode_tpl = new EpisodeTpl();
+            int index = 1;
+            foreach (var ep in episodes)
             {
-                var streams = await invoke.GetMovieStreams(itemUrl);
-                if (streams == null || streams.Count == 0)
-                    return OnError("lme_bamboo", refresh_proxy: true);
+                int season = ep.Season > 0 ? ep.Season : 1;
+                int episodeNumber = ep.Episode ?? index;
+                string episodeName = string.IsNullOrEmpty(ep.Title) ? $"Серія {episodeNumber}" : ep.Title;
+                string streamUrl = BuildStreamUrl(init, ep.Url);
 
-                var movie_tpl = new MovieTpl(title, original_title);
-                for (int i = 0; i < streams.Count; i++)
-                {
-                    var stream = streams[i];
-                    string label = !string.IsNullOrEmpty(stream.Title) ? stream.Title : $"Варіант {i + 1}";
-                    string streamUrl = BuildStreamUrl(init, stream.Url);
-                    movie_tpl.Append(label, streamUrl);
-                }
+                episode_tpl.Append(
+                    episodeName,
+                    title ?? original_title,
+                    season.ToString(),
+                    episodeNumber.ToString("D2"),
+                    streamUrl,
+                    subtitles: ApnHelper.ParseSubtitles(ep.Subtitle),
+                    voice_name: string.IsNullOrEmpty(selected.Name) ? null : selected.Name);
 
-                return rjson ? Content(movie_tpl.ToJson(), "application/json; charset=utf-8") : Content(movie_tpl.ToHtml(), "text/html; charset=utf-8");
+                index++;
             }
+
+            episode_tpl.Append(voice_tpl);
+            return rjson
+                ? Content(episode_tpl.ToJson(), "application/json; charset=utf-8")
+                : Content(episode_tpl.ToHtml(), "text/html; charset=utf-8");
+        }
+
+        /// <summary>
+        /// Фільм: кожен голос окремим потоком (MovieTpl).
+        /// </summary>
+        private async Task<ActionResult> HandleMovie(BambooInvoke invoke, OnlinesSettings init, string itemUrl, string title, string original_title, bool rjson)
+        {
+            var streams = await invoke.GetMovieStreams(itemUrl);
+            if (streams == null || streams.Count == 0)
+                return OnError("lme_bamboo", refresh_proxy: true);
+
+            var movie_tpl = new MovieTpl(title, original_title);
+            int index = 1;
+            foreach (var stream in streams)
+            {
+                string label = QualityHelper.BuildDisplayTitle(stream.Voice ?? stream.Title, stream.Url, index);
+                movie_tpl.Append(
+                    label,
+                    BuildStreamUrl(init, stream.Url),
+                    subtitles: ApnHelper.ParseSubtitles(stream.Subtitle),
+                    voice_name: string.IsNullOrEmpty(stream.Voice) ? null : stream.Voice);
+
+                index++;
+            }
+
+            return rjson
+                ? Content(movie_tpl.ToJson(), "application/json; charset=utf-8")
+                : Content(movie_tpl.ToHtml(), "text/html; charset=utf-8");
+        }
+
+        private string BuildSeriesLink(string href, string imdb_id, long kinopoisk_id, string title, string original_title, int year, string t, int s)
+        {
+            string link = $"{host}/lite/lme_bamboo?imdb_id={imdb_id}&kinopoisk_id={kinopoisk_id}" +
+                          $"&title={HttpUtility.UrlEncode(title ?? string.Empty)}" +
+                          $"&original_title={HttpUtility.UrlEncode(original_title ?? string.Empty)}" +
+                          $"&year={year}&serial=1&href={HttpUtility.UrlEncode(href ?? string.Empty)}" +
+                          $"&t={HttpUtility.UrlEncode(t ?? string.Empty)}";
+
+            if (s > 0)
+                link += $"&s={s}";
+
+            return link;
         }
 
         string BuildStreamUrl(OnlinesSettings init, string streamLink)

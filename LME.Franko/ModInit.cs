@@ -19,7 +19,7 @@ namespace LME.Franko
 {
     public class ModInit : IModuleLoaded
     {
-        public static double Version => 1.0;
+        public static double Version => 1.1;
 
         public static FrankoConfig Franko;
         public static bool ApnHostProvided;
@@ -32,7 +32,11 @@ namespace LME.Franko
 
         /// <summary>
         /// Дефолтний пул мірорів для consilium search (тільки сайти-донори).
-        /// kinokrad виключено: його прямий /show/imdb/ ендпоінт ненадійний (чужий контент).
+        ///
+        /// kinokrad НЕ включаємо: прямий franko `/show/imdb/{imdb}` ендпоінт ненадійний
+        /// (tt1757678 → id=149 замість правильного 11662), а його DLE mod=search не працює.
+        /// Перевірено live 2026-09-30: uakino.watch / uakinohd.my / uakino.productions віддають
+        /// picasso id=11662, uaserials.* — content page → franko iframe /show/11662/.
         /// </summary>
         private static readonly string[] DefaultMirrors = new string[]
         {

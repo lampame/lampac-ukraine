@@ -87,9 +87,12 @@ namespace LME.Franko
                 return OnError("lme_franko", refresh_proxy: true);
 
             int? tid = int.TryParse(t, out int parsedTid) ? parsedTid : (int?)null;
-            var stream = await invoke.ResolveStream(searchResult.Id, tid, s, e);
+            var (stream, reason) = await invoke.ResolveStream(searchResult.Id, tid, s, e);
             if (stream == null || string.IsNullOrEmpty(stream.Url))
+            {
+                OnLog($"lme_franko play: стрім не знайдено ({reason}) для id={searchResult.Id}, t={t}, s={s}, e={e}");
                 return OnError("lme_franko", refresh_proxy: true);
+            }
 
             string streamUrl = BuildStreamUrl(init, stream.Url);
             string episodeTitle = $"{title ?? original_title} - {s}x{e:D2}";
@@ -111,12 +114,15 @@ namespace LME.Franko
             var movie_tpl = new MovieTpl(title, original_title);
             foreach (var tr in translations)
             {
-                var stream = await invoke.ResolveStream(result.Id, tr.id, null, null);
+                var (stream, reason) = await invoke.ResolveStream(result.Id, tr.id, null, null);
                 if (stream == null || string.IsNullOrEmpty(stream.Url))
+                {
+                    OnLog($"lme_franko movie: переклад {tr.id} ({tr.title}) без стріму ({reason})");
                     continue;
+                }
 
                 string streamUrl = BuildStreamUrl(init, stream.Url);
-                movie_tpl.Append(tr.title, streamUrl);
+                movie_tpl.Append(tr.title, streamUrl, voice_name: tr.title);
             }
 
             if (movie_tpl.data == null || movie_tpl.data.Count == 0)
