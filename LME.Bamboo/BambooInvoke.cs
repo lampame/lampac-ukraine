@@ -21,6 +21,11 @@ namespace LME.Bamboo
     /// <summary>
     /// Портук Python-джерела bambooua.py на актуальну верстку BambooUA (2026-09).
     ///
+    /// Компіляційні правила цього файлу (перевірено сканером):
+    ///  - жоден static-метод не читає інстансні поля (_init, _hybridCache, _onLog, _proxyManager, _httpHydra);
+    ///  - жоден static-метод не викликає інстансний метод;
+    ///  - NormalizeUrl / Walk / WalkPlaylist / PlaylistVoices — інстансні саме тому, що їм потрібен _init.
+    ///
     /// Ключові відмінності від старої версії:
     ///  - картки пошуку: article.swiper-slide / a.link-title / h2.label-3 (було li.slide-item / a.hover-buttons / h6);
     ///  - контент береться з Playerjs-плейлиста (const playlist = [...] або ashdi file: '[…]'),
@@ -559,7 +564,7 @@ namespace LME.Bamboo
         /// Розкладає плейлист на голоси: title верхнього рівня = озвучка, folder = серії/епізоди.
         /// Leaf на depth 0 — це самостійний файл фільму, а не епізод (includeMovies вирішує).
         /// </summary>
-        public static List<PlaylistVoice> PlaylistVoices(JsonArray payload)
+        public List<PlaylistVoice> PlaylistVoices(JsonArray payload)
         {
             var voices = new List<PlaylistVoice>();
             if (payload == null)
@@ -584,14 +589,14 @@ namespace LME.Bamboo
         /// <summary>
         /// Рекурсивний обхід плейлиста: voice(depth 0) → folder → folder → leaf(file).
         /// </summary>
-        public static List<EpisodeInfo> WalkPlaylist(JsonArray payload, string voice = null, bool includeMovies = true)
+        public List<EpisodeInfo> WalkPlaylist(JsonArray payload, string voice = null, bool includeMovies = true)
         {
             var episodes = new List<EpisodeInfo>();
             Walk(payload, voice, episodes, 0, includeMovies);
             return episodes;
         }
 
-        private static void Walk(JsonArray payload, string voice, List<EpisodeInfo> episodes, int depth, bool includeMovies)
+        private void Walk(JsonArray payload, string voice, List<EpisodeInfo> episodes, int depth, bool includeMovies)
         {
             if (payload == null || depth > MaxPlaylistDepth)
                 return;
@@ -724,8 +729,12 @@ namespace LME.Bamboo
         /// Абсолютний URL для власних запитів. APN тут НЕ застосовується —
         /// інакше внутрішні fetch-и йдуть через проксі і ламаються.
         /// APN накладається лише на стрім у контролері (StreamHelper.BuildStreamUrl).
+        ///
+        /// Інстансний метод: відносні шляхи треба розгортати на host з конфігу.
+        /// host зберігається зашифрованим (BaseSettings.Decrypt = зсув на 3 символи),
+        /// тому розгортаємо через Decrypt.
         /// </summary>
-        public static string NormalizeUrl(string url)
+        public string NormalizeUrl(string url)
         {
             if (string.IsNullOrEmpty(url))
                 return string.Empty;
@@ -738,7 +747,10 @@ namespace LME.Bamboo
                 return $"https:{value}";
 
             if (value.StartsWith("/", StringComparison.Ordinal))
-                return $"{_init.host.TrimEnd('/')}{value}";
+            {
+                string host = _init?.Decrypt(_init.host) ?? string.Empty;
+                return string.IsNullOrEmpty(host) ? value : $"{host.TrimEnd('/')}{value}";
+            }
 
             return value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
                    || value.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
