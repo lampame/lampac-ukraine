@@ -419,7 +419,7 @@ namespace LME.Bamboo
                 }
 
                 if (streams.Count == 0)
-                    streams = StreamsFromPlayerBlocks(html);
+                    streams = await StreamsFromPlayerBlocks(html);
 
                 // Нативний плеєр і ashdi часто пропонують той самий дубляж — дедупимо за голосом.
                 var unique = new List<StreamInfo>();
@@ -725,7 +725,7 @@ namespace LME.Bamboo
         /// інакше внутрішні fetch-и йдуть через проксі і ламаються.
         /// APN накладається лише на стрім у контролері (StreamHelper.BuildStreamUrl).
         /// </summary>
-        public string NormalizeUrl(string url)
+        public static string NormalizeUrl(string url)
         {
             if (string.IsNullOrEmpty(url))
                 return string.Empty;
@@ -788,7 +788,8 @@ namespace LME.Bamboo
             if (string.IsNullOrWhiteSpace(value))
                 return string.Empty;
 
-            return WhitespaceRegex.Replace(WebUtility.HtmlDecode(value)).Trim();
+            // Regex.Replace потребує replacement-аргумент: \s+ → один пробіл.
+            return WhitespaceRegex.Replace(WebUtility.HtmlDecode(value), " ").Trim();
         }
 
         #endregion
