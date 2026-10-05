@@ -15,17 +15,42 @@ namespace LME.Common.Update
     {
         private const string ConnectUrl = "https://lmcuk.lme.isroot.in/stats";
 
+        // Перевірка не блокує запит користувача: пінг іде у фоні, тому таймаут короткий.
+        private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
+
+        // Після успішної перевірки повторюємо її не частіше ніж раз на 4 години.
+        private static readonly TimeSpan SuccessInterval = TimeSpan.FromHours(4);
+
+        // Якщо сервер не відповів — не достукуємось на кожному запиті, а чекаємо паузу.
+        private static readonly TimeSpan FailureInterval = TimeSpan.FromMinutes(15);
+
+        // Один HttpClient на всі перевірки замість створення нового на кожен виклик.
+        private static readonly HttpClient _client = CreateClient();
+
+        private static HttpClient CreateClient()
+        {
+            var handler = new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                SslOptions = new SslClientAuthenticationOptions
+                {
+                    RemoteCertificateValidationCallback = (_, _, _, _) => true,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+                }
+            };
+
+            return new HttpClient(handler) { Timeout = RequestTimeout };
+        }
+
         private readonly Func<string> _pluginResolver;
         private readonly Func<double> _versionResolver;
 
-        private ConnectResponse? _connect;
-        private DateTime? _connectTime;
-        private DateTime? _disconnectTime;
-
-        private static readonly TimeSpan ResetInterval = TimeSpan.FromHours(4);
-        private Timer? _resetTimer;
-
         private readonly object _lock = new();
+
+        private ConnectResponse? _connect;
+        private DateTime? _nextAttemptTime;
+        private DateTime? _disconnectTime;
+        private int _inFlight;
 
         public ModuleUpdateService(Func<string> pluginResolver, Func<double> versionResolver)
         {
@@ -33,33 +58,35 @@ namespace LME.Common.Update
             _versionResolver = versionResolver;
         }
 
-        public async Task ConnectAsync(string host, CancellationToken cancellationToken = default)
+        public Task ConnectAsync(string host, CancellationToken cancellationToken = default)
         {
-            if (_connectTime is not null || _connect?.IsUpdateUnavailable == true)
-                return;
+            if (!ShouldAttempt())
+                return Task.CompletedTask;
 
             lock (_lock)
             {
-                if (_connectTime is not null || _connect?.IsUpdateUnavailable == true)
-                    return;
-
-                _connectTime = DateTime.UtcNow;
+                if (!ShouldAttempt() || Interlocked.CompareExchange(ref _inFlight, 1, 0) != 0)
+                    return Task.CompletedTask;
             }
 
+            // Навмисно не чекаємо: результат перевірки не потрібен поточному запиту,
+            // а його таймаут не має гальмувати відповідь користувачу.
+            _ = CheckAsync(host);
+            return Task.CompletedTask;
+        }
+
+        private bool ShouldAttempt()
+        {
+            if (_disconnectTime is not null)
+                return false;
+
+            return _nextAttemptTime is null || DateTime.UtcNow >= _nextAttemptTime;
+        }
+
+        private async Task CheckAsync(string host)
+        {
             try
             {
-                using var handler = new SocketsHttpHandler
-                {
-                    SslOptions = new SslClientAuthenticationOptions
-                    {
-                        RemoteCertificateValidationCallback = (_, _, _, _) => true,
-                        EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
-                    }
-                };
-
-                using var client = new HttpClient(handler);
-                client.Timeout = TimeSpan.FromSeconds(15);
-
                 var request = new
                 {
                     Host = host,
@@ -68,43 +95,51 @@ namespace LME.Common.Update
                 };
 
                 var requestJson = JsonSerializer.Serialize(request);
-                var requestContent = new StringContent(requestJson, Encoding.UTF8, MediaTypeNames.Application.Json);
+                using var requestContent = new StringContent(requestJson, Encoding.UTF8, MediaTypeNames.Application.Json);
 
-                var response = await client
-                    .PostAsync(ConnectUrl, requestContent, cancellationToken)
+                // CancellationToken.None: запит користувача вже завершився, його токен тут недійсний.
+                using var response = await _client
+                    .PostAsync(ConnectUrl, requestContent, CancellationToken.None)
                     .ConfigureAwait(false);
 
                 response.EnsureSuccessStatusCode();
 
-                if (response.Content.Headers.ContentLength > 0)
-                {
-                    var responseText = await response.Content
-                        .ReadAsStringAsync(cancellationToken)
-                        .ConfigureAwait(false);
+                ConnectResponse? parsed = _connect;
 
-                    _connect = JsonSerializer.Deserialize<ConnectResponse>(responseText);
-                }
+                var responseText = await response.Content
+                    .ReadAsStringAsync(CancellationToken.None)
+                    .ConfigureAwait(false);
+
+                if (!string.IsNullOrWhiteSpace(responseText))
+                    parsed = JsonSerializer.Deserialize<ConnectResponse>(responseText);
 
                 lock (_lock)
                 {
-                    _resetTimer?.Dispose();
-                    _resetTimer = null;
+                    _connect = parsed;
 
-                    if (_connect?.IsUpdateUnavailable != true)
+                    if (parsed?.IsUpdateUnavailable == true)
                     {
-                        _resetTimer = new Timer(ResetConnectTime, null, ResetInterval, Timeout.InfiniteTimeSpan);
+                        _disconnectTime = parsed.IsNoiseEnabled
+                            ? DateTime.UtcNow.AddHours(Random.Shared.Next(1, 4))
+                            : DateTime.UtcNow;
                     }
                     else
                     {
-                        _disconnectTime = _connect?.IsNoiseEnabled == true
-                            ? DateTime.UtcNow.AddHours(Random.Shared.Next(1, 4))
-                            : DateTime.UtcNow;
+                        _nextAttemptTime = DateTime.UtcNow.Add(SuccessInterval);
                     }
                 }
             }
             catch
             {
-                ResetConnectTime(null);
+                lock (_lock)
+                {
+                    _connect = null;
+                    _nextAttemptTime = DateTime.UtcNow.Add(FailureInterval);
+                }
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _inFlight, 0);
             }
         }
 
@@ -119,18 +154,6 @@ namespace LME.Common.Update
             return IsDisconnected()
                 ? throw new JsonException($"Disconnect error: {Guid.CreateVersion7()}")
                 : result;
-        }
-
-        private void ResetConnectTime(object? state)
-        {
-            lock (_lock)
-            {
-                _connectTime = null;
-                _connect = null;
-
-                _resetTimer?.Dispose();
-                _resetTimer = null;
-            }
         }
 
         private record ConnectResponse(bool IsUpdateUnavailable, bool IsNoiseEnabled);
