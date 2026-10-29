@@ -16,7 +16,6 @@
 - `LME.Uaflix`
 - `LME.Makhno`
 - `LME.StarLight`
-- `LME.KlonFUN`
 - `LME.JackTor`
 
 **Аніме та дорами**
@@ -57,7 +56,6 @@ git clone https://github.com/lampame/lampac-ukraine.git .
     - LME.Bamboo
     - LME.Makhno
     - LME.StarLight
-    - LME.KlonFUN
     - LME.JackTor
 ```
 
@@ -237,8 +235,6 @@ wget -O check.sh https://raw.githubusercontent.com/lampame/lampac-ukraine/main/c
 **TV shows and movies**
 - `LME.Uaflix`
 - `LME.Makhno`
-- `LME.StarLight`
-- `LME.KlonFUN`
 - `LME.JackTor`
 
 **Anime and dorama**
@@ -279,7 +275,6 @@ Create or update `module/repository.yaml`:
     - LME.Bamboo
     - LME.Makhno
     - LME.StarLight
-    - LME.KlonFUN
     - LME.JackTor
 ```
 
