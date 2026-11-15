@@ -45,7 +45,8 @@ namespace LME.Makhno
             {
                 var headers = new List<HeadersModel>()
                 {
-                    new HeadersModel("User-Agent", Http.UserAgent)
+                    new HeadersModel("User-Agent", Http.UserAgent),
+                    new HeadersModel("skip_zrok_interstitial", "1")
                 };
 
                 string response = await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
