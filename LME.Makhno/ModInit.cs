@@ -40,7 +40,7 @@ namespace LME.Makhno
         /// </summary>
         public void Loaded(InitspaceModel initspace)
         {
-            Makhno = new OnlinesSettings("LME.Makhno", "https://wh.lme.isroot.in", streamproxy: false, useproxy: false)
+            Makhno = new OnlinesSettings("LME.Makhno", "https://makhno.shares.zrok.io", streamproxy: false, useproxy: false)
             {
                 displayname = "Махно",
                 displayindex = 0,

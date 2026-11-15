@@ -16,7 +16,7 @@ namespace LME.Makhno
 {
     public class MakhnoInvoke
     {
-        private const string WormholeHost = "https://wh.lme.isroot.in/";
+        private const string WormholeHost = "https://makhno.shares.zrok.io/";
 
         private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
