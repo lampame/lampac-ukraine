@@ -479,7 +479,12 @@ namespace LME.Makhno
         }
 
         private string BuildStreamUrl(OnlinesSettings init, string streamLink)
-            => StreamHelper.BuildStreamUrl(init, streamLink, ModInit.ApnHostProvided, (s, l) => HostStreamProxy(s, l));
+            => StreamHelper.BuildStreamUrl(init, streamLink, ModInit.ApnHostProvided, (s, l) => HostStreamProxy(s, l, headers: ZrokStreamHeaders(l)));
+
+        private static IReadOnlyList<HeadersModel> ZrokStreamHeaders(string url)
+            => MakhnoInvoke.IsZrokUrl(url)
+                ? new List<HeadersModel> { new HeadersModel(MakhnoInvoke.ZrokSkipHeader, "1") }
+                : null;
 
         private class ResolveResult
         {

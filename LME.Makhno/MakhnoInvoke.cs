@@ -17,6 +17,10 @@ namespace LME.Makhno
     public class MakhnoInvoke
     {
         private const string WormholeHost = "https://makhno.shares.zrok.io/";
+        internal const string ZrokSkipHeader = "skip_zrok_interstitial";
+
+        internal static bool IsZrokUrl(string url)
+            => !string.IsNullOrEmpty(url) && url.Contains(".zrok.io", StringComparison.OrdinalIgnoreCase);
 
         private static readonly Regex Quality4kRegex = new Regex(@"(^|[^0-9])(2160p?)([^0-9]|$)|\b4k\b|\buhd\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -45,7 +49,8 @@ namespace LME.Makhno
             {
                 var headers = new List<HeadersModel>()
                 {
-                    new HeadersModel("User-Agent", Http.UserAgent)
+                    new HeadersModel("User-Agent", Http.UserAgent),
+                    new HeadersModel(ZrokSkipHeader, "1")
                 };
 
                 string response = await HttpHelper.GetAsync(_httpHydra, _init, url, headers, _proxyManager);
@@ -83,6 +88,9 @@ namespace LME.Makhno
 
                 if (ApnHelper.IsAshdiUrl(sourceUrl) && ApnHelper.IsEnabled(_init) && string.IsNullOrWhiteSpace(_init.webcorshost))
                     requestUrl = ApnHelper.WrapUrl(_init, sourceUrl);
+
+                if (IsZrokUrl(requestUrl))
+                    headers.Add(new HeadersModel(ZrokSkipHeader, "1"));
 
                 _onLog($"lme_makhno getting player data from: {requestUrl}");
 
